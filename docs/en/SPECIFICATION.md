@@ -123,6 +123,10 @@ Public entity states and event names must remain stable.
 
 Localized strings may change, but internal state identifiers must not.
 
+### 3.6 Use native Home Assistant entity types whenever possible.
+
+Laundry Monitor should prefer standard Home Assistant entities (such as button, sensor, binary_sensor, number, and select) over custom services or proprietary APIs. Custom services should only be introduced when no suitable native entity exists.
+
 ## 4. Data Sources
 ### 4.1 Required sources
 
