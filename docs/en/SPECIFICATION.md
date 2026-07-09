@@ -195,19 +195,26 @@ Internal states may evolve without changing public states.
 
 ## 6. State Transitions
 ### 6.1 Basic transition model
-idle
-  ↓ door closed
-armed
-  ↓ power above start threshold
-running
-  ↓ final spin detected
-final_spin
-  ↓ no activity for finish timeout
-finished
-  ↓ door opened
-unloaded
-  ↓ reset timeout or next cycle
-idle
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+
+    Idle --> Armed: Door closed
+    Idle --> Running: Power > Start Threshold
+
+    Armed --> Running: Power > Start Threshold
+    Armed --> Idle: Door opened
+
+    Running --> FinalSpin: Final spin detected
+    Running --> Finished: No activity timeout
+
+    FinalSpin --> Running: Activity detected
+    FinalSpin --> Finished: Finish timeout
+
+    Finished --> Unloaded: Door opened
+
+    Unloaded --> Idle: Reset timeout\nor next cycle
+```
 
 ## 6.2 Transition table
 |Current state	|Event	|Next state	|Notes|
