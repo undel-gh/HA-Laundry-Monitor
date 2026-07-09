@@ -252,7 +252,7 @@ A possible first implementation:
 
 Example defaults:
 
-|Parameter|	|Default|
+|Parameter	|Default|
 |--- | --- |
 |Minimum spin duration	|120 s|
 |Spin cooldown	|300 s|
