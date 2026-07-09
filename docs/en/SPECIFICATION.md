@@ -238,11 +238,12 @@ Activity is detected primarily from power.
 
 Example defaults:
 
-- Parameter	Default
-- Start threshold	10 W
-- Activity threshold	5 W
-- Start confirmation	30 s
-- Finish timeout	10 min
+|Parameter	|Default|
+|--- | --- |
+|Start threshold	|10 W|
+|Activity threshold	|5 W|
+|Start confirmation	|30 s|
+|Finish timeout	|10 min|
 
 These values must be configurable.
 
