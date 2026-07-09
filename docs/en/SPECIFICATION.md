@@ -112,7 +112,8 @@ Cycle detection should be split into replaceable components:
 - spin detector;
 - finish detector;
 - safety detector;
-- state machine.
+- state machine;
+- laundry tracking.
 
 This allows future algorithm changes without breaking public entities or events.
 
@@ -162,36 +163,35 @@ Optional sensors may improve diagnostics and statistics but must not be required
 
 The integration should expose a user-facing state sensor.
 
-Initial public states:
+| State | Description |
+|---|---|
+| `idle` | Machine is idle and ready for a new cycle. |
+| `armed` | Door has been closed and the integration is waiting for the cycle to start. |
+| `running` | Washing cycle is active. |
+| `final_spin` | Final spin has likely been detected. |
+| `finished` | Washing cycle has finished. Laundry may still be inside the machine. |
+| `error` | Abnormal condition detected. |
 
-|State	|Description|
-|--- | --- |
-|idle	|Machine is not running|
-|armed	|Door was closed and system is waiting for activity|
-|running	|Washing cycle is active|
-|final_spin	|Final spin was likely detected|
-|finished	|Cycle is finished, laundry may still be inside|
-|unloaded	|Door was opened after finish|
-|error	|Abnormal condition detected|
+The `finished` state remains active until the laundry is explicitly marked as removed by the user (if Laundry Tracking is enabled) or until a new cycle starts.
 
 ### 5.2 Internal states
 
-Internal implementation may use more detailed states, for example:
+The implementation may use additional internal states that are not exposed to the user.
 
-|Internal state	|Public state|
-|--- | --- |
-|IDLE	|idle|
-|ARMED	|armed|
-|RUNNING	|running|
-|LOW_POWER_CONFIRMATION	|running|
-|SPIN_CANDIDATE	|running|
-|FINAL_SPIN_CONFIRMED	|final_spin|
-|FINISH_CONFIRMATION	|final_spin|
-|FINISHED	|finished|
-|UNLOADED	|unloaded|
-|ERROR	|error|
+| Internal state | Public state |
+|---|---|
+| `IDLE` | `idle` |
+| `ARMED` | `armed` |
+| `RUNNING` | `running` |
+| `LOW_POWER_CONFIRMATION` | `running` |
+| `SPIN_CANDIDATE` | `running` |
+| `FINAL_SPIN_CONFIRMED` | `final_spin` |
+| `FINISH_CONFIRMATION` | `final_spin` |
+| `FINISHED` | `finished` |
+| `ERROR` | `error` |
 
-Internal states may evolve without changing public states.
+Internal states may evolve between releases without affecting the public API.
+
 
 ## 6. State Transitions
 ### 6.1 Basic transition model
@@ -203,33 +203,61 @@ stateDiagram-v2
     Idle --> Running: Power > Start Threshold
 
     Armed --> Running: Power > Start Threshold
-    Armed --> Idle: Door opened
+    Armed --> Idle: Door opened before start
 
     Running --> FinalSpin: Final spin detected
-    Running --> Finished: No activity timeout
+    Running --> Finished: Finish timeout
 
-    FinalSpin --> Running: Activity detected
+    FinalSpin --> Running: Activity resumed
     FinalSpin --> Finished: Finish timeout
 
-    Finished --> Unloaded: Door opened
-
-    Unloaded --> Idle: Reset timeout\nor next cycle
+    Finished --> Idle: Mark unloaded
 ```
 
 ## 6.2 Transition table
-|Current state	|Event	|Next state	|Notes|
-|--- | --- | --- | --- |
-|idle	|Door closed	|armed	|Optional when door sensor exists|
-|idle	|Power above start threshold	|running	|Fallback without door sensor|
-|armed	|Power above start threshold	|running	|Cycle started|
-|armed	|Door opened	|idle	|Start cancelled|
-|running	|Final spin detected	|final_spin	|Based on vibration pattern|
-|running	|No activity timeout	finished	|Fallback if spin not detected|
-|final_spin	|Activity detected	|running	|False final spin candidate|
-|final_spin	|No activity timeout	|finished	|Cycle finished|
-|finished	|Door opened	|unloaded	|Laundry likely removed|
-|unloaded	|Reset timeout	|idle	|Ready for next cycle|
-|Any	|Leak detected	|Same cycle state + safety alert	|Safety engine is separate|
+
+| Current state | Event | Next state | Notes |
+|---|---|---|---|
+| `idle` | Door closed | `armed` | Optional when door sensor exists |
+| `idle` | Power above start threshold | `running` | Fallback without door sensor |
+| `armed` | Power above start threshold | `running` | Cycle started |
+| `armed` | Door opened | `idle` | Start cancelled |
+| `running` | Final spin detected | `final_spin` | Based on vibration pattern |
+| `running` | No activity timeout | `finished` | Fallback if spin is not detected |
+| `final_spin` | Activity detected | `running` | False final spin candidate |
+| `final_spin` | No activity timeout | `finished` | Cycle finished |
+| `finished` | Door opened | `finished` | Door opening is diagnostic only; it must not imply laundry removal |
+| `finished` | Mark unloaded | `idle` | Explicit user action via button or service |
+| Any | Leak detected | Same cycle state + safety alert | Safety engine is separate |
+
+### 6.3 Laundry Tracking
+
+Laundry Tracking is an optional module independent of the cycle state machine.
+
+The cycle state machine determines the current state of the washing machine cycle.
+
+Laundry Tracking determines whether laundry is believed to still be inside the machine.
+
+Laundry Monitor must not assume that opening the door means the laundry has been removed. Laundry removal is an explicit user action.
+
+If Laundry Tracking is enabled, the integration shall expose:
+
+- `button.<device>_mark_unloaded`
+- `binary_sensor.<device>_laundry_present`
+- `sensor.<device>_last_unloaded_at`
+
+The module shall behave as follows:
+
+| Event | Laundry Present |
+|---|---|
+| Cycle started | `on` |
+| Cycle finished | `on` |
+| Door opened after finish | unchanged |
+| User presses **Mark Unloaded** | `off` |
+
+Opening the door after the cycle has finished may fire the `laundry_monitor.door_opened_after_finish` event for diagnostic or automation purposes, but it must not change the laundry tracking state.
+
+Laundry is marked as removed only when the user presses `button.<device>_mark_unloaded` or invokes the corresponding service.
 
 ## 7. Detection Logic
 ### 7.1 Activity detection
