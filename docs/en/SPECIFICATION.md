@@ -102,6 +102,7 @@ Evidence:
 - power below activity threshold
 - no vibration
 - door still closed
+```
 
 ### 3.4 Modular algorithms
 
@@ -132,6 +133,7 @@ Example:
 
 ```text
 sensor.washing_machine_power
+```
 
 ### 4.2 Recommended sources
 
@@ -150,7 +152,6 @@ Optional sensors:
 
 - leak sensor;
 - temperature sensor;
-- humidity sensor;
 - energy sensor;
 - plug switch state.
 
@@ -283,46 +284,51 @@ Users may create their own automations based on the leak event.
 ### 9.1 Main sensors
 
 |Entity	|Example state|
-sensor.<device>_state	running
-sensor.<device>_last_transition_reason	Power above start threshold
-sensor.<device>_confidence	94
-sensor.<device>_current_power	38.2 W
-sensor.<device>_current_cycle_duration	01:24:12
-sensor.<device>_last_activity	timestamp
-sensor.<device>_last_cycle_duration	02:11:34
-sensor.<device>_last_cycle_energy	0.82 kWh
-9.2 Binary sensors
-Entity	Meaning
-binary_sensor.<device>_running	Current cycle is running
-binary_sensor.<device>_finished	Cycle finished
-binary_sensor.<device>_final_spin_detected	Final spin was detected
-binary_sensor.<device>_activity_detected	Current activity detected
-binary_sensor.<device>_leak_alarm	Leak sensor active
-9.3 Diagnostic entities
+|sensor.<device>_state	|running|
+|sensor.<device>_last_transition_reason	|Power above start threshold|
+|sensor.<device>_confidence	|94|
+|sensor.<device>_current_power	|38.2 W|
+|sensor.<device>_current_cycle_duration	|01:24:12|
+|sensor.<device>_last_activity	|timestamp|
+|sensor.<device>_last_cycle_duration	|02:11:34|
+|sensor.<device>_last_cycle_energy	|0.82 kWh|
+
+### 9.2 Binary sensors
+|Entity	|Meaning|
+|binary_sensor.<device>_running	|Current cycle is running|
+|binary_sensor.<device>_finished	|Cycle finished|
+|binary_sensor.<device>_final_spin_detected	|Final spin was detected|
+|binary_sensor.<device>_activity_detected	|Current activity detected|
+|binary_sensor.<device>_leak_alarm	|Leak sensor active|
+
+### 9.3 Diagnostic entities
 
 Diagnostic entities may include:
 
-power threshold;
-activity threshold;
-finish timeout;
-spin detection status;
-last vibration event;
-last power activity;
-current evidence list;
-raw sensor availability.
-10. Events
+- power threshold;
+- activity threshold;
+- finish timeout;
+- spin detection status;
+- last vibration event;
+- last power activity;
+- current evidence list;
+- raw sensor availability.
+
+## 10. Events
 
 Laundry Monitor should fire Home Assistant events.
 
-10.1 Event names
-laundry_monitor.cycle_started
-laundry_monitor.final_spin_detected
-laundry_monitor.cycle_finished
-laundry_monitor.machine_unloaded
-laundry_monitor.leak_detected
-laundry_monitor.state_changed
-10.2 Event payload
+### 10.1 Event names
+- laundry_monitor.cycle_started
+- laundry_monitor.final_spin_detected
+- laundry_monitor.cycle_finished
+- laundry_monitor.machine_unloaded
+- laundry_monitor.leak_detected
+- laundry_monitor.state_changed
 
+### 10.2 Event payload
+
+```text
 Example:
 
 {
@@ -334,58 +340,65 @@ Example:
   "confidence": 96,
   "timestamp": "2026-07-09T14:30:00+03:00"
 }
-11. Configuration
-11.1 Config Flow
+```
+
+## 11. Configuration
+### 11.1 Config Flow
 
 The integration shall be configured through Home Assistant UI.
 
 Required field:
 
-power sensor.
+- power sensor.
 
 Recommended fields:
 
-door sensor;
-vibration sensor.
+- door sensor;
+- vibration sensor.
 
 Optional fields:
 
-leak sensor;
-energy sensor;
-temperature sensor;
-humidity sensor;
-plug switch.
-11.2 Options Flow
+- leak sensor;
+- energy sensor;
+- temperature sensor;
+- plug switch.
+
+### 11.2 Options Flow
 
 User-configurable options:
 
-start threshold;
-activity threshold;
-finish timeout;
-spin detection enabled;
-spin minimum duration;
-debug mode;
-experimental sensors enabled.
-12. Localization
+- start threshold;
+- activity threshold;
+- finish timeout;
+- spin detection enabled;
+- spin minimum duration;
+- debug mode;
+- experimental sensors enabled.
+
+## 12. Localization
 
 Laundry Monitor must support localization from the first version.
 
-12.1 Requirements
-All user-visible strings must be localizable.
-English is the default language.
-Additional languages may be added by contributors.
-Internal state identifiers must not be localized.
-Entity states used for automations must remain stable.
-UI labels, descriptions, config flow text, options text, and diagnostics must use Home Assistant translation files.
-12.2 Suggested structure
+### 12.1 Requirements
+- All user-visible strings must be localizable.
+- English is the default language.
+- Additional languages may be added by contributors.
+- Internal state identifiers must not be localized.
+- Entity states used for automations must remain stable.
+- UI labels, descriptions, config flow text, options text, and diagnostics must use Home Assistant translation files.
+
+### 12.2 Suggested structure
+```text
 custom_components/laundry_monitor/
   strings.json
   translations/
     en.json
     ru.json
+```
 
 Documentation may be organized as:
 
+```text
 docs/
   en/
     SPECIFICATION.md
@@ -395,68 +408,75 @@ docs/
     SPECIFICATION.md
     ARCHITECTURE.md
     STATE_MACHINE.md
+```
 
 The English documentation is canonical.
 
 Translated documentation should follow the English version and must not define separate behavior.
 
-13. Debug Mode
+## 13. Debug Mode
 
 Debug Mode is a first-class feature.
 
 It should expose:
 
-current state;
-confidence;
-transition reason;
-evidence;
-raw power;
-raw vibration;
-raw door state;
-last activity time;
-last state transition;
-algorithm parameters.
+- current state;
+- confidence;
+- transition reason;
+- evidence;
+- raw power;
+- raw vibration;
+- raw door state;
+- last activity time;
+- last state transition;
+- algorithm parameters.
 
 Future versions may include cycle playback.
 
-14. Non-goals
+## 14. Non-goals
 
 Laundry Monitor is not:
 
-a notification system;
-a washing machine controller;
-a vendor integration;
-a dishwasher monitor;
-a universal appliance monitor;
-a replacement for Home Assistant automations.
-15. Roadmap
-v0.1
-project skeleton;
-config flow;
-basic power-based state machine;
-diagnostic entities;
-localization foundation.
-v0.2
-door sensor support;
-finished/unloaded distinction;
-Home Assistant events.
-v0.3
-vibration-based final spin detection;
-confidence calculation;
-debug diagnostics.
-v0.4
-leak sensor support;
-safety state;
-event payload improvements.
-v1.0
-stable public API;
-documented state machine;
-HACS-ready release;
-English documentation;
-localization support.
-16. Open Questions
-Should unloaded be a persistent state or an event only?
-Should confidence be a percentage or diagnostic enum?
-Should final spin detection be enabled by default?
-Should leak detection create a separate safety state sensor?
-Should temperature and humidity be diagnostic-only in v1.0?
+- a notification system;
+- a washing machine controller;
+- a vendor integration;
+- a dishwasher monitor;
+- a universal appliance monitor;
+- a replacement for Home Assistant automations.
+
+## 15. Roadmap
+### v0.1
+- project skeleton;
+- config flow;
+- basic power-based state machine;
+- diagnostic entities;
+- localization foundation.
+
+### v0.2
+- door sensor support;
+- finished/unloaded distinction;
+- Home Assistant events.
+
+### v0.3
+- vibration-based final spin detection;
+- confidence calculation;
+- debug diagnostics.
+
+### v0.4
+- leak sensor support;
+- safety state;
+- event payload improvements.
+
+### v1.0
+- stable public API;
+- documented state machine;
+- HACS-ready release;
+- English documentation;
+- localization support.
+
+## 16. Open Questions
+- Should unloaded be a persistent state or an event only?
+- Should confidence be a percentage or diagnostic enum?
+- Should final spin detection be enabled by default?
+- Should leak detection create a separate safety state sensor?
+- Should temperature be diagnostic-only in v1.0?
