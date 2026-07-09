@@ -165,6 +165,7 @@ The integration should expose a user-facing state sensor.
 Initial public states:
 
 |State	|Description|
+|--- | --- |
 |idle	|Machine is not running|
 |armed	|Door was closed and system is waiting for activity|
 |running	|Washing cycle is active|
@@ -178,6 +179,7 @@ Initial public states:
 Internal implementation may use more detailed states, for example:
 
 |Internal state	|Public state|
+|--- | --- |
 |IDLE	|idle|
 |ARMED	|armed|
 |RUNNING	|running|
@@ -192,7 +194,7 @@ Internal implementation may use more detailed states, for example:
 Internal states may evolve without changing public states.
 
 ## 6. State Transitions
-###6.1 Basic transition model
+### 6.1 Basic transition model
 idle
   ↓ door closed
 armed
@@ -209,6 +211,7 @@ idle
 
 ## 6.2 Transition table
 |Current state	|Event	|Next state	|Notes|
+|--- | --- | --- | --- |
 |idle	|Door closed	|armed	|Optional when door sensor exists|
 |idle	|Power above start threshold	|running	|Fallback without door sensor|
 |armed	|Power above start threshold	|running	|Cycle started|
@@ -249,7 +252,8 @@ A possible first implementation:
 
 Example defaults:
 
-|Parameter	|Default|
+|Parameter|	|Default|
+|--- | --- |
 |Minimum spin duration	|120 s|
 |Spin cooldown	|300 s|
 |Required confidence	|70%|
@@ -284,6 +288,7 @@ Users may create their own automations based on the leak event.
 ### 9.1 Main sensors
 
 |Entity	|Example state|
+|--- | --- |
 |sensor.<device>_state	|running|
 |sensor.<device>_last_transition_reason	|Power above start threshold|
 |sensor.<device>_confidence	|94|
@@ -295,6 +300,7 @@ Users may create their own automations based on the leak event.
 
 ### 9.2 Binary sensors
 |Entity	|Meaning|
+|--- | --- |
 |binary_sensor.<device>_running	|Current cycle is running|
 |binary_sensor.<device>_finished	|Cycle finished|
 |binary_sensor.<device>_final_spin_detected	|Final spin was detected|
