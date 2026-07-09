@@ -224,7 +224,7 @@ idle
 |unloaded	|Reset timeout	|idle	|Ready for next cycle|
 |Any	|Leak detected	|Same cycle state + safety alert	|Safety engine is separate|
 
-##7. Detection Logic
+## 7. Detection Logic
 ### 7.1 Activity detection
 
 Activity is detected primarily from power.
