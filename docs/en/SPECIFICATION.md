@@ -15,7 +15,7 @@ The integration does not communicate with the washing machine directly. Instead,
 - door sensor;
 - vibration sensor;
 - optional leak sensor;
-- optional temperature or humidity sensors for diagnostics.
+- optional temperature sensors for diagnostics.
 
 Laundry Monitor is designed to answer:
 
