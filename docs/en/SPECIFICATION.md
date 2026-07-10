@@ -114,7 +114,7 @@ Cycle detection should be split into replaceable components:
 - activity detector;
 - spin detector;
 - finish detector;
-- safety detector;
+- leak detector;
 - state machine;
 - laundry tracking.
 
@@ -235,7 +235,7 @@ stateDiagram-v2
 | `final_spin` | No activity timeout | `finished` | Cycle finished |
 | `finished` | Door opened | `finished` | Door opening is diagnostic only; it must not imply laundry removal |
 | `finished` | Mark unloaded | `idle` | Explicit user action via button or service |
-| Any | Leak detected | Same cycle state + safety alert | Safety engine is separate |
+| Any | Leak detected | Same cycle state + leak alert | Leak engine is separate |
 
 ### 6.3 Laundry Tracking
 
@@ -313,14 +313,14 @@ The integration should avoid trying to distinguish:
 
 Instead, finish should be inferred from absence of meaningful activity over time.
 
-## 8. Safety Model
+## 8. Leak Model
 
-Leak detection belongs to a separate safety layer.
+Leak detection belongs to a separate leak layer.
 
 Laundry Monitor may expose:
 
 - binary_sensor.<device>_leak_alarm;
-- sensor.<device>_safety_state;
+- sensor.<device>_leak_state;
 - laundry_monitor.leak_detected event.
 
 Laundry Monitor must not turn off the plug automatically.
@@ -503,7 +503,7 @@ Laundry Monitor is not:
 
 ### v0.2
 - door sensor support;
-- finished/unloaded distinction;
+- Laundry Tracking module;
 - Home Assistant events.
 
 ### v0.3
@@ -513,7 +513,7 @@ Laundry Monitor is not:
 
 ### v0.4
 - leak sensor support;
-- safety state;
+- leak state;
 - event payload improvements.
 
 ### v1.0
@@ -524,8 +524,6 @@ Laundry Monitor is not:
 - localization support.
 
 ## 16. Open Questions
-- Should unloaded be a persistent state or an event only?
 - Should confidence be a percentage or diagnostic enum?
 - Should final spin detection be enabled by default?
-- Should leak detection create a separate safety state sensor?
 - Should temperature be diagnostic-only in v1.0?
