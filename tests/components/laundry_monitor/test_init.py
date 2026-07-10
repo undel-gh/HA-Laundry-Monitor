@@ -12,6 +12,15 @@ from custom_components.laundry_monitor.const import (
     DOMAIN,
 )
 
+def test_integration_modules_can_be_imported() -> None:
+    """Test that integration modules can be imported."""
+    from custom_components.laundry_monitor import async_setup_entry
+    from custom_components.laundry_monitor.config_flow import (
+        LaundryMonitorConfigFlow,
+    )
+
+    assert async_setup_entry is not None
+    assert LaundryMonitorConfigFlow is not None
 
 async def test_setup_and_unload_entry(
     hass: HomeAssistant,
