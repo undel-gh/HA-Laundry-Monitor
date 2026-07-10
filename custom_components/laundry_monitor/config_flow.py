@@ -9,9 +9,12 @@ import voluptuous as vol
 
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass
-from homeassistant.config_entries import ConfigEntry, ConfigFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+)
 from homeassistant.const import CONF_NAME
-from homeassistant.data_entry_flow import ConfigFlowResult
 from homeassistant.helpers.selector import (
     BooleanSelector,
     EntityFilterSelectorConfig,
@@ -20,7 +23,6 @@ from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
 )
-
 from .const import (
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
