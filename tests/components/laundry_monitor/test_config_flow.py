@@ -193,6 +193,16 @@ class LaundryMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def test_user_flow(
+       hass: HomeAssistant,
+       enable_custom_integrations: None,
+    ) -> None:
+
+    async def test_duplicate_power_sensor_is_rejected(
+       hass: HomeAssistant,
+       enable_custom_integrations: None,
+    ) -> None:
+    
     async def async_step_reconfigure(
         self,
         user_input: dict[str, Any] | None = None,
