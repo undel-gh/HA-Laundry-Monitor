@@ -1,1 +1,66 @@
-
+{
+  "title": "Laundry Monitor",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add a washing machine",
+        "description": "Select the Home Assistant entities used to monitor this washing machine. Only the power sensor is required.",
+        "data": {
+          "name": "Name",
+          "power_sensor": "Power sensor",
+          "door_sensor": "Door sensor",
+          "vibration_sensor": "Vibration sensor",
+          "leak_sensor": "Leak sensor",
+          "energy_sensor": "Energy sensor",
+          "temperature_sensor": "Temperature sensor",
+          "plug_switch": "Smart plug switch",
+          "track_laundry": "Enable laundry tracking"
+        },
+        "data_description": {
+          "name": "A friendly name for this washing machine.",
+          "power_sensor": "A sensor that reports the current active power in watts.",
+          "door_sensor": "Optional. Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Optional. Used to detect a probable final spin.",
+          "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
+          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
+          "temperature_sensor": "Optional diagnostic source. It does not affect cycle detection in the initial implementation.",
+          "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
+          "track_laundry": "Expose laundry-presence tracking and a Mark unloaded button."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure washing machine",
+        "description": "Change the source entities or laundry-tracking setting.",
+        "data": {
+          "name": "Name",
+          "power_sensor": "Power sensor",
+          "door_sensor": "Door sensor",
+          "vibration_sensor": "Vibration sensor",
+          "leak_sensor": "Leak sensor",
+          "energy_sensor": "Energy sensor",
+          "temperature_sensor": "Temperature sensor",
+          "plug_switch": "Smart plug switch",
+          "track_laundry": "Enable laundry tracking"
+        },
+        "data_description": {
+          "name": "A friendly name for this washing machine.",
+          "power_sensor": "A sensor that reports the current active power in watts.",
+          "door_sensor": "Optional. Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Optional. Used to detect a probable final spin.",
+          "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
+          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
+          "temperature_sensor": "Optional diagnostic source. It does not affect cycle detection in the initial implementation.",
+          "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
+          "track_laundry": "Expose laundry-presence tracking and a Mark unloaded button."
+        }
+      }
+    },
+    "error": {
+      "already_configured": "This power sensor is already used by another Laundry Monitor entry."
+    },
+    "abort": {
+      "already_configured": "This power sensor is already used by another Laundry Monitor entry.",
+      "reconfigure_successful": "The washing machine was reconfigured successfully."
+    }
+  }
+}
