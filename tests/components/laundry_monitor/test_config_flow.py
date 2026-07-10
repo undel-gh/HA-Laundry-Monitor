@@ -14,7 +14,10 @@ from custom_components.laundry_monitor.const import (
 )
 
 
-async def test_user_flow(hass: HomeAssistant) -> None:
+async def test_user_flow(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
     """Test creating a Laundry Monitor config entry."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
@@ -45,6 +48,7 @@ async def test_user_flow(hass: HomeAssistant) -> None:
 
 async def test_duplicate_power_sensor_is_rejected(
     hass: HomeAssistant,
+    enable_custom_integrations: None,
 ) -> None:
     """Test that the same power sensor cannot be configured twice."""
     existing = MockConfigEntry(
