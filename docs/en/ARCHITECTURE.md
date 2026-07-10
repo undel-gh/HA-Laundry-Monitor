@@ -146,7 +146,7 @@ Monitor optional leak sensors.
 Responsibilities:
 
 * detect leak conditions;
-* publish safety state;
+* publish leak state;
 * generate diagnostic events.
 
 Leak detection must not modify the cycle state.
