@@ -97,12 +97,15 @@ Example:
 State: Finished
 Reason: No activity for 10 minutes after final spin
 Confidence: 96%
+```
+The confidence value is intended as a diagnostic indicator only. Confidence calculation is implementation-specific and may change between releases without affecting the public API.
+
 Evidence:
 - final spin detected
 - power below activity threshold
 - no vibration
 - door still closed
-```
+
 
 ### 3.4 Modular algorithms
 
