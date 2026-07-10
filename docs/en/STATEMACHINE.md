@@ -517,13 +517,13 @@ For example, the following combination is valid:
 
 ```text
 Cycle state: running
-Safety state: leak_detected
+Leak state: leak_detected
 ```
 
 The integration may:
 
 * expose a leak binary sensor;
-* expose a safety-state sensor;
+* expose a leak-state sensor;
 * emit `laundry_monitor.leak_detected`;
 * include the leak condition in diagnostics.
 
@@ -579,7 +579,7 @@ The state machine should:
 
 Loss of the leak sensor must not affect the cycle state.
 
-Only leak-related diagnostics and safety reporting are affected.
+Only leak-related diagnostics and leak reporting are affected.
 
 ### 12.5 Energy or temperature sensor unavailable
 
