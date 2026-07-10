@@ -13,7 +13,10 @@ from custom_components.laundry_monitor.const import (
 )
 
 
-async def test_setup_and_unload_entry(hass: HomeAssistant) -> None:
+async def test_setup_and_unload_entry(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
     """Test that a config entry can be loaded and unloaded."""
     entry = MockConfigEntry(
         domain=DOMAIN,
