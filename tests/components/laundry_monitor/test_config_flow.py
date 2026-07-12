@@ -9,6 +9,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.laundry_monitor.const import (
     CONF_POWER_SENSOR,
+    CONF_DOOR_SENSOR,
+    CONF_VIBRATION_SENSOR,
     CONF_TRACK_LAUNDRY,
     DOMAIN,
 )
@@ -33,6 +35,8 @@ async def test_user_flow(
         {
             CONF_NAME: "Washing Machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
+            CONF_DOOR_SENSOR: "sensor.washing_machine_door",
+            CONF_VIBRATION_SENSOR: "sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: True,
         },
     )
@@ -57,6 +61,8 @@ async def test_duplicate_power_sensor_is_rejected(
         data={
             CONF_NAME: "Existing washing machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
+            CONF_DOOR_SENSOR: "sensor.washing_machine_door",
+            CONF_VIBRATION_SENSOR: "sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: False,
         },
     )
@@ -68,6 +74,8 @@ async def test_duplicate_power_sensor_is_rejected(
         data={
             CONF_NAME: "Second washing machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
+            CONF_DOOR_SENSOR: "sensor.washing_machine_door",
+            CONF_VIBRATION_SENSOR: "sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: False,
         },
     )
