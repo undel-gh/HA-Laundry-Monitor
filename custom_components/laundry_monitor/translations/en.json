@@ -18,8 +18,8 @@
         "data_description": {
           "name": "A friendly name for this washing machine.",
           "power_sensor": "A sensor that reports the current active power in watts.",
-          "door_sensor": "Optional. Used to arm cycle detection and record door events.",
-          "vibration_sensor": "Optional. Used to detect a probable final spin.",
+          "door_sensor": "Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
           "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",          
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
@@ -42,8 +42,8 @@
         "data_description": {
           "name": "A friendly name for this washing machine.",
           "power_sensor": "A sensor that reports the current active power in watts.",
-          "door_sensor": "Optional. Used to arm cycle detection and record door events.",
-          "vibration_sensor": "Optional. Used to detect a probable final spin.",
+          "door_sensor": "Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
           "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",          
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
