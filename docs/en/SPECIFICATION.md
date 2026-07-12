@@ -133,14 +133,18 @@ Laundry Monitor should prefer standard Home Assistant entities (such as button, 
 ## 4. Data Sources
 ### 4.1 Required sources
 
-At least one power sensor is required.
+The following sources are required:
 
-The power sensor should report current power consumption in watts.
+- power sensor;
+- door sensor;
+- vibration sensor.
 
 Example:
 
 ```text
 sensor.washing_machine_power
+sensor.washing_machine_door
+sensor.washing_machine_vibration
 ```
 
 ### 4.2 Recommended sources
