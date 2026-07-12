@@ -11,7 +11,6 @@ CONF_DOOR_SENSOR: Final = "door_sensor"
 CONF_VIBRATION_SENSOR: Final = "vibration_sensor"
 CONF_LEAK_SENSOR: Final = "leak_sensor"
 CONF_ENERGY_SENSOR: Final = "energy_sensor"
-CONF_TEMPERATURE_SENSOR: Final = "temperature_sensor"
 CONF_PLUG_SWITCH: Final = "plug_switch"
 CONF_TRACK_LAUNDRY: Final = "track_laundry"
 
