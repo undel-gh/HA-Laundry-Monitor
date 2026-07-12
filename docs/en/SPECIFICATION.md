@@ -15,7 +15,7 @@ The integration does not communicate with the washing machine directly. Instead,
 - door sensor;
 - vibration sensor;
 - optional leak sensor;
-- optional temperature sensors for diagnostics.
+- optional energy sensor for diagnostics.
 
 Laundry Monitor is designed to answer:
 
@@ -159,7 +159,6 @@ Vibration sensor improves detection of final spin.
 Optional sensors:
 
 - leak sensor;
-- temperature sensor;
 - energy sensor;
 - plug switch state.
 
@@ -409,7 +408,6 @@ Optional fields:
 
 - leak sensor;
 - energy sensor;
-- temperature sensor;
 - plug switch.
 
 ### 11.2 Options Flow
@@ -526,4 +524,3 @@ Laundry Monitor is not:
 ## 16. Open Questions
 - Should confidence be a percentage or diagnostic enum?
 - Should final spin detection be enabled by default?
-- Should temperature be diagnostic-only in v1.0?
