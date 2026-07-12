@@ -11,8 +11,7 @@
           "door_sensor": "Door sensor",
           "vibration_sensor": "Vibration sensor",
           "leak_sensor": "Leak sensor",
-          "energy_sensor": "Energy sensor",
-          "temperature_sensor": "Temperature sensor",
+          "energy_sensor": "Energy sensor",          
           "plug_switch": "Smart plug switch",
           "track_laundry": "Enable laundry tracking"
         },
@@ -22,8 +21,7 @@
           "door_sensor": "Optional. Used to arm cycle detection and record door events.",
           "vibration_sensor": "Optional. Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
-          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
-          "temperature_sensor": "Optional diagnostic source. It does not affect cycle detection in the initial implementation.",
+          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",          
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
           "track_laundry": "Expose laundry-presence tracking and a Mark unloaded button."
         }
@@ -37,8 +35,7 @@
           "door_sensor": "Door sensor",
           "vibration_sensor": "Vibration sensor",
           "leak_sensor": "Leak sensor",
-          "energy_sensor": "Energy sensor",
-          "temperature_sensor": "Temperature sensor",
+          "energy_sensor": "Energy sensor",          
           "plug_switch": "Smart plug switch",
           "track_laundry": "Enable laundry tracking"
         },
@@ -48,8 +45,7 @@
           "door_sensor": "Optional. Used to arm cycle detection and record door events.",
           "vibration_sensor": "Optional. Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
-          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
-          "temperature_sensor": "Optional diagnostic source. It does not affect cycle detection in the initial implementation.",
+          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",          
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
           "track_laundry": "Expose laundry-presence tracking and a Mark unloaded button."
         }
