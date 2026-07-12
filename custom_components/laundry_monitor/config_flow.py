@@ -30,8 +30,7 @@ from .const import (
     CONF_ENERGY_SENSOR,
     CONF_LEAK_SENSOR,
     CONF_PLUG_SWITCH,
-    CONF_POWER_SENSOR,
-    CONF_TEMPERATURE_SENSOR,
+    CONF_POWER_SENSOR,    
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
     DEFAULT_NAME,
@@ -121,16 +120,7 @@ def _config_schema(
             ): _entity_selector(
                 domain="sensor",
                 device_class=SensorDeviceClass.ENERGY,
-            ),
-            vol.Optional(
-                CONF_TEMPERATURE_SENSOR,
-                description=_suggested_value(
-                    defaults.get(CONF_TEMPERATURE_SENSOR)
-                ),
-            ): _entity_selector(
-                domain="sensor",
-                device_class=SensorDeviceClass.TEMPERATURE,
-            ),
+            ),            
             vol.Optional(
                 CONF_PLUG_SWITCH,
                 description=_suggested_value(
