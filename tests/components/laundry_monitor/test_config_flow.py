@@ -35,8 +35,8 @@ async def test_user_flow(
         {
             CONF_NAME: "Washing Machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "sensor.washing_machine_vibration",
+            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: True,
         },
     )
@@ -46,6 +46,8 @@ async def test_user_flow(
     assert result["data"] == {
         CONF_NAME: "Washing Machine",
         CONF_POWER_SENSOR: "sensor.washing_machine_power",
+        CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+        CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
         CONF_TRACK_LAUNDRY: True,
     }
 
@@ -61,8 +63,8 @@ async def test_duplicate_power_sensor_is_rejected(
         data={
             CONF_NAME: "Existing washing machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "sensor.washing_machine_vibration",
+            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: False,
         },
     )
@@ -74,8 +76,8 @@ async def test_duplicate_power_sensor_is_rejected(
         data={
             CONF_NAME: "Second washing machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "sensor.washing_machine_vibration",
+            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: False,
         },
     )
