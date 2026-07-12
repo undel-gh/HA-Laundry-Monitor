@@ -33,7 +33,8 @@ Power Sensor
 Door Sensor
 Vibration Sensor
 Leak Sensor (optional)
-Temperature Sensor (optional)
+Energy Sensor (optional)
+
 
         │
         ▼
