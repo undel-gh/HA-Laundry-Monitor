@@ -12,131 +12,119 @@ Version: 0.1
 
 ## FR-001
 
-The integration shall require a power sensor.
+The integration shall a power sensor, a door sensor, and a vibration sensor.
 
 ---
 
 ## FR-002
 
-The integration shall operate without a door sensor.
+The integration shall operate without a leak sensor.
 
 ---
 
 ## FR-003
 
-The integration shall operate without a vibration sensor.
+The integration shall expose a stable public cycle state model.
 
 ---
 
 ## FR-004
 
-The integration shall operate without a leak sensor.
+The integration shall never control external devices.
 
 ---
 
 ## FR-005
 
-The integration shall expose a stable public cycle state model.
+The integration shall explain every state transition.
 
 ---
 
 ## FR-006
 
-The integration shall never control external devices.
+The integration shall expose diagnostic information.
 
 ---
 
 ## FR-007
 
-The integration shall explain every state transition.
+Every threshold shall be configurable.
 
 ---
 
 ## FR-008
 
-The integration shall expose diagnostic information.
+Activity detection shall be independent from spin detection.
 
 ---
 
 ## FR-009
 
-Every threshold shall be configurable.
+Spin detection shall be independent from finish detection.
 
 ---
 
 ## FR-010
 
-Activity detection shall be independent from spin detection.
+Leak detection shall be independent from cycle detection.
 
 ---
 
 ## FR-011
 
-Spin detection shall be independent from finish detection.
+Laundry Tracking shall be independent from cycle detection.
 
 ---
 
 ## FR-012
 
-Leak detection shall be independent from cycle detection.
+Laundry Tracking shall be optional.
 
 ---
 
 ## FR-013
 
-Laundry Tracking shall be independent from cycle detection.
+Opening the washing machine door shall not imply that laundry has been removed.
 
 ---
 
 ## FR-014
 
-Laundry Tracking shall be optional.
+Laundry shall be marked as removed only by explicit user action.
 
 ---
 
 ## FR-015
 
-Opening the washing machine door shall not imply that laundry has been removed.
+The integration shall support multiple washing machines.
 
 ---
 
 ## FR-016
 
-Laundry shall be marked as removed only by explicit user action.
+The integration shall support localization.
 
 ---
 
 ## FR-017
 
-The integration shall support multiple washing machines.
+English translations shall be provided.
 
 ---
 
 ## FR-018
 
-The integration shall support localization.
+All user-visible strings shall be localizable.
 
 ---
 
 ## FR-019
 
-English translations shall be provided.
-
----
-
-## FR-020
-
-All user-visible strings shall be localizable.
-
----
-
-## FR-021
-
 The integration shall expose Home Assistant events for major state transitions.
 
 ---
 
-## FR-022
+## FR-020
 
 Public entity identifiers shall remain stable between compatible releases.
 
