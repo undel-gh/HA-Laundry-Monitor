@@ -581,9 +581,9 @@ Loss of the leak sensor must not affect the cycle state.
 
 Only leak-related diagnostics and leak reporting are affected.
 
-### 12.5 Energy or temperature sensor unavailable
+### 12.5 Energy sensor unavailable
 
-Loss of an optional energy or temperature sensor must not affect state transitions.
+Loss of an optional energy sensor must not affect state transitions.
 
 ## 13. Home Assistant Restart and State Restoration
 
