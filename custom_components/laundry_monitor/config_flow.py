@@ -82,7 +82,7 @@ def _config_schema(
                 domain="sensor",
                 device_class=SensorDeviceClass.POWER,
             ),
-            vol.Optional(
+            vol.Required(
                 CONF_DOOR_SENSOR,
                 description=_suggested_value(
                     defaults.get(CONF_DOOR_SENSOR)
@@ -94,7 +94,7 @@ def _config_schema(
                     BinarySensorDeviceClass.OPENING,
                 ],
             ),
-            vol.Optional(
+            vol.Required(
                 CONF_VIBRATION_SENSOR,
                 description=_suggested_value(
                     defaults.get(CONF_VIBRATION_SENSOR)
