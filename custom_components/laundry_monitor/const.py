@@ -14,6 +14,20 @@ CONF_ENERGY_SENSOR: Final = "energy_sensor"
 CONF_PLUG_SWITCH: Final = "plug_switch"
 CONF_TRACK_LAUNDRY: Final = "track_laundry"
 
+# Spin Detector option keys.
+CONF_SPIN_REQUIRED_EVENTS: Final = "spin_required_events"
+CONF_SPIN_WINDOW: Final = "spin_window"
+CONF_SPIN_MIN_CYCLE_TIME: Final = "spin_min_cycle_time"
+CONF_SPIN_ACTIVITY_MAX_AGE: Final = "spin_activity_max_age"
+
+DEFAULT_SPIN_REQUIRED_EVENTS: Final = 3
+DEFAULT_SPIN_WINDOW: Final = 180
+DEFAULT_SPIN_MIN_CYCLE_TIME: Final = 600
+DEFAULT_SPIN_ACTIVITY_MAX_AGE: Final = 120
+
+# Transition reason.
+REASON_FINAL_SPIN_CONFIRMED: Final = "final_spin_confirmed"
+
 # Activity Detector option keys.
 CONF_START_THRESHOLD: Final = "start_threshold"
 CONF_ACTIVITY_THRESHOLD: Final = "activity_threshold"
