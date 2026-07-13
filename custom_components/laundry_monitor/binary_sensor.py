@@ -43,6 +43,12 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[
         value_fn=lambda runtime: runtime.cycle_state
         is LaundryCycleState.FINISHED,
     ),
+    LaundryMonitorBinarySensorDescription(
+        key="activity_detected",
+        translation_key="activity_detected",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.activity_detected,
+    ),
 )
 
 
