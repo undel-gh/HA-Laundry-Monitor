@@ -4,24 +4,24 @@
     "step": {
       "user": {
         "title": "Add a washing machine",
-        "description": "Select the Home Assistant entities used to monitor this washing machine. Only the power sensor is required.",
+        "description": "Select the Home Assistant entities used to monitor this washing machine. Power, door, and vibration sensors are required.",
         "data": {
           "name": "Name",
           "power_sensor": "Power sensor",
           "door_sensor": "Door sensor",
           "vibration_sensor": "Vibration sensor",
           "leak_sensor": "Leak sensor",
-          "energy_sensor": "Energy sensor",          
+          "energy_sensor": "Energy sensor",
           "plug_switch": "Smart plug switch",
           "track_laundry": "Enable laundry tracking"
         },
         "data_description": {
           "name": "A friendly name for this washing machine.",
           "power_sensor": "A sensor that reports the current active power in watts.",
-          "door_sensor": "Used to arm cycle detection and record door events.",
-          "vibration_sensor": "Used to detect a probable final spin.",
+          "door_sensor": "Required. Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Required. Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
-          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",          
+          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
           "track_laundry": "Expose laundry-presence tracking and a Mark unloaded button."
         }
@@ -35,17 +35,17 @@
           "door_sensor": "Door sensor",
           "vibration_sensor": "Vibration sensor",
           "leak_sensor": "Leak sensor",
-          "energy_sensor": "Energy sensor",          
+          "energy_sensor": "Energy sensor",
           "plug_switch": "Smart plug switch",
           "track_laundry": "Enable laundry tracking"
         },
         "data_description": {
           "name": "A friendly name for this washing machine.",
           "power_sensor": "A sensor that reports the current active power in watts.",
-          "door_sensor": "Used to arm cycle detection and record door events.",
-          "vibration_sensor": "Used to detect a probable final spin.",
+          "door_sensor": "Required. Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Required. Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
-          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",          
+          "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
           "track_laundry": "Expose laundry-presence tracking and a Mark unloaded button."
         }
@@ -57,6 +57,46 @@
     "abort": {
       "already_configured": "This power sensor is already used by another Laundry Monitor entry.",
       "reconfigure_successful": "The washing machine was reconfigured successfully."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cycle_state": {
+        "name": "Cycle state",
+        "state": {
+          "idle": "Idle",
+          "armed": "Armed",
+          "running": "Running",
+          "final_spin": "Final spin",
+          "finished": "Finished",
+          "error": "Error"
+        }
+      },
+      "last_transition_reason": {
+        "name": "Last transition reason"
+      },
+      "last_state_change": {
+        "name": "Last state change"
+      }
+    },
+    "binary_sensor": {
+      "running": {
+        "name": "Running"
+      },
+      "finished": {
+        "name": "Finished"
+      },
+      "leak": {
+        "name": "Leak"
+      },
+      "laundry_present": {
+        "name": "Laundry present"
+      }
+    },
+    "button": {
+      "mark_unloaded": {
+        "name": "Mark unloaded"
+      }
     }
   }
 }
