@@ -66,6 +66,21 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.last_activity,
     ),
+    LaundryMonitorSensorDescription(
+        key="final_spin_confidence",
+        translation_key="final_spin_confidence",
+        native_unit_of_measurement="%",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: round(
+            runtime.final_spin_confidence * 100,
+        ),
+    ),
+    LaundryMonitorSensorDescription(
+        key="final_spin_evidence_count",
+        translation_key="final_spin_evidence_count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.final_spin_evidence_count,
+    ),
 )
 
 
