@@ -77,6 +77,12 @@
       },
       "last_state_change": {
         "name": "Последнее изменение состояния"
+      },
+      "current_power": {
+        "name": "Текущая мощность"
+      },
+      "last_activity": {
+        "name": "Последняя активность"
       }
     },
     "binary_sensor": {
@@ -91,6 +97,9 @@
       },
       "laundry_present": {
         "name": "Бельё в машине"
+      },      
+      "activity_detected": {
+        "name": "Обнаружена активность"
       }
     },
     "button": {
