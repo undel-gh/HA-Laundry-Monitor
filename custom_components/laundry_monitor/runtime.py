@@ -397,40 +397,52 @@ class LaundryMonitorRuntime:
         reason: str,
     ) -> None:
         """Set the public cycle state."""
-        if self.cycle_state == new_state and self.last_transition_reason == reason:
-            return        
+        if (
+            self.cycle_state == new_state
+            and self.last_transition_reason == reason
+        ):
+            return
 
-        if new_state is LaundryCycleState.FINAL_SPIN:
-            self.finish_detector.reset()
-            self.finish_quiet_since = None
-            self.finish_deadline = None
-            self.finish_remaining_seconds = None
-            self._evaluate_finish()
-        elif new_state is not LaundryCycleState.FINAL_SPIN:
-            self._reset_finish_detection()
+        old_state = self.cycle_state
+        transition_time = dt_util.utcnow()
 
-        elif new_state is LaundryCycleState.RUNNING:
-            self.cycle_started_at = dt_util.utcnow()
+        self.cycle_state = new_state
+        self.last_transition_reason = reason
+        self.last_state_change = transition_time
+
+        if new_state is LaundryCycleState.RUNNING:
+            self.cycle_started_at = transition_time
+
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
             self.spin_detector.reset(
                 vibration_active=self.vibration_active,
             )
+
+            self._reset_finish_detection()
+
+        elif new_state is LaundryCycleState.FINAL_SPIN:
+            self.finish_detector.reset()
+            self.finish_quiet_since = None
+            self.finish_deadline = None
+            self.finish_remaining_seconds = None
+
         elif new_state in (
             LaundryCycleState.IDLE,
             LaundryCycleState.ARMED,
         ):
             self.cycle_started_at = None
+
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
             self.spin_detector.reset(
                 vibration_active=self.vibration_active,
             )
 
-        old_state = self.cycle_state
-        self.cycle_state = new_state
-        self.last_transition_reason = reason
-        self.last_state_change = dt_util.utcnow()
+            self._reset_finish_detection()
+
+        elif new_state is LaundryCycleState.FINISHED:
+            self._reset_finish_detection()
 
         if new_state in (
             LaundryCycleState.RUNNING,
@@ -449,7 +461,12 @@ class LaundryMonitorRuntime:
                 "reason": reason,
             },
         )
+
         self._notify_entities()
+
+        if new_state is LaundryCycleState.FINAL_SPIN:
+            # Выполняем после публикации нового состояния.
+            self._evaluate_finish()
 
     @callback
     def async_mark_unloaded(self) -> None:
