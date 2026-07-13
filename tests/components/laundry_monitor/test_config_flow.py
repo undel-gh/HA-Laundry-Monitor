@@ -1,5 +1,6 @@
 """Test the Laundry Monitor config flow."""
-
+import pytest
+import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
@@ -85,3 +86,68 @@ async def test_duplicate_power_sensor_is_rejected(
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
     assert result["errors"] == {"base": "already_configured"}
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        CONF_DOOR_SENSOR,
+        CONF_VIBRATION_SENSOR,
+    ],
+)
+async def test_required_sensor_is_rejected_when_missing(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+    missing_field: str,
+) -> None:
+    """Test that door and vibration sensors remain required."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_USER},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "user"
+
+    user_input = {
+        CONF_NAME: "Washing Machine",
+        CONF_POWER_SENSOR: "sensor.washing_machine_power",
+        CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+        CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
+        CONF_TRACK_LAUNDRY: True,
+    }
+    user_input.pop(missing_field)
+
+    with pytest.raises(vol.MultipleInvalid):
+        result["data_schema"](user_input)
+
+
+@pytest.mark.parametrize(
+    "required_field",
+    [
+        CONF_POWER_SENSOR,
+        CONF_DOOR_SENSOR,
+        CONF_VIBRATION_SENSOR,
+    ],
+)
+async def test_sensor_is_declared_as_required_in_user_schema(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+    required_field: str,
+) -> None:
+    """Test that all primary sensors use vol.Required markers."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_USER},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+
+    schema_keys = result["data_schema"].schema
+    matching_markers = [
+        marker
+        for marker in schema_keys
+        if marker.schema == required_field
+    ]
+
+    assert len(matching_markers) == 1
+    assert isinstance(matching_markers[0], vol.Required)
