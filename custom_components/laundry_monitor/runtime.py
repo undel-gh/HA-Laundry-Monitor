@@ -571,7 +571,7 @@ class LaundryMonitorRuntime:
         )
 
     @callback
-    def _async_finish_confirmation_elapsed(self, _now: datetime) -> None:
+    def _async_finish_confirmation_elapsed(self, now: datetime) -> None:
         self._cancel_finish_confirmation = None
         if self.cycle_state is not LaundryCycleState.FINAL_SPIN:
             return
@@ -579,7 +579,7 @@ class LaundryMonitorRuntime:
             activity_detected=self.activity_detected,
             last_activity=self.last_activity,
             vibration_active=self.vibration_active,
-            now=dt_util.utcnow(),
+            now=now,
         )
         self._apply_finish_diagnostics(evaluation)
         if evaluation.detected:
