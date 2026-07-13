@@ -89,6 +89,15 @@
       },
       "final_spin_evidence_count": {
         "name": "Количество признаков финального отжима"
+      },
+      "finish_quiet_since": {
+        "name": "Отсутствие активности с"
+      },
+      "finish_deadline": {
+        "name": "Срок подтверждения завершения"
+      },
+      "finish_remaining": {
+        "name": "До подтверждения завершения"
       }
     },
     "binary_sensor": {
