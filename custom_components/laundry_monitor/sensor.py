@@ -49,6 +49,22 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.last_state_change,
+    ),     
+    LaundryMonitorSensorDescription(
+        key="current_power",
+        translation_key="current_power",
+        native_unit_of_measurement="W",
+        device_class=SensorDeviceClass.POWER,
+        state_class="measurement",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.power,
+    ),
+    LaundryMonitorSensorDescription(
+        key="last_activity",
+        translation_key="last_activity",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.last_activity,
     ),
 )
 
