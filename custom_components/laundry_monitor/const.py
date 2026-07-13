@@ -20,13 +20,21 @@ DEFAULT_TRACK_LAUNDRY: Final = False
 CONFIG_ENTRY_VERSION: Final = 1
 CONFIG_ENTRY_MINOR_VERSION: Final = 1
 
+# Runtime platforms.
+PLATFORMS: Final = ("sensor", "binary_sensor", "button")
+
+# Dispatcher signals.
+SIGNAL_RUNTIME_UPDATED: Final = f"{DOMAIN}_runtime_updated"
+
+# Transition reasons.
+REASON_INITIAL_SETUP: Final = "initial_setup"
+REASON_MARKED_UNLOADED: Final = "marked_unloaded"
+
 # Event names.
 EVENT_CYCLE_STARTED: Final = f"{DOMAIN}.cycle_started"
 EVENT_FINAL_SPIN_DETECTED: Final = f"{DOMAIN}.final_spin_detected"
 EVENT_CYCLE_FINISHED: Final = f"{DOMAIN}.cycle_finished"
-EVENT_DOOR_OPENED_AFTER_FINISH: Final = (
-    f"{DOMAIN}.door_opened_after_finish"
-)
+EVENT_DOOR_OPENED_AFTER_FINISH: Final = f"{DOMAIN}.door_opened_after_finish"
 EVENT_MACHINE_UNLOADED: Final = f"{DOMAIN}.machine_unloaded"
 EVENT_LEAK_DETECTED: Final = f"{DOMAIN}.leak_detected"
 EVENT_STATE_CHANGED: Final = f"{DOMAIN}.state_changed"
