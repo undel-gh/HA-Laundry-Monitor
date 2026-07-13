@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .spin import SpinDetector
+
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -39,6 +41,16 @@ from .const import (
     REASON_MARKED_UNLOADED,
     REASON_POWER_ABOVE_START_THRESHOLD,
     SIGNAL_RUNTIME_UPDATED,
+    CONF_SPIN_ACTIVITY_MAX_AGE,
+    CONF_SPIN_MIN_CYCLE_TIME,
+    CONF_SPIN_REQUIRED_EVENTS,
+    CONF_SPIN_WINDOW,
+    DEFAULT_SPIN_ACTIVITY_MAX_AGE,
+    DEFAULT_SPIN_MIN_CYCLE_TIME,
+    DEFAULT_SPIN_REQUIRED_EVENTS,
+    DEFAULT_SPIN_WINDOW,
+    EVENT_FINAL_SPIN_DETECTED,
+    REASON_FINAL_SPIN_CONFIRMED,
 )
 
 
@@ -59,8 +71,12 @@ class LaundryMonitorRuntime:
     leak_detected: bool = False
     energy: float | None = None
     laundry_present: bool = False
+    cycle_started_at: datetime | None = None
+    final_spin_confidence: float = 0.0
+    final_spin_evidence_count: int = 0
 
     activity_detector: ActivityDetector = field(init=False)
+    spin_detector: SpinDetector = field(init=False)
 
     _remove_source_listener: Callable[[], None] | None = field(
         default=None,
@@ -84,6 +100,32 @@ class LaundryMonitorRuntime:
                 self.entry.options.get(
                     CONF_ACTIVITY_THRESHOLD,
                     DEFAULT_ACTIVITY_THRESHOLD,
+                )
+            ),            
+        )
+        self.spin_detector = SpinDetector(
+            required_events=int(
+                self.entry.options.get(
+                    CONF_SPIN_REQUIRED_EVENTS,
+                    DEFAULT_SPIN_REQUIRED_EVENTS,
+                )
+            ),
+            window_seconds=int(
+                self.entry.options.get(
+                    CONF_SPIN_WINDOW,
+                    DEFAULT_SPIN_WINDOW,
+                )
+            ),
+            min_cycle_seconds=int(
+                self.entry.options.get(
+                    CONF_SPIN_MIN_CYCLE_TIME,
+                    DEFAULT_SPIN_MIN_CYCLE_TIME,
+                )
+            ),
+            activity_max_age_seconds=int(
+                self.entry.options.get(
+                    CONF_SPIN_ACTIVITY_MAX_AGE,
+                    DEFAULT_SPIN_ACTIVITY_MAX_AGE,
                 )
             ),
         )
@@ -166,6 +208,9 @@ class LaundryMonitorRuntime:
             self._update_source(entity_id, self.hass.states.get(entity_id))
 
         self.activity_detector.evaluate(self.power)
+        self.spin_detector.reset(
+            vibration_active=self.vibration_active,
+        )
 
     @callback
     def _async_source_state_changed(
@@ -185,6 +230,12 @@ class LaundryMonitorRuntime:
         elif entity_id == self.entry.data.get(CONF_DOOR_SENSOR):
             self._handle_door_update(old_door_open)
 
+        if entity_id in (
+            self.entry.data.get(CONF_POWER_SENSOR),
+            self.entry.data.get(CONF_VIBRATION_SENSOR),
+        ):
+            self._evaluate_spin()
+        
         if not old_leak and self.leak_detected:
             self.hass.bus.async_fire(
                 EVENT_LEAK_DETECTED,
@@ -327,6 +378,24 @@ class LaundryMonitorRuntime:
         if self.cycle_state == new_state and self.last_transition_reason == reason:
             return
 
+        if new_state is LaundryCycleState.RUNNING:
+            self.cycle_started_at = dt_util.utcnow()
+            self.final_spin_confidence = 0.0
+            self.final_spin_evidence_count = 0
+            self.spin_detector.reset(
+                vibration_active=self.vibration_active,
+            )
+        elif new_state in (
+            LaundryCycleState.IDLE,
+            LaundryCycleState.ARMED,
+        ):
+            self.cycle_started_at = None
+            self.final_spin_confidence = 0.0
+            self.final_spin_evidence_count = 0
+            self.spin_detector.reset(
+                vibration_active=self.vibration_active,
+            )
+
         old_state = self.cycle_state
         self.cycle_state = new_state
         self.last_transition_reason = reason
@@ -381,6 +450,47 @@ class LaundryMonitorRuntime:
     def _notify_entities(self) -> None:
         """Notify all entities belonging to this runtime."""
         async_dispatcher_send(self.hass, self.signal)
+
+    @callback
+    def _evaluate_spin(self) -> None:
+        """Evaluate final-spin evidence."""
+        if self.cycle_state is not LaundryCycleState.RUNNING:
+            return
+
+        evaluation = self.spin_detector.evaluate(
+            vibration_active=self.vibration_active,
+            activity_detected=self.activity_detected,
+            last_activity=self.last_activity,
+            cycle_started_at=self.cycle_started_at,
+            now=dt_util.utcnow(),
+        )
+
+        changed = (
+            self.final_spin_confidence != evaluation.confidence
+            or self.final_spin_evidence_count != evaluation.evidence_count
+        )
+        self.final_spin_confidence = evaluation.confidence
+        self.final_spin_evidence_count = evaluation.evidence_count
+
+        if evaluation.detected:
+            self.async_set_cycle_state(
+                LaundryCycleState.FINAL_SPIN,
+                REASON_FINAL_SPIN_CONFIRMED,
+            )
+            self.hass.bus.async_fire(
+                EVENT_FINAL_SPIN_DETECTED,
+                {
+                    "config_entry_id": self.entry.entry_id,
+                    "name": self.name,
+                    "confidence": evaluation.confidence,
+                    "evidence_count": evaluation.evidence_count,
+                    "window_seconds": self.spin_detector.window_seconds,
+                },
+            )
+            return
+
+        if changed:
+            self._notify_entities()
 
 
 def _state_as_float(state: State | None) -> float | None:
