@@ -89,6 +89,15 @@
       },
        "final_spin_evidence_count": {
          "name": "Final spin evidence count"
+      },
+      "finish_quiet_since": {
+        "name": "Finish inactivity since"
+      },
+      "finish_deadline": {
+        "name": "Finish confirmation deadline"
+      },
+      "finish_remaining": {
+        "name": "Finish confirmation remaining"
       }
     },
     "binary_sensor": {
