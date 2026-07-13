@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -10,23 +11,33 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.util import dt as dt_util
 
+from .activity import ActivityDetector
 from .const import (
+    CONF_ACTIVITY_THRESHOLD,
     CONF_DOOR_SENSOR,
     CONF_ENERGY_SENSOR,
     CONF_LEAK_SENSOR,
     CONF_POWER_SENSOR,
+    CONF_START_CONFIRMATION,
+    CONF_START_THRESHOLD,
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
-    DOMAIN,
+    DEFAULT_ACTIVITY_THRESHOLD,
+    DEFAULT_START_CONFIRMATION,
+    DEFAULT_START_THRESHOLD,
+    EVENT_CYCLE_STARTED,
     EVENT_LEAK_DETECTED,
     EVENT_MACHINE_UNLOADED,
     EVENT_STATE_CHANGED,
     LaundryCycleState,
+    REASON_DOOR_CLOSED,
+    REASON_DOOR_OPENED_BEFORE_START,
     REASON_INITIAL_SETUP,
     REASON_MARKED_UNLOADED,
+    REASON_POWER_ABOVE_START_THRESHOLD,
     SIGNAL_RUNTIME_UPDATED,
 )
 
@@ -49,7 +60,33 @@ class LaundryMonitorRuntime:
     energy: float | None = None
     laundry_present: bool = False
 
-    _remove_source_listener: Any | None = field(default=None, init=False)
+    activity_detector: ActivityDetector = field(init=False)
+
+    _remove_source_listener: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
+    _cancel_start_confirmation: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
+
+    def __post_init__(self) -> None:
+        """Initialize detector modules from config-entry options."""
+        self.activity_detector = ActivityDetector(
+            start_threshold=float(
+                self.entry.options.get(
+                    CONF_START_THRESHOLD,
+                    DEFAULT_START_THRESHOLD,
+                )
+            ),
+            activity_threshold=float(
+                self.entry.options.get(
+                    CONF_ACTIVITY_THRESHOLD,
+                    DEFAULT_ACTIVITY_THRESHOLD,
+                )
+            ),
+        )
 
     @property
     def name(self) -> str:
@@ -60,6 +97,26 @@ class LaundryMonitorRuntime:
     def tracking_enabled(self) -> bool:
         """Return whether laundry-presence tracking is enabled."""
         return bool(self.entry.data.get(CONF_TRACK_LAUNDRY, False))
+
+    @property
+    def start_confirmation_seconds(self) -> int:
+        """Return the configured cycle-start confirmation time."""
+        return int(
+            self.entry.options.get(
+                CONF_START_CONFIRMATION,
+                DEFAULT_START_CONFIRMATION,
+            )
+        )
+
+    @property
+    def activity_detected(self) -> bool:
+        """Return whether meaningful power activity is present."""
+        return self.activity_detector.activity_detected
+
+    @property
+    def last_activity(self) -> datetime | None:
+        """Return the last meaningful power activity timestamp."""
+        return self.activity_detector.last_activity
 
     @property
     def signal(self) -> str:
@@ -95,16 +152,20 @@ class LaundryMonitorRuntime:
             )
 
     async def async_stop(self) -> None:
-        """Remove runtime subscriptions."""
+        """Remove runtime subscriptions and timers."""
         if self._remove_source_listener is not None:
             self._remove_source_listener()
             self._remove_source_listener = None
 
+        self._cancel_pending_start_confirmation()
+
     @callback
     def _read_all_source_states(self) -> None:
-        """Read the current state of every configured source entity."""
+        """Read current states without causing cycle-state transitions."""
         for entity_id in self.source_entity_ids:
             self._update_source(entity_id, self.hass.states.get(entity_id))
+
+        self.activity_detector.evaluate(self.power)
 
     @callback
     def _async_source_state_changed(
@@ -113,10 +174,16 @@ class LaundryMonitorRuntime:
     ) -> None:
         """Handle a source entity state change."""
         entity_id = event.data["entity_id"]
+        old_door_open = self.door_open
         old_leak = self.leak_detected
 
         if not self._update_source(entity_id, event.data.get("new_state")):
             return
+
+        if entity_id == self.entry.data.get(CONF_POWER_SENSOR):
+            self._handle_power_update()
+        elif entity_id == self.entry.data.get(CONF_DOOR_SENSOR):
+            self._handle_door_update(old_door_open)
 
         if not old_leak and self.leak_detected:
             self.hass.bus.async_fire(
@@ -131,11 +198,98 @@ class LaundryMonitorRuntime:
         self._notify_entities()
 
     @callback
-    def _update_source(self, entity_id: str, state: State | None) -> bool:
-        """Update one cached source value.
+    def _handle_power_update(self) -> None:
+        """Evaluate power activity and manage start confirmation."""
+        evaluation = self.activity_detector.evaluate(self.power)
 
-        Return True when the cached value changed.
-        """
+        if evaluation.start_candidate:
+            self._schedule_start_confirmation()
+        else:
+            self._cancel_pending_start_confirmation()
+
+    @callback
+    def _handle_door_update(self, old_door_open: bool | None) -> None:
+        """Handle public state transitions caused by the door."""
+        # Only a real open -> closed event arms detection. Initial closed state
+        # during integration startup must not create a synthetic transition.
+        if (
+            old_door_open is True
+            and self.door_open is False
+            and self.cycle_state is LaundryCycleState.IDLE
+        ):
+            self.async_set_cycle_state(
+                LaundryCycleState.ARMED,
+                REASON_DOOR_CLOSED,
+            )
+            return
+
+        if (
+            self.door_open is True
+            and self.cycle_state is LaundryCycleState.ARMED
+        ):
+            self._cancel_pending_start_confirmation()
+            self.async_set_cycle_state(
+                LaundryCycleState.IDLE,
+                REASON_DOOR_OPENED_BEFORE_START,
+            )
+
+    @callback
+    def _schedule_start_confirmation(self) -> None:
+        """Schedule confirmation of sustained start-level power."""
+        if self.cycle_state not in (
+            LaundryCycleState.IDLE,
+            LaundryCycleState.ARMED,
+        ):
+            return
+
+        if self._cancel_start_confirmation is not None:
+            return
+
+        self._cancel_start_confirmation = async_call_later(
+            self.hass,
+            self.start_confirmation_seconds,
+            self._async_confirm_cycle_start,
+        )
+
+    @callback
+    def _async_confirm_cycle_start(self, _now: datetime) -> None:
+        """Confirm a cycle start after sustained high power."""
+        self._cancel_start_confirmation = None
+
+        if self.cycle_state not in (
+            LaundryCycleState.IDLE,
+            LaundryCycleState.ARMED,
+        ):
+            return
+
+        if not self.activity_detector.start_candidate:
+            return
+
+        self.async_set_cycle_state(
+            LaundryCycleState.RUNNING,
+            REASON_POWER_ABOVE_START_THRESHOLD,
+        )
+        self.hass.bus.async_fire(
+            EVENT_CYCLE_STARTED,
+            {
+                "config_entry_id": self.entry.entry_id,
+                "name": self.name,
+                "power": self.power,
+                "start_threshold": self.activity_detector.start_threshold,
+                "confirmation_seconds": self.start_confirmation_seconds,
+            },
+        )
+
+    @callback
+    def _cancel_pending_start_confirmation(self) -> None:
+        """Cancel a pending cycle-start confirmation timer."""
+        if self._cancel_start_confirmation is not None:
+            self._cancel_start_confirmation()
+            self._cancel_start_confirmation = None
+
+    @callback
+    def _update_source(self, entity_id: str, state: State | None) -> bool:
+        """Update one cached source value."""
         value: object
         data_key: str
 
@@ -169,10 +323,7 @@ class LaundryMonitorRuntime:
         new_state: LaundryCycleState,
         reason: str,
     ) -> None:
-        """Set the public cycle state.
-
-        Detectors and the state machine will call this method in later stages.
-        """
+        """Set the public cycle state."""
         if self.cycle_state == new_state and self.last_transition_reason == reason:
             return
 
