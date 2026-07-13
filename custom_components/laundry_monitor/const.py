@@ -64,6 +64,10 @@ EVENT_MACHINE_UNLOADED: Final = f"{DOMAIN}.machine_unloaded"
 EVENT_LEAK_DETECTED: Final = f"{DOMAIN}.leak_detected"
 EVENT_STATE_CHANGED: Final = f"{DOMAIN}.state_changed"
 
+# Finish detection
+CONF_FINISH_CONFIRMATION: Final = "finish_confirmation"
+DEFAULT_FINISH_CONFIRMATION: Final = 180
+REASON_FINISH_INACTIVITY_CONFIRMED: Final = "finish_inactivity_confirmed"
 
 class LaundryCycleState(StrEnum):
     """Public cycle states exposed by Laundry Monitor."""
