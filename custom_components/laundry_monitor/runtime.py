@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .spin import SpinDetector
+from .finish import FinishDetector, FinishEvaluation
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -51,6 +52,10 @@ from .const import (
     DEFAULT_SPIN_WINDOW,
     EVENT_FINAL_SPIN_DETECTED,
     REASON_FINAL_SPIN_CONFIRMED,
+    CONF_FINISH_CONFIRMATION,
+    DEFAULT_FINISH_CONFIRMATION,
+    EVENT_CYCLE_FINISHED,
+    REASON_FINISH_INACTIVITY_CONFIRMED,
 )
 
 
@@ -74,9 +79,14 @@ class LaundryMonitorRuntime:
     cycle_started_at: datetime | None = None
     final_spin_confidence: float = 0.0
     final_spin_evidence_count: int = 0
+    finish_quiet_since: datetime | None = None
+    finish_deadline: datetime | None = None
+    finish_remaining_seconds: float | None = None
 
     activity_detector: ActivityDetector = field(init=False)
     spin_detector: SpinDetector = field(init=False)
+    finish_detector: FinishDetector = field(init=False)
+    _cancel_finish_confirmation: Callable[[], None] | None = field(default=None, init=False)
 
     _remove_source_listener: Callable[[], None] | None = field(
         default=None,
@@ -129,6 +139,12 @@ class LaundryMonitorRuntime:
                 )
             ),
         )
+        self.finish_detector = FinishDetector(
+            confirmation_seconds=int(self.entry.options.get(
+                CONF_FINISH_CONFIRMATION, DEFAULT_FINISH_CONFIRMATION
+            ))
+        )
+
 
     @property
     def name(self) -> str:
@@ -200,6 +216,7 @@ class LaundryMonitorRuntime:
             self._remove_source_listener = None
 
         self._cancel_pending_start_confirmation()
+        self._cancel_pending_finish_confirmation()
 
     @callback
     def _read_all_source_states(self) -> None:
@@ -235,7 +252,12 @@ class LaundryMonitorRuntime:
             self.entry.data.get(CONF_VIBRATION_SENSOR),
         ):
             self._evaluate_spin()
-        
+        if entity_id in (
+            self.entry.data.get(CONF_POWER_SENSOR),
+            self.entry.data.get(CONF_VIBRATION_SENSOR),
+        ):
+            self._evaluate_finish()
+
         if not old_leak and self.leak_detected:
             self.hass.bus.async_fire(
                 EVENT_LEAK_DETECTED,
@@ -376,9 +398,18 @@ class LaundryMonitorRuntime:
     ) -> None:
         """Set the public cycle state."""
         if self.cycle_state == new_state and self.last_transition_reason == reason:
-            return
+            return        
 
-        if new_state is LaundryCycleState.RUNNING:
+        if new_state is LaundryCycleState.FINAL_SPIN:
+            self.finish_detector.reset()
+            self.finish_quiet_since = None
+            self.finish_deadline = None
+            self.finish_remaining_seconds = None
+            self._evaluate_finish()
+        elif new_state is not LaundryCycleState.FINAL_SPIN:
+            self._reset_finish_detection()
+
+        elif new_state is LaundryCycleState.RUNNING:
             self.cycle_started_at = dt_util.utcnow()
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
@@ -492,6 +523,90 @@ class LaundryMonitorRuntime:
         if changed:
             self._notify_entities()
 
+    @callback
+    def _evaluate_finish(self) -> None:
+        if self.cycle_state is not LaundryCycleState.FINAL_SPIN:
+            self._reset_finish_detection()
+            return
+        now = dt_util.utcnow()
+        evaluation = self.finish_detector.evaluate(
+            activity_detected=self.activity_detected,
+            last_activity=self.last_activity,
+            vibration_active=self.vibration_active,
+            now=now,
+        )
+        self._apply_finish_diagnostics(evaluation)
+        if evaluation.detected:
+            self._confirm_cycle_finished()
+            return
+        if not evaluation.quiet or evaluation.deadline is None:
+            self._cancel_pending_finish_confirmation()
+            self._notify_entities()
+            return
+        self._schedule_finish_confirmation(max((evaluation.deadline-now).total_seconds(),0.0))
+        self._notify_entities()
+
+    @callback
+    def _schedule_finish_confirmation(self, delay: float) -> None:
+        self._cancel_pending_finish_confirmation()
+        self._cancel_finish_confirmation = async_call_later(
+            self.hass, delay, self._async_finish_confirmation_elapsed
+        )
+
+    @callback
+    def _async_finish_confirmation_elapsed(self, _now: datetime) -> None:
+        self._cancel_finish_confirmation = None
+        if self.cycle_state is not LaundryCycleState.FINAL_SPIN:
+            return
+        evaluation = self.finish_detector.evaluate(
+            activity_detected=self.activity_detected,
+            last_activity=self.last_activity,
+            vibration_active=self.vibration_active,
+            now=dt_util.utcnow(),
+        )
+        self._apply_finish_diagnostics(evaluation)
+        if evaluation.detected:
+            self._confirm_cycle_finished()
+        elif evaluation.quiet and evaluation.remaining_seconds is not None:
+            self._schedule_finish_confirmation(evaluation.remaining_seconds)
+            self._notify_entities()
+
+    @callback
+    def _confirm_cycle_finished(self) -> None:
+        self._cancel_pending_finish_confirmation()
+        self.async_set_cycle_state(
+            LaundryCycleState.FINISHED,
+            REASON_FINISH_INACTIVITY_CONFIRMED,
+        )
+        self.hass.bus.async_fire(EVENT_CYCLE_FINISHED, {
+            "config_entry_id": self.entry.entry_id,
+            "name": self.name,
+            "quiet_since": self.finish_quiet_since,
+            "confirmation_seconds": self.finish_detector.confirmation_seconds,
+        })
+
+    @callback
+    def _apply_finish_diagnostics(self, evaluation: FinishEvaluation) -> None:
+        self.finish_quiet_since = evaluation.quiet_since
+        self.finish_deadline = evaluation.deadline
+        self.finish_remaining_seconds = (
+            round(evaluation.remaining_seconds,1)
+            if evaluation.remaining_seconds is not None else None
+        )
+
+    @callback
+    def _reset_finish_detection(self) -> None:
+        self._cancel_pending_finish_confirmation()
+        self.finish_detector.reset()
+        self.finish_quiet_since = None
+        self.finish_deadline = None
+        self.finish_remaining_seconds = None
+
+    @callback
+    def _cancel_pending_finish_confirmation(self) -> None:
+        if self._cancel_finish_confirmation is not None:
+            self._cancel_finish_confirmation()
+            self._cancel_finish_confirmation = None
 
 def _state_as_float(state: State | None) -> float | None:
     """Convert a Home Assistant state to float."""
