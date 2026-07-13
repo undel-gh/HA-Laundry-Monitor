@@ -83,6 +83,12 @@
       },
       "last_activity": {
         "name": "Last activity"
+      },
+      "final_spin_confidence": {
+        "name": "Final spin confidence"
+      },
+       "final_spin_evidence_count": {
+         "name": "Final spin evidence count"
       }
     },
     "binary_sensor": {
