@@ -83,6 +83,12 @@
       },
       "last_activity": {
         "name": "Последняя активность"
+      },
+      "final_spin_confidence": {
+        "name": "Уверенность в финальном отжиме"
+      },
+      "final_spin_evidence_count": {
+        "name": "Количество признаков финального отжима"
       }
     },
     "binary_sensor": {
