@@ -202,19 +202,37 @@ Internal states may evolve between releases without affecting the public API.
 stateDiagram-v2
     [*] --> Idle
 
-    Idle --> Armed: Door closed
-    Idle --> Running: Power > Start Threshold
+idle
+ ├─ door closed ─────────────→ armed
+ ├─ confirmed start ─────────→ running
+ └─ required source failure ─→ error
 
-    Armed --> Running: Power > Start Threshold
-    Armed --> Idle: Door opened before start
+armed
+ ├─ door opened ─────────────→ idle
+ ├─ arming timeout ──────────→ idle
+ ├─ confirmed start ─────────→ running
+ └─ required source failure ─→ error
 
-    Running --> FinalSpin: Final spin detected
-    Running --> Finished: Finish timeout
+running
+ ├─ final spin confirmed ────→ final_spin
+ ├─ long inactivity fallback → finished
+ └─ required source failure ─→ error
 
-    FinalSpin --> Running: Activity resumed
-    FinalSpin --> Finished: Finish timeout
+final_spin
+ ├─ activity resumes ────────→ running
+ ├─ inactivity confirmed ────→ finished
+ └─ required source failure ─→ error
 
-    Finished --> Idle: Mark unloaded
+finished
+ ├─ new cycle confirmed ─────→ running
+ ├─ mark unloaded ───────────→ idle
+ ├─ retention elapsed
+ │   when tracking disabled ─→ idle
+ └─ required source failure ─→ error
+
+error
+ └─ source recovered
+     and machine quiet ──────→ idle
 ```
 
 ## 6.2 Transition table
