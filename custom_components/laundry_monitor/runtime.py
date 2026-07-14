@@ -212,6 +212,7 @@ class LaundryMonitorRuntime:
     async def async_start(self) -> None:
         """Read initial source states and subscribe to future changes."""
         self._read_all_source_states()
+        await self._async_restore_snapshot()
 
         if self.source_entity_ids:
             self._remove_source_listener = async_track_state_change_event(
