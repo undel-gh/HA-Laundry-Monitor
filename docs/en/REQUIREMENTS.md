@@ -12,7 +12,7 @@ Version: 0.1
 
 ## FR-001
 
-The integration shall a power sensor, a door sensor, and a vibration sensor.
+The integration shall require a power sensor, a door sensor, and a vibration sensor.
 
 ---
 
