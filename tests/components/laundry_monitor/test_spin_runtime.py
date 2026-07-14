@@ -88,7 +88,7 @@ async def test_repeated_vibration_transitions_to_final_spin(
     enable_custom_integrations: None,
 ) -> None:
     """Test running -> final_spin after repeated vibration."""
-    entry = await await _setup_final_spin_entry(hass)
+    entry = await _setup_final_spin_entry(hass)
     runtime = entry.runtime_data
 
     await _vibration_pulse(hass)
@@ -112,7 +112,7 @@ async def test_vibration_is_ignored_outside_running(
     enable_custom_integrations: None,
 ) -> None:
     """Test that vibration cannot change idle state."""
-    entry = await await _setup_final_spin_entry(
+    entry = await _setup_final_spin_entry(
         hass,
         start_running=False,
     )
