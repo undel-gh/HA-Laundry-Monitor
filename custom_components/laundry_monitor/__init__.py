@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import PLATFORMS
 from .runtime import LaundryMonitorRuntime
+from .storage import LaundryStateStore
 
 type LaundryMonitorConfigEntry = ConfigEntry[LaundryMonitorRuntime]
 
@@ -41,3 +42,8 @@ async def async_unload_entry(
         await entry.runtime_data.async_stop()
 
     return unload_ok
+    
+async def async_remove_entry(hass, entry) -> None:
+    store = LaundryStateStore(hass)
+    await store.async_remove(entry.entry_id)
+
