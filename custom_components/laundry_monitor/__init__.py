@@ -13,7 +13,22 @@ from .storage import LaundryStateStore
 type LaundryMonitorConfigEntry = ConfigEntry[LaundryMonitorRuntime]
 
 _PLATFORM_ENUMS = tuple(Platform(platform) for platform in PLATFORMS)
+DATA_STATE_STORE = f"{DOMAIN}_state_store"
 
+
+def _get_state_store(hass: HomeAssistant) -> LaundryStateStore:
+    """Return the shared Laundry Monitor state store."""
+    store = hass.data.get(DATA_STATE_STORE)
+
+    if store is None:
+        store = LaundryStateStore(hass)
+        hass.data[DATA_STATE_STORE] = store
+        runtime = LaundryMonitorRuntime(
+            hass=hass,
+            entry=entry,
+            state_store=_get_state_store(hass),
+        )
+    return store
 
 async def async_setup_entry(
     hass: HomeAssistant,
