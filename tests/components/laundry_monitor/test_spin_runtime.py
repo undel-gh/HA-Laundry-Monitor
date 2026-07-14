@@ -21,11 +21,21 @@ from custom_components.laundry_monitor.const import (
 )
 
 
-async def _setup_entry(hass: HomeAssistant) -> MockConfigEntry:
-    """Set up a running-cycle test entry."""
+async def _setup_entry(
+    hass: HomeAssistant,
+    *,
+    start_running: bool = True,
+) -> MockConfigEntry:
+    """Set up a Spin Detector test entry."""
     hass.states.async_set("sensor.washing_machine_power", "45")
-    hass.states.async_set("binary_sensor.washing_machine_door", STATE_OFF)
-    hass.states.async_set("binary_sensor.washing_machine_vibration", STATE_OFF)
+    hass.states.async_set(
+        "binary_sensor.washing_machine_door",
+        STATE_OFF,
+    )
+    hass.states.async_set(
+        "binary_sensor.washing_machine_vibration",
+        STATE_OFF,
+    )
 
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -34,7 +44,8 @@ async def _setup_entry(hass: HomeAssistant) -> MockConfigEntry:
             CONF_NAME: "Washing Machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
             CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
+            CONF_VIBRATION_SENSOR:
+                "binary_sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: True,
         },
         options={
@@ -48,11 +59,13 @@ async def _setup_entry(hass: HomeAssistant) -> MockConfigEntry:
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    entry.runtime_data.async_set_cycle_state(
-        LaundryCycleState.RUNNING,
-        "test_running",
-    )
-    await hass.async_block_till_done()
+    if start_running:
+        assert entry.runtime_data.async_set_cycle_state(
+            LaundryCycleState.RUNNING,
+            "test_running",
+        )
+        await hass.async_block_till_done()
+
     return entry
 
 
@@ -99,9 +112,13 @@ async def test_vibration_is_ignored_outside_running(
     enable_custom_integrations: None,
 ) -> None:
     """Test that vibration cannot change idle state."""
-    entry = await _setup_entry(hass)
+    entry = await _setup_entry(
+        hass,
+        start_running=False,
+    )
     runtime = entry.runtime_data
-    runtime.async_set_cycle_state(LaundryCycleState.IDLE, "test_idle")
+
+    assert runtime.cycle_state is LaundryCycleState.IDLE
 
     await _vibration_pulse(hass)
     await _vibration_pulse(hass)
@@ -109,3 +126,4 @@ async def test_vibration_is_ignored_outside_running(
 
     assert runtime.cycle_state is LaundryCycleState.IDLE
     assert runtime.final_spin_evidence_count == 0
+    assert runtime.rejected_transition_count == 0
