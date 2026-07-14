@@ -222,7 +222,7 @@ stateDiagram-v2
 | Current state | Event | Next state | Notes |
 |---|---|---|---|
 | `idle` | Door closed | `armed` | Optional when door sensor exists |
-| `idle` | Power above start threshold | `running` | Fallback without door sensor |
+| `idle` | Power above start threshold | `running` | fallback when door evidence is unavailable |
 | `armed` | Power above start threshold | `running` | Cycle started |
 | `armed` | Door opened | `idle` | Start cancelled |
 | `running` | Final spin detected | `final_spin` | Based on vibration pattern |
