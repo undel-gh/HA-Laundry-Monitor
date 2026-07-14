@@ -202,37 +202,37 @@ Internal states may evolve between releases without affecting the public API.
 stateDiagram-v2
     [*] --> Idle
 
-idle
- ├─ door closed ─────────────→ armed
- ├─ confirmed start ─────────→ running
- └─ required source failure ─→ error
+    idle
+     ├─ door closed ─────────────→ armed
+     ├─ confirmed start ─────────→ running
+     └─ required source failure ─→ error
 
-armed
- ├─ door opened ─────────────→ idle
- ├─ arming timeout ──────────→ idle
- ├─ confirmed start ─────────→ running
- └─ required source failure ─→ error
+    armed
+     ├─ door opened ─────────────→ idle
+     ├─ arming timeout ──────────→ idle
+     ├─ confirmed start ─────────→ running
+     └─ required source failure ─→ error
 
-running
- ├─ final spin confirmed ────→ final_spin
- ├─ long inactivity fallback → finished
- └─ required source failure ─→ error
+    running
+     ├─ final spin confirmed ────→ final_spin
+     ├─ long inactivity fallback → finished
+     └─ required source failure ─→ error
 
-final_spin
- ├─ activity resumes ────────→ running
- ├─ inactivity confirmed ────→ finished
- └─ required source failure ─→ error
+    final_spin
+     ├─ activity resumes ────────→ running
+     ├─ inactivity confirmed ────→ finished
+     └─ required source failure ─→ error
 
-finished
- ├─ new cycle confirmed ─────→ running
- ├─ mark unloaded ───────────→ idle
- ├─ retention elapsed
- │   when tracking disabled ─→ idle
- └─ required source failure ─→ error
+    finished
+     ├─ new cycle confirmed ─────→ running
+     ├─ mark unloaded ───────────→ idle
+     ├─ retention elapsed
+     │   when tracking disabled ─→ idle
+     └─ required source failure ─→ error
 
-error
- └─ source recovered
-     and machine quiet ──────→ idle
+    error
+     └─ source recovered
+         and machine quiet ──────→ idle
 ```
 
 ## 6.2 Transition table
