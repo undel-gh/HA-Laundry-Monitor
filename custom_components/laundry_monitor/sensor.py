@@ -99,6 +99,18 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.finish_remaining_seconds,
     ),
+    LaundryMonitorSensorDescription(
+        key="rejected_transition_count",
+        translation_key="rejected_transition_count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.rejected_transition_count,
+    ),
+    LaundryMonitorSensorDescription(
+        key="last_rejected_transition",
+        translation_key="last_rejected_transition",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.last_rejected_transition,
+    ),
 )
 
 
