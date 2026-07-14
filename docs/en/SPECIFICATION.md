@@ -198,8 +198,8 @@ Internal states may evolve between releases without affecting the public API.
 
 ## 6. State Transitions
 ### 6.1 Basic transition model
-```mermaid
-stateDiagram-v2
+```text
+stateDiagram-v3
     [*] --> Idle
 
     idle
