@@ -69,6 +69,7 @@ class LaundryMonitorRuntime:
 
     hass: HomeAssistant
     entry: ConfigEntry
+    state_store: LaundryStateStore
 
     cycle_state: LaundryCycleState = LaundryCycleState.IDLE
     last_transition_reason: str = REASON_INITIAL_SETUP
@@ -86,8 +87,7 @@ class LaundryMonitorRuntime:
     finish_quiet_since: datetime | None = None
     finish_deadline: datetime | None = None
     finish_remaining_seconds: float | None = None
-    state_machine: LaundryStateMachine = field(init=False)
-    state_store: LaundryStateStore
+    state_machine: LaundryStateMachine = field(init=False)    
     rejected_transition_count: int = 0
     last_rejected_transition: str | None = None
 
