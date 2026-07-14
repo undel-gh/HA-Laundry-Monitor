@@ -10,21 +10,57 @@ from custom_components.laundry_monitor.const import (
     LaundryCycleState, REASON_FINISH_INACTIVITY_CONFIRMED,
 )
 
-async def _setup(hass: HomeAssistant, confirmation_seconds: int=30) -> MockConfigEntry:
-    hass.states.async_set("sensor.washing_machine_power","45")
-    hass.states.async_set("binary_sensor.washing_machine_door",STATE_OFF)
-    hass.states.async_set("binary_sensor.washing_machine_vibration",STATE_ON)
-    entry=MockConfigEntry(domain=DOMAIN,title="Washing Machine",data={
-        CONF_NAME:"Washing Machine", CONF_POWER_SENSOR:"sensor.washing_machine_power",
-        CONF_DOOR_SENSOR:"binary_sensor.washing_machine_door",
-        CONF_VIBRATION_SENSOR:"binary_sensor.washing_machine_vibration",
-        CONF_TRACK_LAUNDRY:True,
-    },options={CONF_FINISH_CONFIRMATION:confirmation_seconds})
+async def _setup_final_spin_entry(
+    hass: HomeAssistant,
+    *,
+    confirmation_seconds: int = 30,
+) -> MockConfigEntry:
+    """Set up an entry already placed in final_spin."""
+    hass.states.async_set("sensor.washing_machine_power", "45")
+    hass.states.async_set(
+        "binary_sensor.washing_machine_door",
+        STATE_OFF,
+    )
+    hass.states.async_set(
+        "binary_sensor.washing_machine_vibration",
+        STATE_ON,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Washing Machine",
+        data={
+            CONF_NAME: "Washing Machine",
+            CONF_POWER_SENSOR: "sensor.washing_machine_power",
+            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+            CONF_VIBRATION_SENSOR:
+                "binary_sensor.washing_machine_vibration",
+            CONF_TRACK_LAUNDRY: True,
+        },
+        options={
+            CONF_FINISH_CONFIRMATION: confirmation_seconds,
+        },
+    )
     entry.add_to_hass(hass)
+
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    entry.runtime_data.async_set_cycle_state(LaundryCycleState.FINAL_SPIN,"test_final_spin")
+
+    runtime = entry.runtime_data
+
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.RUNNING,
+        "test_running",
+    )
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.FINAL_SPIN,
+        "test_final_spin",
+    )
     await hass.async_block_till_done()
+
+    assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
+    assert runtime.rejected_transition_count == 0
+
     return entry
 
 async def test_quiet_period_transitions_to_finished(hass: HomeAssistant, enable_custom_integrations: None) -> None:
