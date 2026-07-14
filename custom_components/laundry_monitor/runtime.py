@@ -87,7 +87,7 @@ class LaundryMonitorRuntime:
     finish_deadline: datetime | None = None
     finish_remaining_seconds: float | None = None
     state_machine: LaundryStateMachine = field(init=False)
-    state_store: LaundryStateStore = field(init=False)
+    state_store: LaundryStateStore
     rejected_transition_count: int = 0
     last_rejected_transition: str | None = None
 
@@ -108,7 +108,7 @@ class LaundryMonitorRuntime:
     def __post_init__(self) -> None:
         """Initialize detector modules from config-entry options."""
         self.state_machine = LaundryStateMachine(state=self.cycle_state)
-        self.state_store = LaundryStateStore(self.hass)
+        
         
         self.activity_detector = ActivityDetector(
             start_threshold=float(
