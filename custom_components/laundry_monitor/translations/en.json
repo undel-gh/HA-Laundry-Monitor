@@ -128,8 +128,7 @@
         "name": "Mark unloaded"
       }
     }
-  },
-  
+  },  
   "options": {
     "step": {
       "init": {
