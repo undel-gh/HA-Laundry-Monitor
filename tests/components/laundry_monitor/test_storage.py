@@ -10,20 +10,6 @@ from custom_components.laundry_monitor.storage import (
     select_recovery_state,
 )
 
-def _state_test_id(state: LaundryCycleState) -> str:
-    """Return a test ID that does not trigger CI problem matchers."""
-    if state is LaundryCycleState.ERROR:
-        return "state-fault"
-
-    return f"state-{state.value}"
-
-
-@pytest.mark.parametrize(
-    "state",
-    list(LaundryCycleState),
-    ids=_state_test_id,
-)
-
 def _snapshot(state: LaundryCycleState) -> RuntimeSnapshot:
     return RuntimeSnapshot(
         cycle_state=state,
@@ -40,6 +26,19 @@ def _snapshot(state: LaundryCycleState) -> RuntimeSnapshot:
 
 @pytest.mark.parametrize("state", list(LaundryCycleState))
 
+def _state_test_id(state: LaundryCycleState) -> str:
+    """Return a CI-safe parameter ID."""
+    if state is LaundryCycleState.ERROR:
+        return "state-fault"
+
+    return f"state-{state.value}"
+
+
+@pytest.mark.parametrize(
+    "state",
+    list(LaundryCycleState),
+    ids=_state_test_id,
+)
 def test_snapshot_round_trip(
     state: LaundryCycleState,
 ) -> None:
@@ -52,21 +51,26 @@ def test_snapshot_round_trip(
 
     assert restored == snapshot
 
-
 @pytest.mark.parametrize(
-    "state",
+    "invalid",
     [
-        LaundryCycleState.RUNNING,
-        LaundryCycleState.FINAL_SPIN,
-        LaundryCycleState.FINISHED,
-        LaundryCycleState.ERROR,
+        {},
+        {"cycle_state": "not-a-state"},
+        {
+            "cycle_state": "idle",
+            "last_transition_reason": "test",
+            "last_state_change": "invalid",
+            "cycle_started_at": None,
+            "laundry_present": False,
+        },
     ],
-    ids=_state_test_id,
 )
 
-def test_invalid_snapshot_is_ignored(invalid: dict[str, object]) -> None:
+def test_invalid_snapshot_is_ignored(
+    invalid: dict[str, object],
+) -> None:
+    """Test corrupt storage cannot break integration setup."""
     assert RuntimeSnapshot.from_storage_dict(invalid) is None
-
 
 def test_armed_recovery_requires_closed_door() -> None:
     snapshot = _snapshot(LaundryCycleState.ARMED)
@@ -94,12 +98,12 @@ def test_armed_recovery_requires_closed_door() -> None:
         LaundryCycleState.FINISHED,
         LaundryCycleState.ERROR,
     ],
+    ids=_state_test_id,
 )
-
 def test_meaningful_states_survive_restart(
     state: LaundryCycleState,
 ) -> None:
-    """Test restoration does not lose an active/finished/error cycle."""
+    """Test restoration does not lose meaningful states."""
     assert (
         select_recovery_state(
             _snapshot(state),
