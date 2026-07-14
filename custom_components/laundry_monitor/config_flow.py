@@ -1,4 +1,4 @@
-"""Config flow for Laundry Monitor."""
+"""Config and options flows for Laundry Monitor."""
 
 from __future__ import annotations
 
@@ -13,29 +13,64 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    OptionsFlowWithReload,
 )
-from homeassistant.const import CONF_NAME
+from homeassistant.const import (
+    CONF_NAME,
+    UnitOfPower,
+    UnitOfTime,
+)
+from homeassistant.core import callback
 from homeassistant.helpers.selector import (
     BooleanSelector,
     EntityFilterSelectorConfig,
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     TextSelector,
     TextSelectorConfig,
 )
+
 from .const import (
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
+    CONF_ACTIVITY_THRESHOLD,
     CONF_DOOR_SENSOR,
     CONF_ENERGY_SENSOR,
+    CONF_FINISH_CONFIRMATION,
     CONF_LEAK_SENSOR,
     CONF_PLUG_SWITCH,
-    CONF_POWER_SENSOR,    
+    CONF_POWER_SENSOR,
+    CONF_SPIN_ACTIVITY_MAX_AGE,
+    CONF_SPIN_MIN_CYCLE_TIME,
+    CONF_SPIN_REQUIRED_EVENTS,
+    CONF_SPIN_WINDOW,
+    CONF_START_CONFIRMATION,
+    CONF_START_THRESHOLD,
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
+    DEFAULT_ACTIVITY_THRESHOLD,
+    DEFAULT_FINISH_CONFIRMATION,
     DEFAULT_NAME,
+    DEFAULT_SPIN_ACTIVITY_MAX_AGE,
+    DEFAULT_SPIN_MIN_CYCLE_TIME,
+    DEFAULT_SPIN_REQUIRED_EVENTS,
+    DEFAULT_SPIN_WINDOW,
+    DEFAULT_START_CONFIRMATION,
+    DEFAULT_START_THRESHOLD,
     DEFAULT_TRACK_LAUNDRY,
     DOMAIN,
+)
+
+_INTEGER_OPTION_KEYS = (
+    CONF_START_CONFIRMATION,
+    CONF_SPIN_REQUIRED_EVENTS,
+    CONF_SPIN_WINDOW,
+    CONF_SPIN_MIN_CYCLE_TIME,
+    CONF_SPIN_ACTIVITY_MAX_AGE,
+    CONF_FINISH_CONFIRMATION,
 )
 
 
@@ -51,6 +86,7 @@ def _entity_selector(
 ) -> EntitySelector:
     """Create an entity selector using the current filter syntax."""
     entity_filter = EntityFilterSelectorConfig(domain=domain)
+
     if device_class is not None:
         entity_filter["device_class"] = device_class
 
@@ -59,10 +95,31 @@ def _entity_selector(
     )
 
 
+def _number_selector(
+    *,
+    minimum: float,
+    maximum: float,
+    step: float,
+    unit: str | None = None,
+) -> NumberSelector:
+    """Create a box-mode number selector."""
+    config = NumberSelectorConfig(
+        min=minimum,
+        max=maximum,
+        step=step,
+        mode=NumberSelectorMode.BOX,
+    )
+
+    if unit is not None:
+        config["unit_of_measurement"] = unit
+
+    return NumberSelector(config)
+
+
 def _config_schema(
     defaults: Mapping[str, Any] | None = None,
 ) -> vol.Schema:
-    """Build the configuration schema."""
+    """Build the integration configuration schema."""
     defaults = defaults or {}
 
     return vol.Schema(
@@ -120,7 +177,7 @@ def _config_schema(
             ): _entity_selector(
                 domain="sensor",
                 device_class=SensorDeviceClass.ENERGY,
-            ),            
+            ),
             vol.Optional(
                 CONF_PLUG_SWITCH,
                 description=_suggested_value(
@@ -138,11 +195,148 @@ def _config_schema(
     )
 
 
+def _options_schema(
+    defaults: Mapping[str, Any] | None = None,
+) -> vol.Schema:
+    """Build the detector-options schema."""
+    defaults = defaults or {}
+
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_ACTIVITY_THRESHOLD,
+                default=defaults.get(
+                    CONF_ACTIVITY_THRESHOLD,
+                    DEFAULT_ACTIVITY_THRESHOLD,
+                ),
+            ): _number_selector(
+                minimum=0.1,
+                maximum=10000,
+                step=0.1,
+                unit=UnitOfPower.WATT,
+            ),
+            vol.Required(
+                CONF_START_THRESHOLD,
+                default=defaults.get(
+                    CONF_START_THRESHOLD,
+                    DEFAULT_START_THRESHOLD,
+                ),
+            ): _number_selector(
+                minimum=0.1,
+                maximum=10000,
+                step=0.1,
+                unit=UnitOfPower.WATT,
+            ),
+            vol.Required(
+                CONF_START_CONFIRMATION,
+                default=defaults.get(
+                    CONF_START_CONFIRMATION,
+                    DEFAULT_START_CONFIRMATION,
+                ),
+            ): _number_selector(
+                minimum=0,
+                maximum=600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_SPIN_REQUIRED_EVENTS,
+                default=defaults.get(
+                    CONF_SPIN_REQUIRED_EVENTS,
+                    DEFAULT_SPIN_REQUIRED_EVENTS,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=20,
+                step=1,
+            ),
+            vol.Required(
+                CONF_SPIN_WINDOW,
+                default=defaults.get(
+                    CONF_SPIN_WINDOW,
+                    DEFAULT_SPIN_WINDOW,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=3600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_SPIN_MIN_CYCLE_TIME,
+                default=defaults.get(
+                    CONF_SPIN_MIN_CYCLE_TIME,
+                    DEFAULT_SPIN_MIN_CYCLE_TIME,
+                ),
+            ): _number_selector(
+                minimum=0,
+                maximum=21600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_SPIN_ACTIVITY_MAX_AGE,
+                default=defaults.get(
+                    CONF_SPIN_ACTIVITY_MAX_AGE,
+                    DEFAULT_SPIN_ACTIVITY_MAX_AGE,
+                ),
+            ): _number_selector(
+                minimum=0,
+                maximum=3600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_FINISH_CONFIRMATION,
+                default=defaults.get(
+                    CONF_FINISH_CONFIRMATION,
+                    DEFAULT_FINISH_CONFIRMATION,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=3600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+        }
+    )
+
+
+def _normalize_options(
+    user_input: Mapping[str, Any],
+) -> dict[str, int | float]:
+    """Normalize selector values before storing them."""
+    normalized: dict[str, int | float] = {
+        CONF_ACTIVITY_THRESHOLD: float(
+            user_input[CONF_ACTIVITY_THRESHOLD]
+        ),
+        CONF_START_THRESHOLD: float(
+            user_input[CONF_START_THRESHOLD]
+        ),
+    }
+
+    normalized.update(
+        {
+            key: int(user_input[key])
+            for key in _INTEGER_OPTION_KEYS
+        }
+    )
+    return normalized
+
+
 class LaundryMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Laundry Monitor."""
 
     VERSION = CONFIG_ENTRY_VERSION
     MINOR_VERSION = CONFIG_ENTRY_MINOR_VERSION
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> LaundryMonitorOptionsFlow:
+        """Return the Laundry Monitor options flow."""
+        return LaundryMonitorOptionsFlow()
 
     def _power_sensor_is_configured(
         self,
@@ -207,6 +401,43 @@ class LaundryMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=_config_schema(
                 user_input if user_input is not None else entry.data
+            ),
+            errors=errors,
+        )
+
+
+class LaundryMonitorOptionsFlow(OptionsFlowWithReload):
+    """Handle detector options for Laundry Monitor."""
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> ConfigFlowResult:
+        """Manage detector thresholds and confirmation periods."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            normalized = _normalize_options(user_input)
+
+            if (
+                normalized[CONF_ACTIVITY_THRESHOLD]
+                > normalized[CONF_START_THRESHOLD]
+            ):
+                errors[
+                    CONF_ACTIVITY_THRESHOLD
+                ] = "activity_threshold_above_start"
+            else:
+                return self.async_create_entry(
+                    title="",
+                    data=normalized,
+                )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=_options_schema(
+                user_input
+                if user_input is not None
+                else self.config_entry.options
             ),
             errors=errors,
         )
