@@ -64,7 +64,7 @@ async def _setup_final_spin_entry(
     return entry
 
 async def test_quiet_period_transitions_to_finished(hass: HomeAssistant, enable_custom_integrations: None) -> None:
-    entry=await _setup(hass)
+    entry=await _setup_final_spin_entry(hass)
     runtime=entry.runtime_data
     now=dt_util.utcnow()
     hass.states.async_set("sensor.washing_machine_power","0.25")
@@ -79,7 +79,7 @@ async def test_quiet_period_transitions_to_finished(hass: HomeAssistant, enable_
     assert runtime.laundry_present is True
 
 async def test_activity_cancels_finish_confirmation(hass: HomeAssistant, enable_custom_integrations: None) -> None:
-    entry=await await _setup_final_spin_entry(hass); runtime=entry.runtime_data; now=dt_util.utcnow()
+    entry=await _setup_final_spin_entry(hass); runtime=entry.runtime_data; now=dt_util.utcnow()
     hass.states.async_set("sensor.washing_machine_power","0.25")
     hass.states.async_set("binary_sensor.washing_machine_vibration",STATE_OFF)
     await hass.async_block_till_done()
@@ -90,7 +90,7 @@ async def test_activity_cancels_finish_confirmation(hass: HomeAssistant, enable_
     assert runtime.finish_deadline is None
 
 async def test_vibration_cancels_finish_confirmation(hass: HomeAssistant, enable_custom_integrations: None) -> None:
-    entry=await await _setup_final_spin_entry(hass); runtime=entry.runtime_data; now=dt_util.utcnow()
+    entry=await _setup_final_spin_entry(hass); runtime=entry.runtime_data; now=dt_util.utcnow()
     hass.states.async_set("sensor.washing_machine_power","0.25")
     hass.states.async_set("binary_sensor.washing_machine_vibration",STATE_OFF)
     await hass.async_block_till_done()
@@ -101,7 +101,7 @@ async def test_vibration_cancels_finish_confirmation(hass: HomeAssistant, enable
     assert runtime.finish_deadline is None
 
 async def test_inactivity_does_not_finish_running_state(hass: HomeAssistant, enable_custom_integrations: None) -> None:
-    entry=await await _setup_final_spin_entry(hass,5); runtime=entry.runtime_data
+    entry=await _setup_final_spin_entry(hass,5); runtime=entry.runtime_data
     runtime.async_set_cycle_state(LaundryCycleState.RUNNING,"test_running")
     now=dt_util.utcnow()
     hass.states.async_set("sensor.washing_machine_power","0.25")
