@@ -33,8 +33,6 @@ The state machine shall:
 
 * provide a small and stable public state model;
 * tolerate low-power pauses during a washing cycle;
-* operate without a door sensor;
-* operate without a vibration sensor;
 * avoid relying on exact standby power values;
 * explain every public state transition;
 * recover safely after Home Assistant restarts;
