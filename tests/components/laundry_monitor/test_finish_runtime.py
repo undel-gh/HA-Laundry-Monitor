@@ -101,7 +101,7 @@ async def test_vibration_cancels_finish_confirmation(hass: HomeAssistant, enable
     assert runtime.finish_deadline is None
 
 async def test_inactivity_does_not_finish_running_state(hass: HomeAssistant, enable_custom_integrations: None) -> None:
-    entry=await _setup_final_spin_entry(hass,5); runtime=entry.runtime_data
+    entry=await _setup_final_spin_entry(hass, confirmation_seconds=5); runtime=entry.runtime_data
     runtime.async_set_cycle_state(LaundryCycleState.RUNNING,"test_running")
     now=dt_util.utcnow()
     hass.states.async_set("sensor.washing_machine_power","0.25")
