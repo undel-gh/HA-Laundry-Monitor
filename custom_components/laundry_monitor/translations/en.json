@@ -98,6 +98,12 @@
       },
       "finish_remaining": {
         "name": "Finish confirmation remaining"
+      },
+      "rejected_transition_count": {
+        "name": "Rejected transition count"
+      },
+      "last_rejected_transition": {
+        "name": "Last rejected transition"
       }
     },
     "binary_sensor": {
