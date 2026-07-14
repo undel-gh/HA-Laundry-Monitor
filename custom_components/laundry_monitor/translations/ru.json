@@ -98,7 +98,14 @@
       },
       "finish_remaining": {
         "name": "До подтверждения завершения"
+      },
+      "rejected_transition_count": {
+        "name": "Количество отклонённых переходов"
+      },
+      "last_rejected_transition": {
+        "name": "Последний отклонённый переход"
       }
+      
     },
     "binary_sensor": {
       "running": {
