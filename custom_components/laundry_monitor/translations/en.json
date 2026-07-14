@@ -156,9 +156,15 @@
         }
       }
     },
+  "issues": {
+    "required_source_unavailable": {
+      "title": "Required laundry sensor unavailable",
+      "description": "Laundry Monitor cannot reliably monitor **{name}** because the required entity `{entity_id}` is missing, unknown, or unavailable. Restore the entity or reconfigure the integration."
+    }
+  },
     "error": {
       "activity_threshold_above_start": "The activity threshold must not be higher than the start threshold."
     }
-  }
+  }  
 }
 
