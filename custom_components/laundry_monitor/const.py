@@ -27,6 +27,9 @@ DEFAULT_SPIN_ACTIVITY_MAX_AGE: Final = 120
 
 # Transition reason.
 REASON_FINAL_SPIN_CONFIRMED: Final = "final_spin_confirmed"
+REASON_STATE_RESTORED: Final = "state_restored"
+REASON_ILLEGAL_TRANSITION_REJECTED: Final = "illegal_transition_rejected"
+EVENT_TRANSITION_REJECTED: Final = f"{DOMAIN}.transition_rejected"
 
 # Activity Detector option keys.
 CONF_START_THRESHOLD: Final = "start_threshold"
