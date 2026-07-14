@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN, PLATFORMS
 from .runtime import LaundryMonitorRuntime
 from .storage import LaundryStateStore
+from .repairs import LaundryMonitorRepairs
 
 type LaundryMonitorConfigEntry = ConfigEntry[LaundryMonitorRuntime]
 
@@ -44,6 +45,11 @@ async def async_setup_entry(
         entry,
         _PLATFORM_ENUMS,
     )
+
+    repairs = LaundryMonitorRepairs(hass, entry)
+    repairs.async_start()
+    entry.async_on_unload(repairs.async_stop)
+    
     return True
 
 
