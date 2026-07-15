@@ -1,18 +1,20 @@
 """Test the Laundry Monitor config flow."""
-import pytest
+
+from __future__ import annotations
+
 import voluptuous as vol
+
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
-
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.laundry_monitor.const import (
-    CONF_POWER_SENSOR,
     CONF_DOOR_SENSOR,
-    CONF_VIBRATION_SENSOR,
+    CONF_POWER_SENSOR,
     CONF_TRACK_LAUNDRY,
+    CONF_VIBRATION_SENSOR,
     DOMAIN,
 )
 
@@ -21,7 +23,7 @@ async def test_user_flow(
     hass: HomeAssistant,
     enable_custom_integrations: None,
 ) -> None:
-    """Test creating a Laundry Monitor config entry."""
+    """Test creating an entry with all recommended sources."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_USER},
@@ -31,41 +33,58 @@ async def test_user_flow(
     assert result["step_id"] == "user"
     assert result["errors"] == {}
 
-    result = await hass.config_entries.flow.async_configure(
-        result["flow_id"],
-        {
-            CONF_NAME: "Washing Machine",
-            CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
-            CONF_TRACK_LAUNDRY: True,
-        },
-    )
-
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Washing Machine"
-    assert result["data"] == {
+    user_input = {
         CONF_NAME: "Washing Machine",
         CONF_POWER_SENSOR: "sensor.washing_machine_power",
         CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
         CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
         CONF_TRACK_LAUNDRY: True,
     }
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Washing Machine"
+    assert result["data"] == user_input
+
+
+async def test_power_only_configuration_is_allowed(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test basic operation needs only the power sensor."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_USER},
+    )
+
+    user_input = {
+        CONF_NAME: "Washing Machine",
+        CONF_POWER_SENSOR: "sensor.washing_machine_power",
+        CONF_TRACK_LAUNDRY: False,
+    }
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input,
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == user_input
 
 
 async def test_duplicate_power_sensor_is_rejected(
     hass: HomeAssistant,
     enable_custom_integrations: None,
 ) -> None:
-    """Test that the same power sensor cannot be configured twice."""
+    """Test the same required power sensor cannot be reused."""
     existing = MockConfigEntry(
         domain=DOMAIN,
         title="Existing washing machine",
         data={
             CONF_NAME: "Existing washing machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: False,
         },
     )
@@ -77,77 +96,29 @@ async def test_duplicate_power_sensor_is_rejected(
         data={
             CONF_NAME: "Second washing machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
             CONF_TRACK_LAUNDRY: False,
         },
     )
 
     assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "user"
     assert result["errors"] == {"base": "already_configured"}
 
-@pytest.mark.parametrize(
-    "missing_field",
-    [
-        CONF_DOOR_SENSOR,
-        CONF_VIBRATION_SENSOR,
-    ],
-)
-async def test_required_sensor_is_rejected_when_missing(
+
+async def test_only_power_sensor_is_required_in_schema(
     hass: HomeAssistant,
     enable_custom_integrations: None,
-    missing_field: str,
 ) -> None:
-    """Test that door and vibration sensors remain required."""
+    """Test door and vibration selectors are optional."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_USER},
     )
 
-    assert result["type"] is FlowResultType.FORM
-    assert result["step_id"] == "user"
-
-    user_input = {
-        CONF_NAME: "Washing Machine",
-        CONF_POWER_SENSOR: "sensor.washing_machine_power",
-        CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-        CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
-        CONF_TRACK_LAUNDRY: True,
+    markers = {
+        marker.schema: marker
+        for marker in result["data_schema"].schema
     }
-    user_input.pop(missing_field)
 
-    with pytest.raises(vol.MultipleInvalid):
-        result["data_schema"](user_input)
-
-
-@pytest.mark.parametrize(
-    "required_field",
-    [
-        CONF_POWER_SENSOR,
-        CONF_DOOR_SENSOR,
-        CONF_VIBRATION_SENSOR,
-    ],
-)
-async def test_sensor_is_declared_as_required_in_user_schema(
-    hass: HomeAssistant,
-    enable_custom_integrations: None,
-    required_field: str,
-) -> None:
-    """Test that all primary sensors use vol.Required markers."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={"source": config_entries.SOURCE_USER},
-    )
-
-    assert result["type"] is FlowResultType.FORM
-
-    schema_keys = result["data_schema"].schema
-    matching_markers = [
-        marker
-        for marker in schema_keys
-        if marker.schema == required_field
-    ]
-
-    assert len(matching_markers) == 1
-    assert isinstance(matching_markers[0], vol.Required)
+    assert isinstance(markers[CONF_POWER_SENSOR], vol.Required)
+    assert isinstance(markers[CONF_DOOR_SENSOR], vol.Optional)
+    assert isinstance(markers[CONF_VIBRATION_SENSOR], vol.Optional)

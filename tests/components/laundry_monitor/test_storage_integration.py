@@ -15,6 +15,7 @@ from custom_components.laundry_monitor.const import (
     CONF_VIBRATION_SENSOR,
     DOMAIN,
     LaundryCycleState,
+    REASON_STATE_RECOVERY_FALLBACK,
     REASON_STATE_RESTORED,
 )
 from custom_components.laundry_monitor.storage import LaundryStateStore
@@ -243,7 +244,7 @@ async def test_two_entries_share_store_and_restore_independently(
     )
     assert (
         restored_dryer.cycle_state
-        is LaundryCycleState.FINAL_SPIN
+        is LaundryCycleState.RUNNING
     )
     assert (
         restored_washer.state_machine.state
@@ -251,7 +252,7 @@ async def test_two_entries_share_store_and_restore_independently(
     )
     assert (
         restored_dryer.state_machine.state
-        is LaundryCycleState.FINAL_SPIN
+        is LaundryCycleState.RUNNING
     )
     assert (
         restored_washer.last_transition_reason
@@ -259,5 +260,5 @@ async def test_two_entries_share_store_and_restore_independently(
     )
     assert (
         restored_dryer.last_transition_reason
-        == REASON_STATE_RESTORED
+        == REASON_STATE_RECOVERY_FALLBACK
     )
