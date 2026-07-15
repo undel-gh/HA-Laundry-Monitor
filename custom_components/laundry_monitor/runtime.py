@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -105,6 +106,8 @@ _FINISH_EVALUATION_STATES = (
     LaundryCycleState.FINAL_SPIN,
 )
 _CYCLE_STATISTICS_UPDATE_INTERVAL = timedelta(seconds=30)
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -349,6 +352,11 @@ class LaundryMonitorRuntime:
 
     async def async_start(self) -> None:
         """Read initial source states and subscribe to future changes."""
+        _LOGGER.debug(
+            "Starting Laundry Monitor runtime for entry %s (%s)",
+            self.entry.entry_id,
+            self.name,
+        )
         self._read_all_source_states()
         await self._async_restore_snapshot()
 
@@ -360,18 +368,33 @@ class LaundryMonitorRuntime:
             )
 
         self._resume_lifecycle_after_start()
+        _LOGGER.debug(
+            "Laundry Monitor runtime ready for entry %s (%s): "
+            "state=%s, power=%s, door_open=%s, vibration_active=%s",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_state.value,
+            self.power,
+            self.door_open,
+            self.vibration_active,
+        )
 
     async def async_stop(self) -> None:
         """Remove runtime subscriptions and timers."""
+        _LOGGER.debug(
+            "Stopping Laundry Monitor runtime for entry %s (%s)",
+            self.entry.entry_id,
+            self.name,
+        )
         if self._remove_source_listener is not None:
             self._remove_source_listener()
             self._remove_source_listener = None
 
-        self._cancel_pending_start_confirmation()
-        self._cancel_pending_finish_confirmation()
-        self._cancel_pending_arming_timeout()
-        self._cancel_pending_finished_retention()
-        self._cancel_pending_power_unavailable()
+        self._cancel_pending_start_confirmation("runtime stopping")
+        self._cancel_pending_finish_confirmation("runtime stopping")
+        self._cancel_pending_arming_timeout("runtime stopping")
+        self._cancel_pending_finished_retention("runtime stopping")
+        self._cancel_pending_power_unavailable("runtime stopping")
         self._cancel_cycle_statistics_updates()
 
     def _snapshot(self) -> RuntimeSnapshot:
@@ -405,20 +428,46 @@ class LaundryMonitorRuntime:
         """Restore a snapshot using the configured recovery policy."""
         snapshot = await self.state_store.async_get(self.entry.entry_id)
         if snapshot is None:
+            _LOGGER.debug(
+                "No runtime snapshot found for entry %s (%s)",
+                self.entry.entry_id,
+                self.name,
+            )
             return
 
+        now = dt_util.utcnow()
+        snapshot_age_seconds = max(
+            (now - snapshot.last_state_change).total_seconds(),
+            0.0,
+        )
         recovered_state = select_recovery_state(
             snapshot,
             door_open=self.door_open,
             activity_detected=self.activity_detected,
             vibration_active=self.vibration_active,
-            now=dt_util.utcnow(),
+            now=now,
             tracking_enabled=self.tracking_enabled,
             arming_timeout_seconds=self.arming_timeout_seconds,
             finished_retention_seconds=self.finished_retention_seconds,
             max_active_snapshot_age_seconds=self.snapshot_max_age_seconds,
             power_available=self.power is not None,
             require_final_spin_context=True,
+        )
+
+        _LOGGER.debug(
+            "Snapshot recovery selected for entry %s (%s): "
+            "stored_state=%s, recovered_state=%s, age=%.1fs, "
+            "power_available=%s, activity_detected=%s, "
+            "door_open=%s, vibration_active=%s",
+            self.entry.entry_id,
+            self.name,
+            snapshot.cycle_state.value,
+            recovered_state.value,
+            snapshot_age_seconds,
+            self.power is not None,
+            self.activity_detected,
+            self.door_open,
+            self.vibration_active,
         )
 
         self.state_machine.restore(recovered_state)
@@ -471,7 +520,22 @@ class LaundryMonitorRuntime:
         self._reset_finish_detection()
 
         if recovered_state is not snapshot.cycle_state:
+            _LOGGER.debug(
+                "Applied snapshot recovery fallback for entry %s (%s): "
+                "%s -> %s",
+                self.entry.entry_id,
+                self.name,
+                snapshot.cycle_state.value,
+                recovered_state.value,
+            )
             self._schedule_snapshot_save()
+        else:
+            _LOGGER.debug(
+                "Restored runtime snapshot for entry %s (%s) in state %s",
+                self.entry.entry_id,
+                self.name,
+                recovered_state.value,
+            )
 
     @callback
     def _resume_lifecycle_after_start(self) -> None:
@@ -512,10 +576,25 @@ class LaundryMonitorRuntime:
     ) -> None:
         """Handle a source entity state change."""
         entity_id = event.data["entity_id"]
+        old_state = event.data.get("old_state")
+        new_state = event.data.get("new_state")
         old_door_open = self.door_open
         old_leak = self.leak_detected
 
-        if not self._update_source(entity_id, event.data.get("new_state")):
+        old_available = _state_is_available(old_state)
+        new_available = _state_is_available(new_state)
+        if old_available != new_available:
+            _LOGGER.debug(
+                "Source availability changed for entry %s (%s): "
+                "entity=%s, available=%s, state=%s",
+                self.entry.entry_id,
+                self.name,
+                entity_id,
+                new_available,
+                new_state.state if new_state is not None else None,
+            )
+
+        if not self._update_source(entity_id, new_state):
             return
 
         power_entity = self.entry.data.get(CONF_POWER_SENSOR)
@@ -548,12 +627,12 @@ class LaundryMonitorRuntime:
     def _handle_power_update(self) -> None:
         """Evaluate power activity, availability, and cycle starts."""
         if self.power is None:
-            self._cancel_pending_start_confirmation()
+            self._cancel_pending_start_confirmation("power unavailable")
             self._reset_finish_detection()
             self._schedule_power_unavailable_error()
             return
 
-        self._cancel_pending_power_unavailable()
+        self._cancel_pending_power_unavailable("power data recovered")
 
         if self.cycle_state is LaundryCycleState.ERROR:
             self.async_set_cycle_state(
@@ -569,7 +648,9 @@ class LaundryMonitorRuntime:
         if evaluation.start_candidate:
             self._schedule_start_confirmation()
         else:
-            self._cancel_pending_start_confirmation()
+            self._cancel_pending_start_confirmation(
+                "power below start threshold"
+            )
             if (
                 self.cycle_state is LaundryCycleState.FINISHED
                 and not self.tracking_enabled
@@ -589,6 +670,13 @@ class LaundryMonitorRuntime:
             and evaluation.activity_detected
             and evaluation.activity_changed
         ):
+            _LOGGER.debug(
+                "Meaningful activity resumed after final spin for entry "
+                "%s (%s): power=%s",
+                self.entry.entry_id,
+                self.name,
+                self.power,
+            )
             return self.async_set_cycle_state(
                 LaundryCycleState.RUNNING,
                 REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN,
@@ -613,7 +701,9 @@ class LaundryMonitorRuntime:
             self.door_open is True
             and self.cycle_state is LaundryCycleState.ARMED
         ):
-            self._cancel_pending_start_confirmation()
+            self._cancel_pending_start_confirmation(
+                "door opened before cycle start"
+            )
             self.async_set_cycle_state(
                 LaundryCycleState.IDLE,
                 REASON_DOOR_OPENED_BEFORE_START,
@@ -642,6 +732,16 @@ class LaundryMonitorRuntime:
         if self._cancel_start_confirmation is not None:
             return
 
+        _LOGGER.debug(
+            "Scheduled start confirmation for entry %s (%s): "
+            "state=%s, delay=%ss, power=%s, start_threshold=%s",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_state.value,
+            self.start_confirmation_seconds,
+            self.power,
+            self.activity_detector.start_threshold,
+        )
         self._cancel_start_confirmation = async_call_later(
             self.hass,
             self.start_confirmation_seconds,
@@ -680,11 +780,20 @@ class LaundryMonitorRuntime:
         )
 
     @callback
-    def _cancel_pending_start_confirmation(self) -> None:
+    def _cancel_pending_start_confirmation(
+        self,
+        reason: str = "conditions changed",
+    ) -> None:
         """Cancel a pending cycle-start confirmation timer."""
         if self._cancel_start_confirmation is not None:
             self._cancel_start_confirmation()
             self._cancel_start_confirmation = None
+            _LOGGER.debug(
+                "Cancelled start confirmation for entry %s (%s): %s",
+                self.entry.entry_id,
+                self.name,
+                reason,
+            )
 
     @callback
     def _schedule_arming_timeout(
@@ -693,7 +802,7 @@ class LaundryMonitorRuntime:
         from_timestamp: datetime | None = None,
     ) -> None:
         """Schedule deterministic armed-to-idle recovery."""
-        self._cancel_pending_arming_timeout()
+        self._cancel_pending_arming_timeout("arming timeout rescheduled")
         if self.cycle_state is not LaundryCycleState.ARMED:
             return
 
@@ -704,9 +813,16 @@ class LaundryMonitorRuntime:
                 0.0,
             )
 
+        delay = max(delay, 0.0)
+        _LOGGER.debug(
+            "Scheduled arming timeout for entry %s (%s): delay=%.1fs",
+            self.entry.entry_id,
+            self.name,
+            delay,
+        )
         self._cancel_arming_timeout = async_call_later(
             self.hass,
-            max(delay, 0.0),
+            delay,
             self._async_arming_timeout_elapsed,
         )
 
@@ -714,6 +830,12 @@ class LaundryMonitorRuntime:
     def _async_arming_timeout_elapsed(self, _now: datetime) -> None:
         """Return an expired armed state to idle."""
         self._cancel_arming_timeout = None
+        _LOGGER.debug(
+            "Arming timeout elapsed for entry %s (%s): state=%s",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_state.value,
+        )
         if self.cycle_state is LaundryCycleState.ARMED:
             self.async_set_cycle_state(
                 LaundryCycleState.IDLE,
@@ -721,11 +843,20 @@ class LaundryMonitorRuntime:
             )
 
     @callback
-    def _cancel_pending_arming_timeout(self) -> None:
+    def _cancel_pending_arming_timeout(
+        self,
+        reason: str = "state changed",
+    ) -> None:
         """Cancel the armed-state timeout."""
         if self._cancel_arming_timeout is not None:
             self._cancel_arming_timeout()
             self._cancel_arming_timeout = None
+            _LOGGER.debug(
+                "Cancelled arming timeout for entry %s (%s): %s",
+                self.entry.entry_id,
+                self.name,
+                reason,
+            )
 
     @callback
     def _schedule_finished_retention(
@@ -734,7 +865,9 @@ class LaundryMonitorRuntime:
         from_timestamp: datetime | None = None,
     ) -> None:
         """Schedule finished-to-idle when Laundry Tracking is disabled."""
-        self._cancel_pending_finished_retention()
+        self._cancel_pending_finished_retention(
+            "finished retention rescheduled"
+        )
         if (
             self.tracking_enabled
             or self.cycle_state is not LaundryCycleState.FINISHED
@@ -748,9 +881,18 @@ class LaundryMonitorRuntime:
                 0.0,
             )
 
+        delay = max(delay, 0.0)
+        _LOGGER.debug(
+            "Scheduled finished-state retention for entry %s (%s): "
+            "delay=%.1fs, tracking_enabled=%s",
+            self.entry.entry_id,
+            self.name,
+            delay,
+            self.tracking_enabled,
+        )
         self._cancel_finished_retention = async_call_later(
             self.hass,
-            max(delay, 0.0),
+            delay,
             self._async_finished_retention_elapsed,
         )
 
@@ -758,6 +900,14 @@ class LaundryMonitorRuntime:
     def _async_finished_retention_elapsed(self, _now: datetime) -> None:
         """Reset an observable finished state after its retention period."""
         self._cancel_finished_retention = None
+        _LOGGER.debug(
+            "Finished-state retention elapsed for entry %s (%s): "
+            "state=%s, tracking_enabled=%s",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_state.value,
+            self.tracking_enabled,
+        )
         self._reset_finished_without_tracking()
 
     @callback
@@ -785,11 +935,20 @@ class LaundryMonitorRuntime:
         )
 
     @callback
-    def _cancel_pending_finished_retention(self) -> None:
+    def _cancel_pending_finished_retention(
+        self,
+        reason: str = "state changed",
+    ) -> None:
         """Cancel completed-state retention."""
         if self._cancel_finished_retention is not None:
             self._cancel_finished_retention()
             self._cancel_finished_retention = None
+            _LOGGER.debug(
+                "Cancelled finished-state retention for entry %s (%s): %s",
+                self.entry.entry_id,
+                self.name,
+                reason,
+            )
 
     @callback
     def _schedule_power_unavailable_error(self) -> None:
@@ -801,6 +960,13 @@ class LaundryMonitorRuntime:
         if self._cancel_power_unavailable is not None:
             return
 
+        _LOGGER.debug(
+            "Scheduled power-unavailable grace period for entry %s (%s): "
+            "delay=%ss",
+            self.entry.entry_id,
+            self.name,
+            self.power_unavailable_grace_seconds,
+        )
         self._cancel_power_unavailable = async_call_later(
             self.hass,
             self.power_unavailable_grace_seconds,
@@ -811,6 +977,13 @@ class LaundryMonitorRuntime:
     def _async_power_unavailable_elapsed(self, _now: datetime) -> None:
         """Enter error when required power data stayed unavailable."""
         self._cancel_power_unavailable = None
+        _LOGGER.debug(
+            "Power-unavailable grace period elapsed for entry %s (%s): "
+            "power=%s",
+            self.entry.entry_id,
+            self.name,
+            self.power,
+        )
         if self.power is None:
             self.async_set_cycle_state(
                 LaundryCycleState.ERROR,
@@ -818,11 +991,21 @@ class LaundryMonitorRuntime:
             )
 
     @callback
-    def _cancel_pending_power_unavailable(self) -> None:
+    def _cancel_pending_power_unavailable(
+        self,
+        reason: str = "power data available",
+    ) -> None:
         """Cancel pending required-source failure confirmation."""
         if self._cancel_power_unavailable is not None:
             self._cancel_power_unavailable()
             self._cancel_power_unavailable = None
+            _LOGGER.debug(
+                "Cancelled power-unavailable grace period for entry "
+                "%s (%s): %s",
+                self.entry.entry_id,
+                self.name,
+                reason,
+            )
 
     @callback
     def _update_source(self, entity_id: str, state: State | None) -> bool:
@@ -880,12 +1063,29 @@ class LaundryMonitorRuntime:
         )
 
         if result.status is TransitionStatus.NO_CHANGE:
+            _LOGGER.debug(
+                "Ignored no-op transition for entry %s (%s): "
+                "state=%s, reason=%s",
+                self.entry.entry_id,
+                self.name,
+                new_state.value,
+                reason,
+            )
             return False
 
         if result.status is TransitionStatus.REJECTED:
             self.rejected_transition_count += 1
             self.last_rejected_transition = (
                 f"{result.old_state.value}->{result.new_state.value}:{reason}"
+            )
+            _LOGGER.debug(
+                "Rejected cycle-state transition for entry %s (%s): "
+                "%s -> %s, reason=%s",
+                self.entry.entry_id,
+                self.name,
+                result.old_state.value,
+                result.new_state.value,
+                reason,
             )
             self.hass.bus.async_fire(
                 EVENT_TRANSITION_REJECTED,
@@ -902,6 +1102,15 @@ class LaundryMonitorRuntime:
             return False
 
         old_state = result.old_state
+        _LOGGER.debug(
+            "Applied cycle-state transition for entry %s (%s): "
+            "%s -> %s, reason=%s",
+            self.entry.entry_id,
+            self.name,
+            old_state.value,
+            result.new_state.value,
+            reason,
+        )
         self.cycle_state = result.new_state
         self.last_transition_reason = reason
         self.last_state_change = transition_time
@@ -1006,6 +1215,15 @@ class LaundryMonitorRuntime:
         self.cycle_energy_start = self.energy
         self.cycle_energy_unit = self.energy_unit
         self.final_spin_detected = False
+        _LOGGER.debug(
+            "Initialized cycle statistics for entry %s (%s): "
+            "started_at=%s, energy_start=%s, energy_unit=%s",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_started_at,
+            self.cycle_energy_start,
+            self.cycle_energy_unit,
+        )
 
     @callback
     def _finalize_cycle_statistics(self) -> None:
@@ -1036,6 +1254,17 @@ class LaundryMonitorRuntime:
             )
             self.last_cycle_energy_unit = self.cycle_energy_unit
 
+        _LOGGER.debug(
+            "Finalized cycle statistics for entry %s (%s): "
+            "duration=%s, energy=%s, energy_unit=%s, "
+            "final_spin_detected=%s",
+            self.entry.entry_id,
+            self.name,
+            self.last_cycle_duration,
+            self.last_cycle_energy,
+            self.last_cycle_energy_unit,
+            self.final_spin_detected,
+        )
         self.cycle_energy_start = None
         self.cycle_energy_unit = None
 
@@ -1072,6 +1301,14 @@ class LaundryMonitorRuntime:
             return
 
         unloaded_at = dt_util.utcnow()
+        _LOGGER.debug(
+            "Laundry marked unloaded for entry %s (%s): state=%s, "
+            "timestamp=%s",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_state.value,
+            unloaded_at.isoformat(),
+        )
         self.laundry_present = False
         self.last_unloaded_at = unloaded_at
 
@@ -1123,6 +1360,21 @@ class LaundryMonitorRuntime:
         self.final_spin_confidence = evaluation.confidence
         self.final_spin_evidence_count = evaluation.evidence_count
 
+        if changed or evaluation.detected:
+            _LOGGER.debug(
+                "Evaluated final-spin evidence for entry %s (%s): "
+                "events=%s/%s, confidence=%.3f, detected=%s, "
+                "activity_detected=%s, vibration_active=%s",
+                self.entry.entry_id,
+                self.name,
+                evaluation.evidence_count,
+                self.spin_detector.required_events,
+                evaluation.confidence,
+                evaluation.detected,
+                self.activity_detected,
+                self.vibration_active,
+            )
+
         if evaluation.detected:
             if not self.async_set_cycle_state(
                 LaundryCycleState.FINAL_SPIN,
@@ -1158,11 +1410,11 @@ class LaundryMonitorRuntime:
         """Evaluate normal completion and the no-spin fallback path."""
         detector = self._active_finish_detector()
         if detector is None:
-            self._reset_finish_detection()
+            self._reset_finish_detection("state is not finish-evaluable")
             return
 
         if self.power is None:
-            self._reset_finish_detection()
+            self._reset_finish_detection("power unavailable")
             return
 
         now = dt_util.utcnow()
@@ -1179,7 +1431,9 @@ class LaundryMonitorRuntime:
             return
 
         if not evaluation.quiet or evaluation.deadline is None:
-            self._cancel_pending_finish_confirmation()
+            self._cancel_pending_finish_confirmation(
+                "meaningful activity or vibration resumed"
+            )
             self._notify_entities()
             return
 
@@ -1191,7 +1445,21 @@ class LaundryMonitorRuntime:
     @callback
     def _schedule_finish_confirmation(self, delay: float) -> None:
         """Schedule the next finish evaluation at its exact deadline."""
-        self._cancel_pending_finish_confirmation()
+        rescheduled = self._cancel_finish_confirmation is not None
+        if self._cancel_finish_confirmation is not None:
+            self._cancel_finish_confirmation()
+            self._cancel_finish_confirmation = None
+        _LOGGER.debug(
+            "%s finish confirmation for entry %s (%s): "
+            "state=%s, delay=%.1fs, quiet_since=%s, deadline=%s",
+            "Rescheduled" if rescheduled else "Scheduled",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_state.value,
+            delay,
+            self.finish_quiet_since,
+            self.finish_deadline,
+        )
         self._cancel_finish_confirmation = async_call_later(
             self.hass,
             delay,
@@ -1202,6 +1470,13 @@ class LaundryMonitorRuntime:
     def _async_finish_confirmation_elapsed(self, now: datetime) -> None:
         """Re-evaluate finish conditions after the confirmation period."""
         self._cancel_finish_confirmation = None
+        _LOGGER.debug(
+            "Finish confirmation timer elapsed for entry %s (%s): "
+            "state=%s",
+            self.entry.entry_id,
+            self.name,
+            self.cycle_state.value,
+        )
         detector = self._active_finish_detector()
         if detector is None or self.power is None:
             return
@@ -1236,7 +1511,18 @@ class LaundryMonitorRuntime:
         quiet_since = self.finish_quiet_since
         confirmation_seconds = detector.confirmation_seconds
 
-        self._cancel_pending_finish_confirmation()
+        _LOGGER.debug(
+            "Finish conditions confirmed for entry %s (%s): "
+            "state=%s, quiet_since=%s, confirmation=%ss",
+            self.entry.entry_id,
+            self.name,
+            old_state.value,
+            quiet_since,
+            confirmation_seconds,
+        )
+        self._cancel_pending_finish_confirmation(
+            "finish conditions confirmed"
+        )
         if not self.async_set_cycle_state(
             LaundryCycleState.FINISHED,
             reason,
@@ -1275,9 +1561,12 @@ class LaundryMonitorRuntime:
         )
 
     @callback
-    def _reset_finish_detection(self) -> None:
+    def _reset_finish_detection(
+        self,
+        reason: str = "finish detection reset",
+    ) -> None:
         """Reset both completion paths and their shared diagnostics."""
-        self._cancel_pending_finish_confirmation()
+        self._cancel_pending_finish_confirmation(reason)
         self.finish_detector.reset()
         self.running_finish_detector.reset()
         self.finish_quiet_since = None
@@ -1285,11 +1574,28 @@ class LaundryMonitorRuntime:
         self.finish_remaining_seconds = None
 
     @callback
-    def _cancel_pending_finish_confirmation(self) -> None:
+    def _cancel_pending_finish_confirmation(
+        self,
+        reason: str = "conditions changed",
+    ) -> None:
         """Cancel the active finish timer."""
         if self._cancel_finish_confirmation is not None:
             self._cancel_finish_confirmation()
             self._cancel_finish_confirmation = None
+            _LOGGER.debug(
+                "Cancelled finish confirmation for entry %s (%s): %s",
+                self.entry.entry_id,
+                self.name,
+                reason,
+            )
+
+
+def _state_is_available(state: State | None) -> bool:
+    """Return whether a source entity has a usable HA state."""
+    return (
+        state is not None
+        and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+    )
 
 
 def _state_as_float(state: State | None) -> float | None:
