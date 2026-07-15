@@ -1,0 +1,20 @@
+{
+  "entity": {
+    "sensor": {
+      "current_cycle_duration": {
+        "name": "Current cycle duration"
+      },
+      "last_cycle_duration": {
+        "name": "Last cycle duration"
+      },
+      "last_cycle_energy": {
+        "name": "Last cycle energy"
+      }
+    },
+    "binary_sensor": {
+      "final_spin_detected": {
+        "name": "Final spin detected"
+      }
+    }
+  }
+}

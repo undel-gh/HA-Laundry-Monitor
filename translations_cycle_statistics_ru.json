@@ -1,0 +1,20 @@
+{
+  "entity": {
+    "sensor": {
+      "current_cycle_duration": {
+        "name": "Длительность текущего цикла"
+      },
+      "last_cycle_duration": {
+        "name": "Длительность последнего цикла"
+      },
+      "last_cycle_energy": {
+        "name": "Энергия последнего цикла"
+      }
+    },
+    "binary_sensor": {
+      "final_spin_detected": {
+        "name": "Обнаружен финальный отжим"
+      }
+    }
+  }
+}
