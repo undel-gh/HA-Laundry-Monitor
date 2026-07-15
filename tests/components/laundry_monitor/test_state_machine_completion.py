@@ -10,7 +10,7 @@ from homeassistant.const import (
     STATE_ON,
     STATE_UNAVAILABLE,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -166,11 +166,16 @@ async def test_new_cycle_is_detected_from_finished(
         },
     )
     runtime = entry.runtime_data
+
     events = []
+
+    @callback
+    def _capture_cycle_started(event) -> None:
+        events.append(event)
+
     hass.bus.async_listen(
         EVENT_CYCLE_STARTED,
-    EVENT_DOOR_OPENED_AFTER_FINISH,
-        lambda event: events.append(event),
+        _capture_cycle_started,
     )
 
     assert runtime.async_set_cycle_state(
@@ -348,9 +353,14 @@ async def test_door_opened_after_finish_event_is_emitted(
     )
     runtime = entry.runtime_data
     events = []
+
+    @callback
+    def _capture_door_event(event) -> None:
+        events.append(event)
+        
     hass.bus.async_listen(
         EVENT_DOOR_OPENED_AFTER_FINISH,
-        lambda event: events.append(event),
+        _capture_door_event,
     )
 
     assert runtime.async_set_cycle_state(
