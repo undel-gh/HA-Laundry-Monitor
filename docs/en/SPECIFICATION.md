@@ -140,8 +140,6 @@ The following sources are required:
 - vibration sensor.
 
 Power sensor is required for detection of running state
-Door sensor is required for detection of laundry removal.
-Vibration sensor is required for detection of final spin.
 
 Example:
 
@@ -155,11 +153,15 @@ sensor.washing_machine_vibration
 
 Optional sensors:
 
+- door sensor
+- vibration sensor
 - leak sensor;
 - energy sensor;
 - plug switch state.
 
 Optional sensors may improve diagnostics and statistics but must not be required for basic operation.
+Door sensor allow the detection of laundry removal.
+Vibration sensor allow the detection of final spin.
 
 ## 5. State Model
 ### 5.1 Public states
@@ -413,11 +415,11 @@ The integration shall be configured through Home Assistant UI.
 Required fields:
 
 - power sensor.
-- door sensor;
-- vibration sensor.
 
 Optional fields:
 
+- door sensor;
+- vibration sensor.
 - leak sensor;
 - energy sensor;
 - plug switch.
