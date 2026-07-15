@@ -153,6 +153,9 @@ async def _async_build_diagnostics(
                 runtime.cycle_started_at
             ),
             "laundry_present": runtime.laundry_present,
+            "last_unloaded_at": _serialize_datetime(
+                runtime.last_unloaded_at
+            ),
             "tracking_enabled": runtime.tracking_enabled,
             "power": runtime.power,
             "door_open": runtime.door_open,
