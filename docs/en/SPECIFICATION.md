@@ -504,24 +504,53 @@ The English documentation is canonical.
 
 Translated documentation should follow the English version and must not define separate behavior.
 
-## 14. Debug Mode
+## 14. Debugging and Diagnostics
 
-Debug Mode is a first-class feature.
+Laundry Monitor shall provide native Home Assistant mechanisms for troubleshooting and explaining its decisions.
 
-It should expose:
+### 14.1 Downloadable diagnostics
 
-- current state;
-- confidence;
-- transition reason;
-- evidence;
-- raw power;
-- raw vibration;
-- raw door state;
-- last activity time;
-- last state transition;
-- algorithm parameters.
+The integration shall provide downloadable diagnostics for each configured appliance.
 
-Future versions may include cycle playback.
+Diagnostics should include:
+
+* the current public and internal state;
+* the last transition reason and timestamp;
+* current confidence and evidence counters;
+* current source entity states and availability;
+* raw power, door, vibration, leak, and energy values when configured;
+* activity, spin, and finish detector state;
+* configured algorithm parameters;
+* laundry tracking state and `last_unloaded_at`;
+* cycle statistics;
+* the persisted runtime snapshot;
+* rejected transition information.
+
+Diagnostics must not expose credentials, tokens, unrelated Home Assistant configuration, or arbitrary source-entity attributes.
+
+### 14.2 Debug logging
+
+Laundry Monitor shall support Home Assistant's native per-integration debug logging.
+
+Debug messages should describe meaningful algorithm decisions, including:
+
+* source availability changes;
+* start confirmation scheduling and cancellation;
+* accepted and rejected state transitions;
+* spin evidence evaluation;
+* finish confirmation scheduling and cancellation;
+* snapshot recovery decisions;
+* lifecycle timeout handling.
+
+Routine unchanged sensor values should not be logged to avoid excessive log volume.
+
+### 14.3 Debug configuration
+
+A custom `debug_mode` integration option is not required.
+
+Users should use Home Assistant's native **Enable debug logging** action when a temporal execution trace is needed and **Download diagnostics** when a point-in-time state snapshot is needed.
+
+Future versions may add cycle playback or a bounded in-memory decision history without changing the public state-machine API.
 
 ## 15. Non-goals
 
