@@ -142,7 +142,12 @@
           "spin_window": "Vibration event window",
           "spin_min_cycle_time": "Minimum cycle time before final spin",
           "spin_activity_max_age": "Maximum age of supporting activity",
-          "finish_confirmation": "Finish confirmation"
+          "finish_confirmation": "Final-spin finish confirmation",
+          "running_finish_confirmation": "Running-state finish confirmation",
+          "arming_timeout": "Arming timeout",
+          "finished_retention": "Finished-state retention",
+          "power_unavailable_grace": "Power sensor unavailable grace period",
+          "snapshot_max_age": "Maximum snapshot age"
         },
         "data_description": {
           "activity_threshold": "Power at or above this value counts as meaningful machine activity.",
@@ -152,7 +157,12 @@
           "spin_window": "Rolling period in which the required vibration events must occur.",
           "spin_min_cycle_time": "Minimum elapsed cycle time before final-spin evidence can be accepted.",
           "spin_activity_max_age": "Maximum age of the last meaningful power activity that can support final-spin detection.",
-          "finish_confirmation": "How long both meaningful activity and vibration must remain absent before the cycle is finished."
+          "finish_confirmation": "How long activity and vibration must remain absent after a detected final spin before the cycle is considered finished.",
+          "running_finish_confirmation": "How long meaningful power activity must remain absent before a cycle is considered finished when no final spin was detected.",
+          "arming_timeout": "How long the integration may remain armed after the door is closed before returning to idle if the cycle does not start.",
+          "finished_retention": "How long the finished state is retained before automatically returning to idle when laundry tracking is disabled.",
+          "power_unavailable_grace": "How long the required power sensor may remain missing, unknown, unavailable, or non-numeric before the integration enters the error state.",
+          "snapshot_max_age": "Maximum age of a stored runtime snapshot that may be restored after Home Assistant restarts."
         }
       }
     },
