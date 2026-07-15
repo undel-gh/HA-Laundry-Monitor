@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
+from math import isfinite
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    ATTR_UNIT_OF_MEASUREMENT,
     CONF_NAME,
     STATE_ON,
     STATE_UNAVAILABLE,
@@ -24,6 +26,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
+    async_track_time_interval,
 )
 from homeassistant.util import dt as dt_util
 
@@ -101,6 +104,7 @@ _FINISH_EVALUATION_STATES = (
     LaundryCycleState.RUNNING,
     LaundryCycleState.FINAL_SPIN,
 )
+_CYCLE_STATISTICS_UPDATE_INTERVAL = timedelta(seconds=30)
 
 
 @dataclass(slots=True)
@@ -120,9 +124,16 @@ class LaundryMonitorRuntime:
     vibration_active: bool | None = None
     leak_detected: bool = False
     energy: float | None = None
+    energy_unit: str | None = None
     laundry_present: bool = False
     last_unloaded_at: datetime | None = None
     cycle_started_at: datetime | None = None
+    cycle_energy_start: float | None = None
+    cycle_energy_unit: str | None = None
+    last_cycle_duration: float | None = None
+    last_cycle_energy: float | None = None
+    last_cycle_energy_unit: str | None = None
+    final_spin_detected: bool = False
 
     final_spin_confidence: float = 0.0
     final_spin_evidence_count: int = 0
@@ -160,6 +171,10 @@ class LaundryMonitorRuntime:
         init=False,
     )
     _cancel_power_unavailable: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
+    _remove_statistics_interval: Callable[[], None] | None = field(
         default=None,
         init=False,
     )
@@ -295,6 +310,22 @@ class LaundryMonitorRuntime:
         return self.activity_detector.last_activity
 
     @property
+    def current_cycle_duration(self) -> float | None:
+        """Return elapsed seconds for the active cycle."""
+        if (
+            self.cycle_started_at is None
+            or self.cycle_state not in _FINISH_EVALUATION_STATES
+        ):
+            return None
+        return round(
+            max(
+                (dt_util.utcnow() - self.cycle_started_at).total_seconds(),
+                0.0,
+            ),
+            1,
+        )
+
+    @property
     def signal(self) -> str:
         """Return the dispatcher signal for this config entry."""
         return f"{SIGNAL_RUNTIME_UPDATED}_{self.entry.entry_id}"
@@ -341,6 +372,7 @@ class LaundryMonitorRuntime:
         self._cancel_pending_arming_timeout()
         self._cancel_pending_finished_retention()
         self._cancel_pending_power_unavailable()
+        self._cancel_cycle_statistics_updates()
 
     def _snapshot(self) -> RuntimeSnapshot:
         """Return the persistable part of runtime state."""
@@ -351,6 +383,12 @@ class LaundryMonitorRuntime:
             cycle_started_at=self.cycle_started_at,
             laundry_present=self.laundry_present,
             last_unloaded_at=self.last_unloaded_at,
+            cycle_energy_start=self.cycle_energy_start,
+            cycle_energy_unit=self.cycle_energy_unit,
+            last_cycle_duration=self.last_cycle_duration,
+            last_cycle_energy=self.last_cycle_energy,
+            last_cycle_energy_unit=self.last_cycle_energy_unit,
+            final_spin_detected=self.final_spin_detected,
         )
 
     @callback
@@ -397,6 +435,9 @@ class LaundryMonitorRuntime:
         )
         self.laundry_present = snapshot.laundry_present
         self.last_unloaded_at = snapshot.last_unloaded_at
+        self.last_cycle_duration = snapshot.last_cycle_duration
+        self.last_cycle_energy = snapshot.last_cycle_energy
+        self.last_cycle_energy_unit = snapshot.last_cycle_energy_unit
         if (
             not self.tracking_enabled
             and snapshot.cycle_state is LaundryCycleState.FINISHED
@@ -404,14 +445,24 @@ class LaundryMonitorRuntime:
         ):
             self.laundry_present = False
 
+        active_cycle_restored = recovered_state in _FINISH_EVALUATION_STATES
         self.cycle_started_at = (
-            snapshot.cycle_started_at
-            if recovered_state
-            in (
-                LaundryCycleState.RUNNING,
-                LaundryCycleState.FINAL_SPIN,
-            )
-            else None
+            snapshot.cycle_started_at if active_cycle_restored else None
+        )
+        self.cycle_energy_start = (
+            snapshot.cycle_energy_start if active_cycle_restored else None
+        )
+        self.cycle_energy_unit = (
+            snapshot.cycle_energy_unit if active_cycle_restored else None
+        )
+        discarded_active_cycle = (
+            snapshot.cycle_state in _FINISH_EVALUATION_STATES
+            and not active_cycle_restored
+        )
+        self.final_spin_detected = (
+            False
+            if discarded_active_cycle
+            else snapshot.final_spin_detected
         )
 
         self.spin_detector.reset(vibration_active=self.vibration_active)
@@ -441,6 +492,7 @@ class LaundryMonitorRuntime:
             )
 
         if self.cycle_state in _FINISH_EVALUATION_STATES:
+            self._start_cycle_statistics_updates()
             self._evaluate_finish()
 
     @callback
@@ -791,8 +843,19 @@ class LaundryMonitorRuntime:
             data_key = "leak_detected"
             value = _state_as_bool(state) is True
         elif entity_id == self.entry.data.get(CONF_ENERGY_SENSOR):
-            data_key = "energy"
             value = _state_as_float(state)
+            unit = (
+                str(state.attributes[ATTR_UNIT_OF_MEASUREMENT])
+                if state is not None
+                and value is not None
+                and state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+                else None
+            )
+            if self.energy == value and self.energy_unit == unit:
+                return False
+            self.energy = value
+            self.energy_unit = unit
+            return True
         else:
             return False
 
@@ -887,15 +950,18 @@ class LaundryMonitorRuntime:
         if new_state is LaundryCycleState.RUNNING:
             self._cancel_pending_start_confirmation()
             if old_state is not LaundryCycleState.FINAL_SPIN:
-                self.cycle_started_at = self.last_state_change
+                self._initialize_cycle_statistics()
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
             self.spin_detector.reset(vibration_active=self.vibration_active)
             self._reset_finish_detection()
+            self._start_cycle_statistics_updates()
             return
 
         if new_state is LaundryCycleState.FINAL_SPIN:
+            self.final_spin_detected = True
             self._reset_finish_detection()
+            self._start_cycle_statistics_updates()
             return
 
         if new_state in (
@@ -903,7 +969,10 @@ class LaundryMonitorRuntime:
             LaundryCycleState.ARMED,
         ):
             self._cancel_pending_start_confirmation()
+            self._cancel_cycle_statistics_updates()
             self.cycle_started_at = None
+            self.cycle_energy_start = None
+            self.cycle_energy_unit = None
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
             self.spin_detector.reset(vibration_active=self.vibration_active)
@@ -916,16 +985,85 @@ class LaundryMonitorRuntime:
 
         if new_state is LaundryCycleState.FINISHED:
             self._cancel_pending_start_confirmation()
+            self._finalize_cycle_statistics()
+            self._cancel_cycle_statistics_updates()
             self._reset_finish_detection()
             self._schedule_finished_retention()
             return
 
         if new_state is LaundryCycleState.ERROR:
             self._cancel_pending_start_confirmation()
+            self._cancel_cycle_statistics_updates()
             self._cancel_pending_arming_timeout()
             self._cancel_pending_finished_retention()
             self._reset_finish_detection()
             self.spin_detector.reset(vibration_active=self.vibration_active)
+
+    @callback
+    def _initialize_cycle_statistics(self) -> None:
+        """Initialize statistics for a newly confirmed cycle."""
+        self.cycle_started_at = self.last_state_change
+        self.cycle_energy_start = self.energy
+        self.cycle_energy_unit = self.energy_unit
+        self.final_spin_detected = False
+
+    @callback
+    def _finalize_cycle_statistics(self) -> None:
+        """Finalize duration and optional energy for a completed cycle."""
+        if self.cycle_started_at is not None:
+            self.last_cycle_duration = round(
+                max(
+                    (self.last_state_change - self.cycle_started_at).total_seconds(),
+                    0.0,
+                ),
+                1,
+            )
+        else:
+            self.last_cycle_duration = None
+
+        self.last_cycle_energy = None
+        self.last_cycle_energy_unit = None
+        if (
+            self.cycle_energy_start is not None
+            and self.energy is not None
+            and self.cycle_energy_unit is not None
+            and self.energy_unit == self.cycle_energy_unit
+            and self.energy >= self.cycle_energy_start
+        ):
+            self.last_cycle_energy = round(
+                self.energy - self.cycle_energy_start,
+                6,
+            )
+            self.last_cycle_energy_unit = self.cycle_energy_unit
+
+        self.cycle_energy_start = None
+        self.cycle_energy_unit = None
+
+    @callback
+    def _start_cycle_statistics_updates(self) -> None:
+        """Start periodic updates for the live duration sensor."""
+        if self.cycle_state not in _FINISH_EVALUATION_STATES:
+            return
+        if self._remove_statistics_interval is not None:
+            return
+        self._remove_statistics_interval = async_track_time_interval(
+            self.hass,
+            self._async_cycle_statistics_tick,
+            _CYCLE_STATISTICS_UPDATE_INTERVAL,
+        )
+
+    @callback
+    def _async_cycle_statistics_tick(self, _now: datetime) -> None:
+        """Publish an updated live cycle duration."""
+        if self.cycle_state in _FINISH_EVALUATION_STATES:
+            self._notify_entities()
+
+    @callback
+    def _cancel_cycle_statistics_updates(self) -> None:
+        """Stop periodic live-duration updates."""
+        if self._remove_statistics_interval is not None:
+            self._remove_statistics_interval()
+            self._remove_statistics_interval = None
 
     @callback
     def async_mark_unloaded(self) -> None:
@@ -1160,9 +1298,11 @@ def _state_as_float(state: State | None) -> float | None:
         return None
 
     try:
-        return float(state.state)
+        value = float(state.state)
     except (TypeError, ValueError):
         return None
+
+    return value if isfinite(value) else None
 
 
 def _state_as_bool(state: State | None) -> bool | None:

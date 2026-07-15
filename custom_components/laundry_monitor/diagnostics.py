@@ -159,12 +159,26 @@ async def _async_build_diagnostics(
             "vibration_active": runtime.vibration_active,
             "leak_detected": runtime.leak_detected,
             "energy": runtime.energy,
+            "energy_unit": runtime.energy_unit,
             "rejected_transition_count": (
                 runtime.rejected_transition_count
             ),
             "last_rejected_transition": (
                 runtime.last_rejected_transition
             ),
+            "statistics": {
+                "current_cycle_duration": (
+                    runtime.current_cycle_duration
+                ),
+                "last_cycle_duration": runtime.last_cycle_duration,
+                "cycle_energy_start": runtime.cycle_energy_start,
+                "cycle_energy_unit": runtime.cycle_energy_unit,
+                "last_cycle_energy": runtime.last_cycle_energy,
+                "last_cycle_energy_unit": (
+                    runtime.last_cycle_energy_unit
+                ),
+                "final_spin_detected": runtime.final_spin_detected,
+            },
         },
         "detectors": {
             "activity": {

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from math import isfinite
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -26,6 +27,12 @@ class RuntimeSnapshot:
     cycle_started_at: datetime | None
     laundry_present: bool
     last_unloaded_at: datetime | None = None
+    cycle_energy_start: float | None = None
+    cycle_energy_unit: str | None = None
+    last_cycle_duration: float | None = None
+    last_cycle_energy: float | None = None
+    last_cycle_energy_unit: str | None = None
+    final_spin_detected: bool = False
 
     def as_storage_dict(self) -> dict[str, Any]:
         """Serialize the snapshot."""
@@ -44,6 +51,12 @@ class RuntimeSnapshot:
                 if self.last_unloaded_at is not None
                 else None
             ),
+            "cycle_energy_start": self.cycle_energy_start,
+            "cycle_energy_unit": self.cycle_energy_unit,
+            "last_cycle_duration": self.last_cycle_duration,
+            "last_cycle_energy": self.last_cycle_energy,
+            "last_cycle_energy_unit": self.last_cycle_energy_unit,
+            "final_spin_detected": self.final_spin_detected,
         }
 
     @classmethod
@@ -69,6 +82,24 @@ class RuntimeSnapshot:
                 if data.get("last_unloaded_at")
                 else None
             )
+            cycle_energy_start = _optional_finite_float(
+                data.get("cycle_energy_start")
+            )
+            cycle_energy_unit = _optional_string(
+                data.get("cycle_energy_unit")
+            )
+            last_cycle_duration = _optional_finite_float(
+                data.get("last_cycle_duration")
+            )
+            last_cycle_energy = _optional_finite_float(
+                data.get("last_cycle_energy")
+            )
+            last_cycle_energy_unit = _optional_string(
+                data.get("last_cycle_energy_unit")
+            )
+            final_spin_detected = bool(
+                data.get("final_spin_detected", False)
+            )
         except (KeyError, TypeError, ValueError):
             return None
 
@@ -84,7 +115,31 @@ class RuntimeSnapshot:
             cycle_started_at=cycle_started_at,
             laundry_present=laundry_present,
             last_unloaded_at=last_unloaded_at,
+            cycle_energy_start=cycle_energy_start,
+            cycle_energy_unit=cycle_energy_unit,
+            last_cycle_duration=last_cycle_duration,
+            last_cycle_energy=last_cycle_energy,
+            last_cycle_energy_unit=last_cycle_energy_unit,
+            final_spin_detected=final_spin_detected,
         )
+
+
+def _optional_finite_float(value: Any) -> float | None:
+    """Return an optional finite float or raise for invalid storage."""
+    if value is None:
+        return None
+    number = float(value)
+    if not isfinite(number):
+        raise ValueError
+    return number
+
+
+def _optional_string(value: Any) -> str | None:
+    """Return an optional non-empty string."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 class LaundryStateStore:

@@ -23,7 +23,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import LaundryMonitorConfigEntry
-from .const import LaundryCycleState
+from .const import CONF_ENERGY_SENSOR, LaundryCycleState
 from .entity import LaundryMonitorEntity
 from .runtime import LaundryMonitorRuntime
 
@@ -33,6 +33,7 @@ class LaundryMonitorSensorDescription(SensorEntityDescription):
     """Describe a Laundry Monitor sensor."""
 
     value_fn: Callable[[LaundryMonitorRuntime], Any]
+    unit_fn: Callable[[LaundryMonitorRuntime], str | None] | None = None
 
 
 SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
@@ -64,6 +65,22 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.power,
+    ),
+    LaundryMonitorSensorDescription(
+        key="current_cycle_duration",
+        translation_key="current_cycle_duration",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda runtime: runtime.current_cycle_duration,
+    ),
+    LaundryMonitorSensorDescription(
+        key="last_cycle_duration",
+        translation_key="last_cycle_duration",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda runtime: runtime.last_cycle_duration,
     ),
     LaundryMonitorSensorDescription(
         key="last_activity",
@@ -119,6 +136,18 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     ),
 )
 
+ENERGY_SENSOR_DESCRIPTIONS: tuple[
+    LaundryMonitorSensorDescription, ...
+] = (
+    LaundryMonitorSensorDescription(
+        key="last_cycle_energy",
+        translation_key="last_cycle_energy",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        value_fn=lambda runtime: runtime.last_cycle_energy,
+        unit_fn=lambda runtime: runtime.last_cycle_energy_unit,
+    ),
+)
 
 TRACKING_SENSOR_DESCRIPTIONS: tuple[
     LaundryMonitorSensorDescription, ...
@@ -140,6 +169,8 @@ async def async_setup_entry(
     """Set up Laundry Monitor sensor entities."""
     runtime = entry.runtime_data
     descriptions = SENSOR_DESCRIPTIONS
+    if entry.data.get(CONF_ENERGY_SENSOR):
+        descriptions += ENERGY_SENSOR_DESCRIPTIONS
     if runtime.tracking_enabled:
         descriptions += TRACKING_SENSOR_DESCRIPTIONS
 
@@ -162,6 +193,13 @@ class LaundryMonitorSensor(LaundryMonitorEntity, SensorEntity):
         """Initialize the sensor."""
         super().__init__(runtime, description.key)
         self.entity_description = description
+
+    @property
+    def native_unit_of_measurement(self) -> str | None:
+        """Return a dynamic source-compatible unit when configured."""
+        if self.entity_description.unit_fn is not None:
+            return self.entity_description.unit_fn(self.runtime)
+        return self.entity_description.native_unit_of_measurement
 
     @property
     def native_value(self) -> str | int | float | datetime | None:

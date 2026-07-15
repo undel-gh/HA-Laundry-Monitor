@@ -44,6 +44,11 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[
         is LaundryCycleState.FINISHED,
     ),
     LaundryMonitorBinarySensorDescription(
+        key="final_spin_detected",
+        translation_key="final_spin_detected",
+        value_fn=lambda runtime: runtime.final_spin_detected,
+    ),
+    LaundryMonitorBinarySensorDescription(
         key="activity_detected",
         translation_key="activity_detected",
         entity_category=EntityCategory.DIAGNOSTIC,
