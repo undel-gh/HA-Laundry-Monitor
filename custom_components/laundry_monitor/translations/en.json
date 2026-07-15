@@ -104,6 +104,18 @@
       },
       "last_rejected_transition": {
         "name": "Last rejected transition"
+      },
+      "current_cycle_duration": {
+        "name": "Current cycle duration"
+      },
+      "last_cycle_duration": {
+        "name": "Last cycle duration"
+      },
+      "last_cycle_energy": {
+        "name": "Last cycle energy"
+      },
+      "last_unloaded_at": {
+        "name": "Last unloaded at"
       }
     },
     "binary_sensor": {
@@ -121,6 +133,9 @@
       },
       "activity_detected": {
         "name": "Activity detected"
+      },
+      "final_spin_detected": {
+        "name": "Final spin detected"
       }
     },
     "button": {
