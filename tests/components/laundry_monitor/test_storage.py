@@ -113,3 +113,33 @@ def test_meaningful_states_survive_restart(
         )
         is state
     )
+
+
+def test_snapshot_without_last_unloaded_at_is_backward_compatible() -> None:
+    """Test snapshots written before unload timestamps still load."""
+    stored = _snapshot(LaundryCycleState.FINISHED).as_storage_dict()
+    stored.pop("last_unloaded_at")
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.last_unloaded_at is None
+
+def test_last_unloaded_at_round_trip() -> None:
+    """Test a recorded unload timestamp survives serialization."""
+    unloaded_at = datetime(2026, 7, 15, 9, 30, tzinfo=timezone.utc)
+    snapshot = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.IDLE,
+        last_transition_reason="marked_unloaded",
+        last_state_change=unloaded_at,
+        cycle_started_at=None,
+        laundry_present=False,
+        last_unloaded_at=unloaded_at,
+    )
+
+    restored = RuntimeSnapshot.from_storage_dict(
+        snapshot.as_storage_dict()
+    )
+
+    assert restored == snapshot
+

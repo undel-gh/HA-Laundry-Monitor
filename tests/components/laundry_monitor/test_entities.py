@@ -34,7 +34,11 @@ def _entity_id(
     return entity_id
 
 
-async def _setup_entry(hass: HomeAssistant) -> MockConfigEntry:
+async def _setup_entry(
+    hass: HomeAssistant,
+    *,
+    tracking: bool = True,
+) -> MockConfigEntry:
     """Create and set up a fully configured test entry."""
     hass.states.async_set("sensor.washing_machine_power", "0.25")
     hass.states.async_set("binary_sensor.washing_machine_door", STATE_OFF)
@@ -52,7 +56,7 @@ async def _setup_entry(hass: HomeAssistant) -> MockConfigEntry:
             CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
             CONF_LEAK_SENSOR: "binary_sensor.washing_machine_leak",
             CONF_ENERGY_SENSOR: "sensor.washing_machine_energy",
-            CONF_TRACK_LAUNDRY: True,
+            CONF_TRACK_LAUNDRY: tracking,
         },
     )
     entry.add_to_hass(hass)
@@ -73,6 +77,7 @@ async def test_base_entities_are_created(
     expected = {
         ("sensor", "cycle_state"): "idle",
         ("sensor", "last_transition_reason"): "initial_setup",
+        ("sensor", "last_unloaded_at"): "unknown",
         ("binary_sensor", "running"): STATE_OFF,
         ("binary_sensor", "finished"): STATE_OFF,
         ("binary_sensor", "leak"): STATE_OFF,
@@ -164,7 +169,13 @@ async def test_mark_unloaded_button(
     entry = await _setup_entry(hass)
     runtime = entry.runtime_data
 
-    runtime.async_set_cycle_state(
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.RUNNING,
+        "test_cycle_started",
+    )
+    await hass.async_block_till_done()
+
+    assert runtime.async_set_cycle_state(
         LaundryCycleState.FINISHED,
         "test_cycle_finished",
     )
@@ -180,6 +191,7 @@ async def test_mark_unloaded_button(
     await hass.async_block_till_done()
 
     assert runtime.laundry_present is False
+    assert runtime.last_unloaded_at is not None
     assert runtime.cycle_state is LaundryCycleState.IDLE
 
     cycle_state = hass.states.get(
@@ -188,8 +200,64 @@ async def test_mark_unloaded_button(
     laundry_present = hass.states.get(
         _entity_id(hass, "binary_sensor", entry, "laundry_present")
     )
+    last_unloaded_at = hass.states.get(
+        _entity_id(hass, "sensor", entry, "last_unloaded_at")
+    )
 
     assert cycle_state is not None
     assert cycle_state.state == LaundryCycleState.IDLE
     assert laundry_present is not None
     assert laundry_present.state == STATE_OFF
+    assert last_unloaded_at is not None
+    assert last_unloaded_at.state not in ("unknown", "unavailable")
+
+
+async def test_last_unloaded_sensor_requires_tracking(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test the unload timestamp sensor exists only with tracking enabled."""
+    entry = await _setup_entry(hass, tracking=False)
+
+    assert (
+        er.async_get(hass).async_get_entity_id(
+            "sensor",
+            DOMAIN,
+            f"{entry.entry_id}_last_unloaded_at",
+        )
+        is None
+    )
+
+
+async def test_mark_unloaded_outside_finished_preserves_transition_metadata(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test unloading outside finished is not reported as a transition."""
+    entry = await _setup_entry(hass)
+    runtime = entry.runtime_data
+
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.RUNNING,
+        "test_cycle_started",
+    )
+    await hass.async_block_till_done()
+
+    transition_reason = runtime.last_transition_reason
+    state_change = runtime.last_state_change
+
+    runtime.async_mark_unloaded()
+    await hass.async_block_till_done()
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.laundry_present is False
+    assert runtime.last_unloaded_at is not None
+    assert runtime.last_transition_reason == transition_reason
+    assert runtime.last_state_change == state_change
+
+    snapshot = await runtime.state_store.async_get(entry.entry_id)
+    assert snapshot is not None
+    assert snapshot.last_unloaded_at == runtime.last_unloaded_at
+    assert snapshot.last_transition_reason == transition_reason
+    assert snapshot.last_state_change == state_change
+

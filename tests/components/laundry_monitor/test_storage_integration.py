@@ -262,3 +262,63 @@ async def test_two_entries_share_store_and_restore_independently(
         restored_dryer.last_transition_reason
         == REASON_STATE_RECOVERY_FALLBACK
     )
+
+
+async def test_last_unloaded_at_is_restored_after_unload_and_setup(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test the unload timestamp survives a real storage reload."""
+    _set_source_states(
+        hass,
+        prefix="washing_machine_unload_timestamp",
+        power=0.25,
+    )
+
+    entry = _create_entry(
+        name="Washing Machine Timestamp",
+        prefix="washing_machine_unload_timestamp",
+    )
+    await _async_add_and_setup_entry(hass, entry)
+
+    runtime = entry.runtime_data
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.RUNNING,
+        "test_cycle_started",
+    )
+    await hass.async_block_till_done()
+
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.FINISHED,
+        "test_cycle_finished",
+    )
+    await hass.async_block_till_done()
+
+    runtime.async_mark_unloaded()
+    await hass.async_block_till_done()
+
+    unloaded_at = runtime.last_unloaded_at
+    original_store = runtime.state_store
+
+    assert unloaded_at is not None
+    assert runtime.cycle_state is LaundryCycleState.IDLE
+
+    stored = await original_store.async_get(entry.entry_id)
+    assert stored is not None
+    assert stored.last_unloaded_at == unloaded_at
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.NOT_LOADED
+
+    assert hass.data.pop(DATA_STATE_STORE) is original_store
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+
+    restored_runtime = entry.runtime_data
+    assert restored_runtime.state_store is not original_store
+    assert restored_runtime.cycle_state is LaundryCycleState.IDLE
+    assert restored_runtime.last_unloaded_at == unloaded_at
+
