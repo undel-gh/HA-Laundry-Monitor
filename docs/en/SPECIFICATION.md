@@ -40,7 +40,8 @@ Laundry Monitor shall support:
 - optional leak detection;
 - diagnostic entities;
 - Home Assistant events;
-- debug mode;
+- downloadable diagnostics;
+- native Home Assistant debug logging;
 - localization;
 - multiple configured washing machines.
 
