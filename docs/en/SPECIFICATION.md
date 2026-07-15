@@ -135,9 +135,7 @@ Laundry Monitor should prefer standard Home Assistant entities (such as button, 
 
 The following sources are required:
 
-- power sensor;
-- door sensor;
-- vibration sensor.
+- power sensor.
 
 Power sensor is required for detection of running state
 
@@ -145,8 +143,6 @@ Example:
 
 ```text
 sensor.washing_machine_power
-sensor.washing_machine_door
-sensor.washing_machine_vibration
 ```
 
 ### 4.2 Optional sources
@@ -158,6 +154,11 @@ Optional sensors:
 - leak sensor;
 - energy sensor;
 - plug switch state.
+
+```text
+sensor.washing_machine_door
+sensor.washing_machine_vibration
+```
 
 Optional sensors may improve diagnostics and statistics but must not be required for basic operation.
 Door sensor allow the detection of laundry removal.
@@ -201,7 +202,6 @@ Internal states may evolve between releases without affecting the public API.
 ## 6. State Transitions
 ### 6.1 Basic transition model
 ```text
-stateDiagram-v3
     [*] --> Idle
 
     idle
@@ -446,10 +446,12 @@ User-configurable options:
 - start threshold;
 - activity threshold;
 - finish timeout;
-- spin detection enabled;
-- spin minimum duration;
-- debug mode;
-- experimental sensors enabled.
+- spin minimum duration
+- running → finished` fallback 
+- arming timeout
+- finished state retention
+- power_unavailable grace period
+- snapshot maximum age.
 
 ## 12. Recovery policy
 
