@@ -285,6 +285,7 @@ Laundry is marked as removed only when the user presses `button.<device>_mark_un
 ## 7. Detection Logic
 ### 7.1 Activity detection
 
+
 Activity is detected primarily from power.
 
 Example defaults:
@@ -328,6 +329,20 @@ The integration should avoid trying to distinguish:
 - low-power pauses during cycle.
 
 Instead, finish should be inferred from absence of meaningful activity over time.
+
+## 7.4 State machine options and defaults
+
+| Option | Default | Purpose |
+|---|---:|---|
+| `running_finish_confirmation` | 600 s | Conservative `running → finished` fallback |
+| `arming_timeout` | 1800 s | Prevents an indefinite `armed` state |
+| `finished_retention` | 300 s | Keeps `finished` observable when tracking is off |
+| `power_unavailable_grace` | 120 s | Delays `error` during brief telemetry loss |
+| `snapshot_max_age` | 86400 s | Rejects stale active-cycle recovery |
+
+The existing `finish_confirmation` remains the shorter timeout used after a
+confirmed final spin. The new running fallback deliberately defaults to the
+10-minute value documented in the specification.
 
 ## 8. Leak Model
 
@@ -436,11 +451,23 @@ User-configurable options:
 - debug mode;
 - experimental sensors enabled.
 
-## 12. Localization
+## 12. Recovery policy
+
+- expired `armed` snapshots recover as `idle`;
+- stale `running`/`final_spin` snapshots recover as `idle`;
+- `final_spin` without current vibration context recovers as `running`;
+- expired `finished` snapshots recover as `idle` when Laundry Tracking is off;
+- `finished` remains restorable when Laundry Tracking is on;
+- `error` recovers as `idle` when valid power data is already available.
+
+Restoration does not emit cycle-start, final-spin, cycle-finished, or unload
+events.
+
+## 13. Localization
 
 Laundry Monitor must support localization from the first version.
 
-### 12.1 Requirements
+### 13.1 Requirements
 - All user-visible strings must be localizable.
 - English is the default language.
 - Additional languages may be added by contributors.
@@ -448,7 +475,7 @@ Laundry Monitor must support localization from the first version.
 - Entity states used for automations must remain stable.
 - UI labels, descriptions, config flow text, options text, and diagnostics must use Home Assistant translation files.
 
-### 12.2 Suggested structure
+### 13.2 Suggested structure
 ```text
 custom_components/laundry_monitor/
   strings.json
@@ -475,7 +502,7 @@ The English documentation is canonical.
 
 Translated documentation should follow the English version and must not define separate behavior.
 
-## 13. Debug Mode
+## 14. Debug Mode
 
 Debug Mode is a first-class feature.
 
@@ -494,7 +521,7 @@ It should expose:
 
 Future versions may include cycle playback.
 
-## 14. Non-goals
+## 15. Non-goals
 
 Laundry Monitor is not:
 
@@ -505,7 +532,7 @@ Laundry Monitor is not:
 - a universal appliance monitor;
 - a replacement for Home Assistant automations.
 
-## 15. Roadmap
+## 16. Roadmap
 ### v0.1
 - project skeleton;
 - config flow;
@@ -535,6 +562,6 @@ Laundry Monitor is not:
 - English documentation;
 - localization support.
 
-## 16. Open Questions
+## 17. Open Questions
 - Should confidence be a percentage or diagnostic enum?
 - Should final spin detection be enabled by default?
