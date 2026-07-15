@@ -104,8 +104,19 @@
       },
       "last_rejected_transition": {
         "name": "Последний отклонённый переход"
+      },
+      "current_cycle_duration": {
+        "name": "Текущая длительность цикла"
+      },
+      "last_cycle_duration": {
+        "name": "Длительность последнего цикла"
+      },
+      "last_cycle_energy": {
+        "name": "Энергия последнего цикла"
+      },
+      "last_unloaded_at": {
+        "name": "Последняя выгрузка белья"
       }
-      
     },
     "binary_sensor": {
       "running": {
@@ -122,6 +133,9 @@
       },      
       "activity_detected": {
         "name": "Обнаружена активность"
+      },
+      "final_spin_detected": {
+        "name": "Обнаружен финальный отжим"
       }
     },
     "button": {
