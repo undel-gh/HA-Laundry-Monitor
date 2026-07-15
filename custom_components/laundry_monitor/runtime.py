@@ -121,6 +121,7 @@ class LaundryMonitorRuntime:
     leak_detected: bool = False
     energy: float | None = None
     laundry_present: bool = False
+    last_unloaded_at: datetime | None = None
     cycle_started_at: datetime | None = None
 
     final_spin_confidence: float = 0.0
@@ -349,6 +350,7 @@ class LaundryMonitorRuntime:
             last_state_change=self.last_state_change,
             cycle_started_at=self.cycle_started_at,
             laundry_present=self.laundry_present,
+            last_unloaded_at=self.last_unloaded_at,
         )
 
     @callback
@@ -394,6 +396,7 @@ class LaundryMonitorRuntime:
             else dt_util.utcnow()
         )
         self.laundry_present = snapshot.laundry_present
+        self.last_unloaded_at = snapshot.last_unloaded_at
         if (
             not self.tracking_enabled
             and snapshot.cycle_state is LaundryCycleState.FINISHED
@@ -930,13 +933,18 @@ class LaundryMonitorRuntime:
         if not self.tracking_enabled or not self.laundry_present:
             return
 
+        unloaded_at = dt_util.utcnow()
         self.laundry_present = False
+        self.last_unloaded_at = unloaded_at
+
         if self.cycle_state is LaundryCycleState.FINISHED:
             self.async_set_cycle_state(
                 LaundryCycleState.IDLE,
                 REASON_MARKED_UNLOADED,
             )
         else:
+            # Laundry presence changed without a public state transition.
+            # Preserve transition metadata and persist only the tracking data.
             self._schedule_snapshot_save()
             self._notify_entities()
 
@@ -945,7 +953,7 @@ class LaundryMonitorRuntime:
             {
                 "config_entry_id": self.entry.entry_id,
                 "name": self.name,
-                "timestamp": dt_util.utcnow().isoformat(),
+                "timestamp": unloaded_at.isoformat(),
             },
         )
 

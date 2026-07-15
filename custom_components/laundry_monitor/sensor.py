@@ -11,8 +11,14 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
-from homeassistant.const import EntityCategory
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfPower,
+    UnitOfRatio,
+    UnitOfTime,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -49,13 +55,13 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.last_state_change,
-    ),     
+    ),
     LaundryMonitorSensorDescription(
         key="current_power",
         translation_key="current_power",
-        native_unit_of_measurement="W",
+        native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
-        state_class="measurement",
+        state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.power,
     ),
@@ -69,7 +75,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     LaundryMonitorSensorDescription(
         key="final_spin_confidence",
         translation_key="final_spin_confidence",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: round(
             runtime.final_spin_confidence * 100,
@@ -95,7 +101,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     ),
     LaundryMonitorSensorDescription(
         key="finish_remaining", translation_key="finish_remaining",
-        native_unit_of_measurement="s",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.finish_remaining_seconds,
     ),
@@ -114,15 +120,32 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
 )
 
 
+TRACKING_SENSOR_DESCRIPTIONS: tuple[
+    LaundryMonitorSensorDescription, ...
+] = (
+    LaundryMonitorSensorDescription(
+        key="last_unloaded_at",
+        translation_key="last_unloaded_at",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda runtime: runtime.last_unloaded_at,
+    ),
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: LaundryMonitorConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up Laundry Monitor sensor entities."""
+    runtime = entry.runtime_data
+    descriptions = SENSOR_DESCRIPTIONS
+    if runtime.tracking_enabled:
+        descriptions += TRACKING_SENSOR_DESCRIPTIONS
+
     async_add_entities(
-        LaundryMonitorSensor(entry.runtime_data, description)
-        for description in SENSOR_DESCRIPTIONS
+        LaundryMonitorSensor(runtime, description)
+        for description in descriptions
     )
 
 
@@ -141,6 +164,6 @@ class LaundryMonitorSensor(LaundryMonitorEntity, SensorEntity):
         self.entity_description = description
 
     @property
-    def native_value(self) -> str | datetime | None:
+    def native_value(self) -> str | int | float | datetime | None:
         """Return the sensor value."""
         return self.entity_description.value_fn(self.runtime)

@@ -25,6 +25,7 @@ class RuntimeSnapshot:
     last_state_change: datetime
     cycle_started_at: datetime | None
     laundry_present: bool
+    last_unloaded_at: datetime | None = None
 
     def as_storage_dict(self) -> dict[str, Any]:
         """Serialize the snapshot."""
@@ -38,6 +39,11 @@ class RuntimeSnapshot:
                 else None
             ),
             "laundry_present": self.laundry_present,
+            "last_unloaded_at": (
+                self.last_unloaded_at.isoformat()
+                if self.last_unloaded_at is not None
+                else None
+            ),
         }
 
     @classmethod
@@ -58,10 +64,17 @@ class RuntimeSnapshot:
             )
             reason = str(data["last_transition_reason"])
             laundry_present = bool(data["laundry_present"])
+            last_unloaded_at = (
+                dt_util.parse_datetime(data["last_unloaded_at"])
+                if data.get("last_unloaded_at")
+                else None
+            )
         except (KeyError, TypeError, ValueError):
             return None
 
         if last_state_change is None:
+            return None
+        if data.get("last_unloaded_at") and last_unloaded_at is None:
             return None
 
         return cls(
@@ -70,6 +83,7 @@ class RuntimeSnapshot:
             last_state_change=last_state_change,
             cycle_started_at=cycle_started_at,
             laundry_present=laundry_present,
+            last_unloaded_at=last_unloaded_at,
         )
 
 
