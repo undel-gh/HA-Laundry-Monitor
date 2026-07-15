@@ -25,13 +25,13 @@ from .runtime import LaundryMonitorRuntime
 
 type LaundryMonitorConfigEntry = ConfigEntry[LaundryMonitorRuntime]
 
-_SOURCE_DEFINITIONS: tuple[tuple[str, bool], ...] = (
-    (CONF_POWER_SENSOR, True),
-    (CONF_DOOR_SENSOR, True),
-    (CONF_VIBRATION_SENSOR, True),
-    (CONF_LEAK_SENSOR, False),
-    (CONF_ENERGY_SENSOR, False),
-    (CONF_PLUG_SWITCH, False),
+_SOURCE_DEFINITIONS: tuple[tuple[str, bool, bool], ...] = (
+    (CONF_POWER_SENSOR, True, True),
+    (CONF_DOOR_SENSOR, False, False),
+    (CONF_VIBRATION_SENSOR, False, False),
+    (CONF_LEAK_SENSOR, False, False),
+    (CONF_ENERGY_SENSOR, False, True),
+    (CONF_PLUG_SWITCH, False, False),
 )
 
 _STATE_ATTRIBUTE_KEYS = (
@@ -51,6 +51,7 @@ def _source_diagnostics(
     entity_id: str | None,
     *,
     required: bool,
+    numeric: bool,
 ) -> dict[str, Any]:
     """Return diagnostics for one configured source entity."""
     if not entity_id:
@@ -79,12 +80,15 @@ def _source_diagnostics(
             "attributes": {},
         }
 
+    valid_state = state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+    if numeric and valid_state:
+        valid_state = _is_numeric_state(state.state)
+
     return {
         "configured": True,
         "required": required,
         "entity_id": entity_id,
-        "available": state.state
-        not in (STATE_UNKNOWN, STATE_UNAVAILABLE),
+        "available": valid_state,
         "state": state.state,
         "last_changed": state.last_changed.isoformat(),
         "last_updated": state.last_updated.isoformat(),
@@ -94,6 +98,15 @@ def _source_diagnostics(
             if key in state.attributes
         },
     }
+
+
+def _is_numeric_state(value: str) -> bool:
+    """Return whether a sensor state is a finite number."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return number == number and number not in (float("inf"), float("-inf"))
 
 
 async def _async_build_diagnostics(
@@ -108,8 +121,9 @@ async def _async_build_diagnostics(
             hass,
             entry.data.get(source_key),
             required=required,
+            numeric=numeric,
         )
-        for source_key, required in _SOURCE_DEFINITIONS
+        for source_key, required, numeric in _SOURCE_DEFINITIONS
     }
 
     snapshot = await runtime.state_store.async_get(entry.entry_id)
@@ -125,7 +139,7 @@ async def _async_build_diagnostics(
         "sources": sources,
         "required_sources_unavailable": [
             source_key
-            for source_key, required in _SOURCE_DEFINITIONS
+            for source_key, required, _numeric in _SOURCE_DEFINITIONS
             if required and not sources[source_key]["available"]
         ],
         "runtime": {
@@ -193,6 +207,12 @@ async def _async_build_diagnostics(
                 "confirmation_seconds": (
                     runtime.finish_detector.confirmation_seconds
                 ),
+                "final_spin_confirmation_seconds": (
+                    runtime.finish_detector.confirmation_seconds
+                ),
+                "running_fallback_confirmation_seconds": (
+                    runtime.running_finish_detector.confirmation_seconds
+                ),
                 "quiet_since": _serialize_datetime(
                     runtime.finish_quiet_since
                 ),
@@ -201,6 +221,18 @@ async def _async_build_diagnostics(
                 ),
                 "remaining_seconds": (
                     runtime.finish_remaining_seconds
+                ),
+            },
+            "lifecycle": {
+                "arming_timeout_seconds": runtime.arming_timeout_seconds,
+                "finished_retention_seconds": (
+                    runtime.finished_retention_seconds
+                ),
+                "power_unavailable_grace_seconds": (
+                    runtime.power_unavailable_grace_seconds
+                ),
+                "snapshot_max_age_seconds": (
+                    runtime.snapshot_max_age_seconds
                 ),
             },
         },

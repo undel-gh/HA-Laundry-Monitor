@@ -20,16 +20,12 @@ from homeassistant.helpers.issue_registry import (
 )
 
 from .const import (
-    CONF_DOOR_SENSOR,
     CONF_POWER_SENSOR,
-    CONF_VIBRATION_SENSOR,
     DOMAIN,
 )
 
 REQUIRED_SOURCE_KEYS: tuple[str, ...] = (
     CONF_POWER_SENSOR,
-    CONF_DOOR_SENSOR,
-    CONF_VIBRATION_SENSOR,
 )
 
 ISSUE_TRANSLATION_KEY = "required_source_unavailable"
@@ -134,6 +130,7 @@ class LaundryMonitorRepairs:
         available = (
             state is not None
             and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+            and _is_numeric_state(state.state)
         )
 
         if available:
@@ -168,3 +165,12 @@ class LaundryMonitorRepairs:
                 "entity_id": display_entity_id,
             },
         )
+
+
+def _is_numeric_state(value: str) -> bool:
+    """Return whether a required power state is a finite number."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return False
+    return number == number and number not in (float("inf"), float("-inf"))

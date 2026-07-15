@@ -29,30 +29,41 @@ class TransitionResult:
 
 
 ALLOWED_TRANSITIONS: dict[LaundryCycleState, frozenset[LaundryCycleState]] = {
-    LaundryCycleState.IDLE: frozenset({
-        LaundryCycleState.ARMED,
-        LaundryCycleState.RUNNING,
-        LaundryCycleState.ERROR,
-    }),
-    LaundryCycleState.ARMED: frozenset({
-        LaundryCycleState.IDLE,
-        LaundryCycleState.RUNNING,
-        LaundryCycleState.ERROR,
-    }),
-    LaundryCycleState.RUNNING: frozenset({
-        LaundryCycleState.FINAL_SPIN,
-        LaundryCycleState.FINISHED,
-        LaundryCycleState.ERROR,
-    }),
-    LaundryCycleState.FINAL_SPIN: frozenset({
-        LaundryCycleState.RUNNING,
-        LaundryCycleState.FINISHED,
-        LaundryCycleState.ERROR,
-    }),
-    LaundryCycleState.FINISHED: frozenset({
-        LaundryCycleState.IDLE,
-        LaundryCycleState.ERROR,
-    }),
+    LaundryCycleState.IDLE: frozenset(
+        {
+            LaundryCycleState.ARMED,
+            LaundryCycleState.RUNNING,
+            LaundryCycleState.ERROR,
+        }
+    ),
+    LaundryCycleState.ARMED: frozenset(
+        {
+            LaundryCycleState.IDLE,
+            LaundryCycleState.RUNNING,
+            LaundryCycleState.ERROR,
+        }
+    ),
+    LaundryCycleState.RUNNING: frozenset(
+        {
+            LaundryCycleState.FINAL_SPIN,
+            LaundryCycleState.FINISHED,
+            LaundryCycleState.ERROR,
+        }
+    ),
+    LaundryCycleState.FINAL_SPIN: frozenset(
+        {
+            LaundryCycleState.RUNNING,
+            LaundryCycleState.FINISHED,
+            LaundryCycleState.ERROR,
+        }
+    ),
+    LaundryCycleState.FINISHED: frozenset(
+        {
+            LaundryCycleState.IDLE,
+            LaundryCycleState.RUNNING,
+            LaundryCycleState.ERROR,
+        }
+    ),
     LaundryCycleState.ERROR: frozenset({LaundryCycleState.IDLE}),
 }
 
@@ -65,7 +76,10 @@ class LaundryStateMachine:
 
     def can_transition(self, new_state: LaundryCycleState) -> bool:
         """Return whether a transition is legal."""
-        return new_state is self.state or new_state in ALLOWED_TRANSITIONS[self.state]
+        return (
+            new_state is self.state
+            or new_state in ALLOWED_TRANSITIONS[self.state]
+        )
 
     def transition(
         self,

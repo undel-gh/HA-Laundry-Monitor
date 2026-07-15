@@ -2,64 +2,104 @@
 
 from __future__ import annotations
 
-from .spin import SpinDetector
-from .finish import FinishDetector, FinishEvaluation
-from .state_machine import LaundryStateMachine, TransitionStatus
-from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
-
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
-from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
+from homeassistant.const import (
+    CONF_NAME,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
+from homeassistant.core import (
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    State,
+    callback,
+)
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+)
 from homeassistant.util import dt as dt_util
 
-from .activity import ActivityDetector
+from .activity import ActivityDetector, ActivityEvaluation
 from .const import (
     CONF_ACTIVITY_THRESHOLD,
+    CONF_ARMING_TIMEOUT,
     CONF_DOOR_SENSOR,
     CONF_ENERGY_SENSOR,
+    CONF_FINISHED_RETENTION,
+    CONF_FINISH_CONFIRMATION,
     CONF_LEAK_SENSOR,
     CONF_POWER_SENSOR,
+    CONF_POWER_UNAVAILABLE_GRACE,
+    CONF_RUNNING_FINISH_CONFIRMATION,
+    CONF_SNAPSHOT_MAX_AGE,
+    CONF_SPIN_ACTIVITY_MAX_AGE,
+    CONF_SPIN_MIN_CYCLE_TIME,
+    CONF_SPIN_REQUIRED_EVENTS,
+    CONF_SPIN_WINDOW,
     CONF_START_CONFIRMATION,
     CONF_START_THRESHOLD,
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
     DEFAULT_ACTIVITY_THRESHOLD,
-    DEFAULT_START_CONFIRMATION,
-    DEFAULT_START_THRESHOLD,
-    EVENT_CYCLE_STARTED,
-    EVENT_LEAK_DETECTED,
-    EVENT_MACHINE_UNLOADED,
-    EVENT_STATE_CHANGED,
-    LaundryCycleState,
-    REASON_DOOR_CLOSED,
-    REASON_DOOR_OPENED_BEFORE_START,
-    REASON_INITIAL_SETUP,
-    REASON_MARKED_UNLOADED,
-    REASON_POWER_ABOVE_START_THRESHOLD,
-    SIGNAL_RUNTIME_UPDATED,
-    CONF_SPIN_ACTIVITY_MAX_AGE,
-    CONF_SPIN_MIN_CYCLE_TIME,
-    CONF_SPIN_REQUIRED_EVENTS,
-    CONF_SPIN_WINDOW,
+    DEFAULT_ARMING_TIMEOUT,
+    DEFAULT_FINISHED_RETENTION,
+    DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_POWER_UNAVAILABLE_GRACE,
+    DEFAULT_RUNNING_FINISH_CONFIRMATION,
+    DEFAULT_SNAPSHOT_MAX_AGE,
     DEFAULT_SPIN_ACTIVITY_MAX_AGE,
     DEFAULT_SPIN_MIN_CYCLE_TIME,
     DEFAULT_SPIN_REQUIRED_EVENTS,
     DEFAULT_SPIN_WINDOW,
-    EVENT_FINAL_SPIN_DETECTED,
-    REASON_FINAL_SPIN_CONFIRMED,
-    CONF_FINISH_CONFIRMATION,
-    DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_START_CONFIRMATION,
+    DEFAULT_START_THRESHOLD,
     EVENT_CYCLE_FINISHED,
-    REASON_FINISH_INACTIVITY_CONFIRMED,
+    EVENT_CYCLE_STARTED,
+    EVENT_DOOR_OPENED_AFTER_FINISH,
+    EVENT_FINAL_SPIN_DETECTED,
+    EVENT_LEAK_DETECTED,
+    EVENT_MACHINE_UNLOADED,
+    EVENT_STATE_CHANGED,
     EVENT_TRANSITION_REJECTED,
-    REASON_STATE_RESTORED
+    LaundryCycleState,
+    REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN,
+    REASON_ARMING_TIMEOUT,
+    REASON_DOOR_CLOSED,
+    REASON_DOOR_OPENED_BEFORE_START,
+    REASON_FINAL_SPIN_CONFIRMED,
+    REASON_FINISHED_RETENTION_EXPIRED,
+    REASON_FINISH_FALLBACK_CONFIRMED,
+    REASON_FINISH_INACTIVITY_CONFIRMED,
+    REASON_INITIAL_SETUP,
+    REASON_MARKED_UNLOADED,
+    REASON_POWER_ABOVE_START_THRESHOLD,
+    REASON_POWER_SENSOR_RECOVERED,
+    REASON_POWER_SENSOR_UNAVAILABLE,
+    REASON_STATE_RECOVERY_FALLBACK,
+    REASON_STATE_RESTORED,
+    SIGNAL_RUNTIME_UPDATED,
+)
+from .finish import FinishDetector, FinishEvaluation
+from .spin import SpinDetector
+from .state_machine import LaundryStateMachine, TransitionStatus
+from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
+
+_STARTABLE_STATES = (
+    LaundryCycleState.IDLE,
+    LaundryCycleState.ARMED,
+    LaundryCycleState.FINISHED,
+)
+_FINISH_EVALUATION_STATES = (
+    LaundryCycleState.RUNNING,
+    LaundryCycleState.FINAL_SPIN,
 )
 
 
@@ -82,19 +122,21 @@ class LaundryMonitorRuntime:
     energy: float | None = None
     laundry_present: bool = False
     cycle_started_at: datetime | None = None
+
     final_spin_confidence: float = 0.0
     final_spin_evidence_count: int = 0
     finish_quiet_since: datetime | None = None
     finish_deadline: datetime | None = None
     finish_remaining_seconds: float | None = None
-    state_machine: LaundryStateMachine = field(init=False)    
+
+    state_machine: LaundryStateMachine = field(init=False)
     rejected_transition_count: int = 0
     last_rejected_transition: str | None = None
 
     activity_detector: ActivityDetector = field(init=False)
     spin_detector: SpinDetector = field(init=False)
     finish_detector: FinishDetector = field(init=False)
-    _cancel_finish_confirmation: Callable[[], None] | None = field(default=None, init=False)
+    running_finish_detector: FinishDetector = field(init=False)
 
     _remove_source_listener: Callable[[], None] | None = field(
         default=None,
@@ -104,12 +146,26 @@ class LaundryMonitorRuntime:
         default=None,
         init=False,
     )
+    _cancel_finish_confirmation: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
+    _cancel_arming_timeout: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
+    _cancel_finished_retention: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
+    _cancel_power_unavailable: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
 
     def __post_init__(self) -> None:
         """Initialize detector modules from config-entry options."""
         self.state_machine = LaundryStateMachine(state=self.cycle_state)
-        
-        
         self.activity_detector = ActivityDetector(
             start_threshold=float(
                 self.entry.options.get(
@@ -122,7 +178,7 @@ class LaundryMonitorRuntime:
                     CONF_ACTIVITY_THRESHOLD,
                     DEFAULT_ACTIVITY_THRESHOLD,
                 )
-            ),            
+            ),
         )
         self.spin_detector = SpinDetector(
             required_events=int(
@@ -151,11 +207,21 @@ class LaundryMonitorRuntime:
             ),
         )
         self.finish_detector = FinishDetector(
-            confirmation_seconds=int(self.entry.options.get(
-                CONF_FINISH_CONFIRMATION, DEFAULT_FINISH_CONFIRMATION
-            ))
+            confirmation_seconds=int(
+                self.entry.options.get(
+                    CONF_FINISH_CONFIRMATION,
+                    DEFAULT_FINISH_CONFIRMATION,
+                )
+            )
         )
-
+        self.running_finish_detector = FinishDetector(
+            confirmation_seconds=int(
+                self.entry.options.get(
+                    CONF_RUNNING_FINISH_CONFIRMATION,
+                    DEFAULT_RUNNING_FINISH_CONFIRMATION,
+                )
+            )
+        )
 
     @property
     def name(self) -> str:
@@ -174,6 +240,46 @@ class LaundryMonitorRuntime:
             self.entry.options.get(
                 CONF_START_CONFIRMATION,
                 DEFAULT_START_CONFIRMATION,
+            )
+        )
+
+    @property
+    def arming_timeout_seconds(self) -> int:
+        """Return how long the optional armed state may remain active."""
+        return int(
+            self.entry.options.get(
+                CONF_ARMING_TIMEOUT,
+                DEFAULT_ARMING_TIMEOUT,
+            )
+        )
+
+    @property
+    def finished_retention_seconds(self) -> int:
+        """Return completed-state retention when tracking is disabled."""
+        return int(
+            self.entry.options.get(
+                CONF_FINISHED_RETENTION,
+                DEFAULT_FINISHED_RETENTION,
+            )
+        )
+
+    @property
+    def power_unavailable_grace_seconds(self) -> int:
+        """Return allowed power-source unavailability duration."""
+        return int(
+            self.entry.options.get(
+                CONF_POWER_UNAVAILABLE_GRACE,
+                DEFAULT_POWER_UNAVAILABLE_GRACE,
+            )
+        )
+
+    @property
+    def snapshot_max_age_seconds(self) -> int:
+        """Return maximum age of an active-cycle snapshot."""
+        return int(
+            self.entry.options.get(
+                CONF_SNAPSHOT_MAX_AGE,
+                DEFAULT_SNAPSHOT_MAX_AGE,
             )
         )
 
@@ -220,9 +326,8 @@ class LaundryMonitorRuntime:
                 self.source_entity_ids,
                 self._async_source_state_changed,
             )
-        
-        if self.cycle_state is LaundryCycleState.FINAL_SPIN:
-            self._evaluate_finish()
+
+        self._resume_lifecycle_after_start()
 
     async def async_stop(self) -> None:
         """Remove runtime subscriptions and timers."""
@@ -232,8 +337,12 @@ class LaundryMonitorRuntime:
 
         self._cancel_pending_start_confirmation()
         self._cancel_pending_finish_confirmation()
+        self._cancel_pending_arming_timeout()
+        self._cancel_pending_finished_retention()
+        self._cancel_pending_power_unavailable()
 
     def _snapshot(self) -> RuntimeSnapshot:
+        """Return the persistable part of runtime state."""
         return RuntimeSnapshot(
             cycle_state=self.cycle_state,
             last_transition_reason=self.last_transition_reason,
@@ -244,11 +353,16 @@ class LaundryMonitorRuntime:
 
     @callback
     def _schedule_snapshot_save(self) -> None:
+        """Schedule persistence without blocking the state callback."""
         self.hass.async_create_task(
-            self.state_store.async_save(self.entry.entry_id, self._snapshot())
+            self.state_store.async_save(
+                self.entry.entry_id,
+                self._snapshot(),
+            )
         )
 
     async def _async_restore_snapshot(self) -> None:
+        """Restore a snapshot using the configured recovery policy."""
         snapshot = await self.state_store.async_get(self.entry.entry_id)
         if snapshot is None:
             return
@@ -258,16 +372,39 @@ class LaundryMonitorRuntime:
             door_open=self.door_open,
             activity_detected=self.activity_detected,
             vibration_active=self.vibration_active,
+            now=dt_util.utcnow(),
+            tracking_enabled=self.tracking_enabled,
+            arming_timeout_seconds=self.arming_timeout_seconds,
+            finished_retention_seconds=self.finished_retention_seconds,
+            max_active_snapshot_age_seconds=self.snapshot_max_age_seconds,
+            power_available=self.power is not None,
+            require_final_spin_context=True,
         )
 
         self.state_machine.restore(recovered_state)
         self.cycle_state = recovered_state
-        self.last_transition_reason = REASON_STATE_RESTORED
-        self.last_state_change = snapshot.last_state_change
+        self.last_transition_reason = (
+            REASON_STATE_RESTORED
+            if recovered_state is snapshot.cycle_state
+            else REASON_STATE_RECOVERY_FALLBACK
+        )
+        self.last_state_change = (
+            snapshot.last_state_change
+            if recovered_state is snapshot.cycle_state
+            else dt_util.utcnow()
+        )
         self.laundry_present = snapshot.laundry_present
+        if (
+            not self.tracking_enabled
+            and snapshot.cycle_state is LaundryCycleState.FINISHED
+            and recovered_state is LaundryCycleState.IDLE
+        ):
+            self.laundry_present = False
+
         self.cycle_started_at = (
             snapshot.cycle_started_at
-            if recovered_state in (
+            if recovered_state
+            in (
                 LaundryCycleState.RUNNING,
                 LaundryCycleState.FINAL_SPIN,
             )
@@ -277,21 +414,41 @@ class LaundryMonitorRuntime:
         self.spin_detector.reset(vibration_active=self.vibration_active)
         self.final_spin_confidence = 0.0
         self.final_spin_evidence_count = 0
-        self.finish_detector.reset()
-        self.finish_quiet_since = None
-        self.finish_deadline = None
-        self.finish_remaining_seconds = None
-    
+        self._reset_finish_detection()
+
+        if recovered_state is not snapshot.cycle_state:
+            self._schedule_snapshot_save()
+
+    @callback
+    def _resume_lifecycle_after_start(self) -> None:
+        """Resume safe timers after current states and snapshot are loaded."""
+        if self.power is None:
+            self._schedule_power_unavailable_error()
+        else:
+            # Re-evaluate the current power level after setup so a machine
+            # already above the start threshold does not require a new state
+            # event before cycle detection begins.
+            self._handle_power_update()
+
+        if self.cycle_state is LaundryCycleState.ARMED:
+            self._schedule_arming_timeout(from_timestamp=self.last_state_change)
+        elif self.cycle_state is LaundryCycleState.FINISHED:
+            self._schedule_finished_retention(
+                from_timestamp=self.last_state_change
+            )
+
+        if self.cycle_state in _FINISH_EVALUATION_STATES:
+            self._evaluate_finish()
+
     @callback
     def _read_all_source_states(self) -> None:
-        """Read current states without causing cycle-state transitions."""
+        """Read current states without creating public transitions."""
         for entity_id in self.source_entity_ids:
             self._update_source(entity_id, self.hass.states.get(entity_id))
 
-        self.activity_detector.evaluate(self.power)
-        self.spin_detector.reset(
-            vibration_active=self.vibration_active,
-        )
+        if self.power is not None:
+            self.activity_detector.evaluate(self.power)
+        self.spin_detector.reset(vibration_active=self.vibration_active)
 
     @callback
     def _async_source_state_changed(
@@ -306,20 +463,17 @@ class LaundryMonitorRuntime:
         if not self._update_source(entity_id, event.data.get("new_state")):
             return
 
-        if entity_id == self.entry.data.get(CONF_POWER_SENSOR):
+        power_entity = self.entry.data.get(CONF_POWER_SENSOR)
+        door_entity = self.entry.data.get(CONF_DOOR_SENSOR)
+        vibration_entity = self.entry.data.get(CONF_VIBRATION_SENSOR)
+
+        if entity_id == power_entity:
             self._handle_power_update()
-        elif entity_id == self.entry.data.get(CONF_DOOR_SENSOR):
+        elif entity_id == door_entity:
             self._handle_door_update(old_door_open)
 
-        if entity_id in (
-            self.entry.data.get(CONF_POWER_SENSOR),
-            self.entry.data.get(CONF_VIBRATION_SENSOR),
-        ):
+        if entity_id in (power_entity, vibration_entity):
             self._evaluate_spin()
-        if entity_id in (
-            self.entry.data.get(CONF_POWER_SENSOR),
-            self.entry.data.get(CONF_VIBRATION_SENSOR),
-        ):
             self._evaluate_finish()
 
         if not old_leak and self.leak_detected:
@@ -329,6 +483,7 @@ class LaundryMonitorRuntime:
                     "config_entry_id": self.entry.entry_id,
                     "name": self.name,
                     "source_entity_id": entity_id,
+                    "timestamp": dt_util.utcnow().isoformat(),
                 },
             )
 
@@ -336,19 +491,58 @@ class LaundryMonitorRuntime:
 
     @callback
     def _handle_power_update(self) -> None:
-        """Evaluate power activity and manage start confirmation."""
+        """Evaluate power activity, availability, and cycle starts."""
+        if self.power is None:
+            self._cancel_pending_start_confirmation()
+            self._reset_finish_detection()
+            self._schedule_power_unavailable_error()
+            return
+
+        self._cancel_pending_power_unavailable()
+
+        if self.cycle_state is LaundryCycleState.ERROR:
+            self.async_set_cycle_state(
+                LaundryCycleState.IDLE,
+                REASON_POWER_SENSOR_RECOVERED,
+            )
+
         evaluation = self.activity_detector.evaluate(self.power)
+
+        if self._resume_running_after_final_spin(evaluation):
+            return
 
         if evaluation.start_candidate:
             self._schedule_start_confirmation()
         else:
             self._cancel_pending_start_confirmation()
+            if (
+                self.cycle_state is LaundryCycleState.FINISHED
+                and not self.tracking_enabled
+            ):
+                self._schedule_finished_retention(
+                    from_timestamp=self.last_state_change
+                )
+
+    @callback
+    def _resume_running_after_final_spin(
+        self,
+        evaluation: ActivityEvaluation,
+    ) -> bool:
+        """Return to running on a real inactivity-to-activity edge."""
+        if (
+            self.cycle_state is LaundryCycleState.FINAL_SPIN
+            and evaluation.activity_detected
+            and evaluation.activity_changed
+        ):
+            return self.async_set_cycle_state(
+                LaundryCycleState.RUNNING,
+                REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN,
+            )
+        return False
 
     @callback
     def _handle_door_update(self, old_door_open: bool | None) -> None:
-        """Handle public state transitions caused by the door."""
-        # Only a real open -> closed event arms detection. Initial closed state
-        # during integration startup must not create a synthetic transition.
+        """Handle public transitions and diagnostics caused by the door."""
         if (
             old_door_open is True
             and self.door_open is False
@@ -369,16 +563,27 @@ class LaundryMonitorRuntime:
                 LaundryCycleState.IDLE,
                 REASON_DOOR_OPENED_BEFORE_START,
             )
+            return
+
+        if (
+            old_door_open is False
+            and self.door_open is True
+            and self.cycle_state is LaundryCycleState.FINISHED
+        ):
+            self.hass.bus.async_fire(
+                EVENT_DOOR_OPENED_AFTER_FINISH,
+                {
+                    "config_entry_id": self.entry.entry_id,
+                    "name": self.name,
+                    "timestamp": dt_util.utcnow().isoformat(),
+                },
+            )
 
     @callback
     def _schedule_start_confirmation(self) -> None:
         """Schedule confirmation of sustained start-level power."""
-        if self.cycle_state not in (
-            LaundryCycleState.IDLE,
-            LaundryCycleState.ARMED,
-        ):
+        if self.cycle_state not in _STARTABLE_STATES:
             return
-
         if self._cancel_start_confirmation is not None:
             return
 
@@ -389,31 +594,33 @@ class LaundryMonitorRuntime:
         )
 
     @callback
-    def _async_confirm_cycle_start(self, _now: datetime) -> None:
+    def _async_confirm_cycle_start(self, now: datetime) -> None:
         """Confirm a cycle start after sustained high power."""
         self._cancel_start_confirmation = None
 
-        if self.cycle_state not in (
-            LaundryCycleState.IDLE,
-            LaundryCycleState.ARMED,
+        if self.cycle_state not in _STARTABLE_STATES:
+            return
+        if self.power is None or not self.activity_detector.start_candidate:
+            return
+
+        old_state = self.cycle_state
+        if not self.async_set_cycle_state(
+            LaundryCycleState.RUNNING,
+            REASON_POWER_ABOVE_START_THRESHOLD,
         ):
             return
 
-        if not self.activity_detector.start_candidate:
-            return
-
-        self.async_set_cycle_state(
-            LaundryCycleState.RUNNING,
-            REASON_POWER_ABOVE_START_THRESHOLD,
-        )
         self.hass.bus.async_fire(
             EVENT_CYCLE_STARTED,
             {
                 "config_entry_id": self.entry.entry_id,
                 "name": self.name,
+                "old_state": old_state.value,
+                "new_state": LaundryCycleState.RUNNING.value,
                 "power": self.power,
                 "start_threshold": self.activity_detector.start_threshold,
                 "confirmation_seconds": self.start_confirmation_seconds,
+                "timestamp": now.isoformat(),
             },
         )
 
@@ -423,6 +630,144 @@ class LaundryMonitorRuntime:
         if self._cancel_start_confirmation is not None:
             self._cancel_start_confirmation()
             self._cancel_start_confirmation = None
+
+    @callback
+    def _schedule_arming_timeout(
+        self,
+        *,
+        from_timestamp: datetime | None = None,
+    ) -> None:
+        """Schedule deterministic armed-to-idle recovery."""
+        self._cancel_pending_arming_timeout()
+        if self.cycle_state is not LaundryCycleState.ARMED:
+            return
+
+        delay = float(self.arming_timeout_seconds)
+        if from_timestamp is not None:
+            delay -= max(
+                (dt_util.utcnow() - from_timestamp).total_seconds(),
+                0.0,
+            )
+
+        self._cancel_arming_timeout = async_call_later(
+            self.hass,
+            max(delay, 0.0),
+            self._async_arming_timeout_elapsed,
+        )
+
+    @callback
+    def _async_arming_timeout_elapsed(self, _now: datetime) -> None:
+        """Return an expired armed state to idle."""
+        self._cancel_arming_timeout = None
+        if self.cycle_state is LaundryCycleState.ARMED:
+            self.async_set_cycle_state(
+                LaundryCycleState.IDLE,
+                REASON_ARMING_TIMEOUT,
+            )
+
+    @callback
+    def _cancel_pending_arming_timeout(self) -> None:
+        """Cancel the armed-state timeout."""
+        if self._cancel_arming_timeout is not None:
+            self._cancel_arming_timeout()
+            self._cancel_arming_timeout = None
+
+    @callback
+    def _schedule_finished_retention(
+        self,
+        *,
+        from_timestamp: datetime | None = None,
+    ) -> None:
+        """Schedule finished-to-idle when Laundry Tracking is disabled."""
+        self._cancel_pending_finished_retention()
+        if (
+            self.tracking_enabled
+            or self.cycle_state is not LaundryCycleState.FINISHED
+        ):
+            return
+
+        delay = float(self.finished_retention_seconds)
+        if from_timestamp is not None:
+            delay -= max(
+                (dt_util.utcnow() - from_timestamp).total_seconds(),
+                0.0,
+            )
+
+        self._cancel_finished_retention = async_call_later(
+            self.hass,
+            max(delay, 0.0),
+            self._async_finished_retention_elapsed,
+        )
+
+    @callback
+    def _async_finished_retention_elapsed(self, _now: datetime) -> None:
+        """Reset an observable finished state after its retention period."""
+        self._cancel_finished_retention = None
+        self._reset_finished_without_tracking()
+
+    @callback
+    def _reset_finished_without_tracking(self) -> None:
+        """Return finished to idle only when explicit tracking is disabled."""
+        if (
+            self.tracking_enabled
+            or self.cycle_state is not LaundryCycleState.FINISHED
+        ):
+            return
+
+        # A start confirmation already in progress takes precedence over the
+        # retention reset. If power drops again, _handle_power_update()
+        # immediately re-evaluates the expired retention period.
+        if (
+            self.activity_detector.start_candidate
+            and self._cancel_start_confirmation is not None
+        ):
+            return
+
+        self.laundry_present = False
+        self.async_set_cycle_state(
+            LaundryCycleState.IDLE,
+            REASON_FINISHED_RETENTION_EXPIRED,
+        )
+
+    @callback
+    def _cancel_pending_finished_retention(self) -> None:
+        """Cancel completed-state retention."""
+        if self._cancel_finished_retention is not None:
+            self._cancel_finished_retention()
+            self._cancel_finished_retention = None
+
+    @callback
+    def _schedule_power_unavailable_error(self) -> None:
+        """Enter error only after the required power source grace period."""
+        if self.power is not None:
+            return
+        if self.cycle_state is LaundryCycleState.ERROR:
+            return
+        if self._cancel_power_unavailable is not None:
+            return
+
+        self._cancel_power_unavailable = async_call_later(
+            self.hass,
+            self.power_unavailable_grace_seconds,
+            self._async_power_unavailable_elapsed,
+        )
+
+    @callback
+    def _async_power_unavailable_elapsed(self, _now: datetime) -> None:
+        """Enter error when required power data stayed unavailable."""
+        self._cancel_power_unavailable = None
+        if self.power is None:
+            self.async_set_cycle_state(
+                LaundryCycleState.ERROR,
+                REASON_POWER_SENSOR_UNAVAILABLE,
+            )
+
+    @callback
+    def _cancel_pending_power_unavailable(self) -> None:
+        """Cancel pending required-source failure confirmation."""
+        if self._cancel_power_unavailable is not None:
+            self._cancel_power_unavailable()
+            self._cancel_power_unavailable = None
 
     @callback
     def _update_source(self, entity_id: str, state: State | None) -> bool:
@@ -460,6 +805,7 @@ class LaundryMonitorRuntime:
         new_state: LaundryCycleState,
         reason: str,
     ) -> bool:
+        """Validate, apply, publish, and persist a public transition."""
         transition_time = dt_util.utcnow()
         result = self.state_machine.transition(
             new_state,
@@ -483,6 +829,7 @@ class LaundryMonitorRuntime:
                     "old_state": result.old_state.value,
                     "requested_state": result.new_state.value,
                     "reason": reason,
+                    "timestamp": transition_time.isoformat(),
                 },
             )
             self._notify_entities()
@@ -493,34 +840,7 @@ class LaundryMonitorRuntime:
         self.last_transition_reason = reason
         self.last_state_change = transition_time
 
-            # Keep the detector lifecycle logic from your working implementation here.
-            # Important detail for FINAL_SPIN -> RUNNING:
-            # do not replace cycle_started_at when returning from a false spin candidate.
-        
-        if new_state is LaundryCycleState.RUNNING:
-            if old_state is not LaundryCycleState.FINAL_SPIN:
-                self.cycle_started_at = transition_time
-
-            self.final_spin_confidence = 0.0
-            self.final_spin_evidence_count = 0
-            self.spin_detector.reset(vibration_active=self.vibration_active)
-            self._reset_finish_detection()
-
-        elif new_state is LaundryCycleState.FINAL_SPIN:
-            self.finish_detector.reset()
-            self.finish_quiet_since = None
-            self.finish_deadline = None
-            self.finish_remaining_seconds = None
-
-        elif new_state in (LaundryCycleState.IDLE, LaundryCycleState.ARMED):
-            self.cycle_started_at = None
-            self.final_spin_confidence = 0.0
-            self.final_spin_evidence_count = 0
-            self.spin_detector.reset(vibration_active=self.vibration_active)
-            self._reset_finish_detection()
-   
-        elif new_state is LaundryCycleState.FINISHED:
-            self._reset_finish_detection()
+        self._apply_state_entry_actions(old_state, new_state)
 
         if new_state in (
             LaundryCycleState.RUNNING,
@@ -537,6 +857,8 @@ class LaundryMonitorRuntime:
                 "old_state": old_state.value,
                 "new_state": new_state.value,
                 "reason": reason,
+                "confidence": self.final_spin_confidence,
+                "timestamp": transition_time.isoformat(),
             },
         )
 
@@ -544,26 +866,77 @@ class LaundryMonitorRuntime:
         self._notify_entities()
 
         if new_state is LaundryCycleState.FINAL_SPIN:
-            # Выполняем после публикации нового состояния.
             self._evaluate_finish()
         return True
-        
+
+    @callback
+    def _apply_state_entry_actions(
+        self,
+        old_state: LaundryCycleState,
+        new_state: LaundryCycleState,
+    ) -> None:
+        """Apply timer and detector lifecycle for an accepted transition."""
+        if new_state is not LaundryCycleState.ARMED:
+            self._cancel_pending_arming_timeout()
+        if new_state is not LaundryCycleState.FINISHED:
+            self._cancel_pending_finished_retention()
+
+        if new_state is LaundryCycleState.RUNNING:
+            self._cancel_pending_start_confirmation()
+            if old_state is not LaundryCycleState.FINAL_SPIN:
+                self.cycle_started_at = self.last_state_change
+            self.final_spin_confidence = 0.0
+            self.final_spin_evidence_count = 0
+            self.spin_detector.reset(vibration_active=self.vibration_active)
+            self._reset_finish_detection()
+            return
+
+        if new_state is LaundryCycleState.FINAL_SPIN:
+            self._reset_finish_detection()
+            return
+
+        if new_state in (
+            LaundryCycleState.IDLE,
+            LaundryCycleState.ARMED,
+        ):
+            self._cancel_pending_start_confirmation()
+            self.cycle_started_at = None
+            self.final_spin_confidence = 0.0
+            self.final_spin_evidence_count = 0
+            self.spin_detector.reset(vibration_active=self.vibration_active)
+            self._reset_finish_detection()
+            if not self.tracking_enabled:
+                self.laundry_present = False
+            if new_state is LaundryCycleState.ARMED:
+                self._schedule_arming_timeout()
+            return
+
+        if new_state is LaundryCycleState.FINISHED:
+            self._cancel_pending_start_confirmation()
+            self._reset_finish_detection()
+            self._schedule_finished_retention()
+            return
+
+        if new_state is LaundryCycleState.ERROR:
+            self._cancel_pending_start_confirmation()
+            self._cancel_pending_arming_timeout()
+            self._cancel_pending_finished_retention()
+            self._reset_finish_detection()
+            self.spin_detector.reset(vibration_active=self.vibration_active)
+
     @callback
     def async_mark_unloaded(self) -> None:
-        """Mark the washing machine as unloaded."""
-        if not self.tracking_enabled:
+        """Mark laundry absent without fabricating a state transition."""
+        if not self.tracking_enabled or not self.laundry_present:
             return
 
         self.laundry_present = False
-
         if self.cycle_state is LaundryCycleState.FINISHED:
             self.async_set_cycle_state(
                 LaundryCycleState.IDLE,
                 REASON_MARKED_UNLOADED,
             )
         else:
-            self.last_transition_reason = REASON_MARKED_UNLOADED
-            self.last_state_change = dt_util.utcnow()
             self._schedule_snapshot_save()
             self._notify_entities()
 
@@ -572,6 +945,7 @@ class LaundryMonitorRuntime:
             {
                 "config_entry_id": self.entry.entry_id,
                 "name": self.name,
+                "timestamp": dt_util.utcnow().isoformat(),
             },
         )
 
@@ -582,8 +956,10 @@ class LaundryMonitorRuntime:
 
     @callback
     def _evaluate_spin(self) -> None:
-        """Evaluate final-spin evidence."""
+        """Evaluate final-spin evidence when vibration is configured."""
         if self.cycle_state is not LaundryCycleState.RUNNING:
+            return
+        if not self.entry.data.get(CONF_VIBRATION_SENSOR):
             return
 
         evaluation = self.spin_detector.evaluate(
@@ -602,10 +978,11 @@ class LaundryMonitorRuntime:
         self.final_spin_evidence_count = evaluation.evidence_count
 
         if evaluation.detected:
-            self.async_set_cycle_state(
+            if not self.async_set_cycle_state(
                 LaundryCycleState.FINAL_SPIN,
                 REASON_FINAL_SPIN_CONFIRMED,
-            )
+            ):
+                return
             self.hass.bus.async_fire(
                 EVENT_FINAL_SPIN_DETECTED,
                 {
@@ -614,6 +991,7 @@ class LaundryMonitorRuntime:
                     "confidence": evaluation.confidence,
                     "evidence_count": evaluation.evidence_count,
                     "window_seconds": self.spin_detector.window_seconds,
+                    "timestamp": dt_util.utcnow().isoformat(),
                 },
             )
             return
@@ -621,90 +999,152 @@ class LaundryMonitorRuntime:
         if changed:
             self._notify_entities()
 
+    def _active_finish_detector(self) -> FinishDetector | None:
+        """Return the detector belonging to the current public state."""
+        if self.cycle_state is LaundryCycleState.FINAL_SPIN:
+            return self.finish_detector
+        if self.cycle_state is LaundryCycleState.RUNNING:
+            return self.running_finish_detector
+        return None
+
     @callback
     def _evaluate_finish(self) -> None:
-        if self.cycle_state is not LaundryCycleState.FINAL_SPIN:
+        """Evaluate normal completion and the no-spin fallback path."""
+        detector = self._active_finish_detector()
+        if detector is None:
             self._reset_finish_detection()
             return
+
+        if self.power is None:
+            self._reset_finish_detection()
+            return
+
         now = dt_util.utcnow()
-        evaluation = self.finish_detector.evaluate(
+        evaluation = detector.evaluate(
             activity_detected=self.activity_detected,
             last_activity=self.last_activity,
             vibration_active=self.vibration_active,
             now=now,
         )
         self._apply_finish_diagnostics(evaluation)
+
         if evaluation.detected:
-            self._confirm_cycle_finished()
+            self._confirm_cycle_finished(now)
             return
+
         if not evaluation.quiet or evaluation.deadline is None:
             self._cancel_pending_finish_confirmation()
             self._notify_entities()
             return
-        self._schedule_finish_confirmation(max((evaluation.deadline-now).total_seconds(),0.0))
+
+        self._schedule_finish_confirmation(
+            max((evaluation.deadline - now).total_seconds(), 0.0)
+        )
         self._notify_entities()
 
     @callback
     def _schedule_finish_confirmation(self, delay: float) -> None:
+        """Schedule the next finish evaluation at its exact deadline."""
         self._cancel_pending_finish_confirmation()
         self._cancel_finish_confirmation = async_call_later(
-            self.hass, delay, self._async_finish_confirmation_elapsed
+            self.hass,
+            delay,
+            self._async_finish_confirmation_elapsed,
         )
 
     @callback
     def _async_finish_confirmation_elapsed(self, now: datetime) -> None:
+        """Re-evaluate finish conditions after the confirmation period."""
         self._cancel_finish_confirmation = None
-        if self.cycle_state is not LaundryCycleState.FINAL_SPIN:
+        detector = self._active_finish_detector()
+        if detector is None or self.power is None:
             return
-        evaluation = self.finish_detector.evaluate(
+
+        evaluation = detector.evaluate(
             activity_detected=self.activity_detected,
             last_activity=self.last_activity,
             vibration_active=self.vibration_active,
             now=now,
         )
         self._apply_finish_diagnostics(evaluation)
+
         if evaluation.detected:
-            self._confirm_cycle_finished()
+            self._confirm_cycle_finished(now)
         elif evaluation.quiet and evaluation.remaining_seconds is not None:
             self._schedule_finish_confirmation(evaluation.remaining_seconds)
             self._notify_entities()
 
     @callback
-    def _confirm_cycle_finished(self) -> None:
-        self._cancel_pending_finish_confirmation()
-        self.async_set_cycle_state(
-            LaundryCycleState.FINISHED,
-            REASON_FINISH_INACTIVITY_CONFIRMED,
+    def _confirm_cycle_finished(self, now: datetime) -> None:
+        """Apply and publish one confirmed cycle completion."""
+        old_state = self.cycle_state
+        detector = self._active_finish_detector()
+        if detector is None:
+            return
+
+        reason = (
+            REASON_FINISH_INACTIVITY_CONFIRMED
+            if old_state is LaundryCycleState.FINAL_SPIN
+            else REASON_FINISH_FALLBACK_CONFIRMED
         )
-        self.hass.bus.async_fire(EVENT_CYCLE_FINISHED, {
-            "config_entry_id": self.entry.entry_id,
-            "name": self.name,
-            "quiet_since": self.finish_quiet_since,
-            "confirmation_seconds": self.finish_detector.confirmation_seconds,
-        })
+        quiet_since = self.finish_quiet_since
+        confirmation_seconds = detector.confirmation_seconds
+
+        self._cancel_pending_finish_confirmation()
+        if not self.async_set_cycle_state(
+            LaundryCycleState.FINISHED,
+            reason,
+        ):
+            return
+
+        self.hass.bus.async_fire(
+            EVENT_CYCLE_FINISHED,
+            {
+                "config_entry_id": self.entry.entry_id,
+                "name": self.name,
+                "old_state": old_state.value,
+                "new_state": LaundryCycleState.FINISHED.value,
+                "quiet_since": (
+                    quiet_since.isoformat()
+                    if quiet_since is not None
+                    else None
+                ),
+                "confirmation_seconds": confirmation_seconds,
+                "timestamp": now.isoformat(),
+            },
+        )
 
     @callback
-    def _apply_finish_diagnostics(self, evaluation: FinishEvaluation) -> None:
+    def _apply_finish_diagnostics(
+        self,
+        evaluation: FinishEvaluation,
+    ) -> None:
+        """Expose the active finish detector's timer state."""
         self.finish_quiet_since = evaluation.quiet_since
         self.finish_deadline = evaluation.deadline
         self.finish_remaining_seconds = (
-            round(evaluation.remaining_seconds,1)
-            if evaluation.remaining_seconds is not None else None
+            round(evaluation.remaining_seconds, 1)
+            if evaluation.remaining_seconds is not None
+            else None
         )
 
     @callback
     def _reset_finish_detection(self) -> None:
+        """Reset both completion paths and their shared diagnostics."""
         self._cancel_pending_finish_confirmation()
         self.finish_detector.reset()
+        self.running_finish_detector.reset()
         self.finish_quiet_since = None
         self.finish_deadline = None
         self.finish_remaining_seconds = None
 
     @callback
     def _cancel_pending_finish_confirmation(self) -> None:
+        """Cancel the active finish timer."""
         if self._cancel_finish_confirmation is not None:
             self._cancel_finish_confirmation()
             self._cancel_finish_confirmation = None
+
 
 def _state_as_float(state: State | None) -> float | None:
     """Convert a Home Assistant state to float."""

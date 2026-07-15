@@ -37,12 +37,17 @@ from .const import (
     CONFIG_ENTRY_MINOR_VERSION,
     CONFIG_ENTRY_VERSION,
     CONF_ACTIVITY_THRESHOLD,
+    CONF_ARMING_TIMEOUT,
     CONF_DOOR_SENSOR,
     CONF_ENERGY_SENSOR,
+    CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
     CONF_LEAK_SENSOR,
     CONF_PLUG_SWITCH,
     CONF_POWER_SENSOR,
+    CONF_POWER_UNAVAILABLE_GRACE,
+    CONF_RUNNING_FINISH_CONFIRMATION,
+    CONF_SNAPSHOT_MAX_AGE,
     CONF_SPIN_ACTIVITY_MAX_AGE,
     CONF_SPIN_MIN_CYCLE_TIME,
     CONF_SPIN_REQUIRED_EVENTS,
@@ -52,7 +57,12 @@ from .const import (
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
     DEFAULT_ACTIVITY_THRESHOLD,
+    DEFAULT_ARMING_TIMEOUT,
+    DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_POWER_UNAVAILABLE_GRACE,
+    DEFAULT_RUNNING_FINISH_CONFIRMATION,
+    DEFAULT_SNAPSHOT_MAX_AGE,
     DEFAULT_NAME,
     DEFAULT_SPIN_ACTIVITY_MAX_AGE,
     DEFAULT_SPIN_MIN_CYCLE_TIME,
@@ -71,6 +81,11 @@ _INTEGER_OPTION_KEYS = (
     CONF_SPIN_MIN_CYCLE_TIME,
     CONF_SPIN_ACTIVITY_MAX_AGE,
     CONF_FINISH_CONFIRMATION,
+    CONF_RUNNING_FINISH_CONFIRMATION,
+    CONF_ARMING_TIMEOUT,
+    CONF_FINISHED_RETENTION,
+    CONF_POWER_UNAVAILABLE_GRACE,
+    CONF_SNAPSHOT_MAX_AGE,
 )
 
 
@@ -139,7 +154,7 @@ def _config_schema(
                 domain="sensor",
                 device_class=SensorDeviceClass.POWER,
             ),
-            vol.Required(
+            vol.Optional(
                 CONF_DOOR_SENSOR,
                 description=_suggested_value(
                     defaults.get(CONF_DOOR_SENSOR)
@@ -151,7 +166,7 @@ def _config_schema(
                     BinarySensorDeviceClass.OPENING,
                 ],
             ),
-            vol.Required(
+            vol.Optional(
                 CONF_VIBRATION_SENSOR,
                 description=_suggested_value(
                     defaults.get(CONF_VIBRATION_SENSOR)
@@ -295,6 +310,66 @@ def _options_schema(
             ): _number_selector(
                 minimum=1,
                 maximum=3600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_RUNNING_FINISH_CONFIRMATION,
+                default=defaults.get(
+                    CONF_RUNNING_FINISH_CONFIRMATION,
+                    DEFAULT_RUNNING_FINISH_CONFIRMATION,
+                ),
+            ): _number_selector(
+                minimum=60,
+                maximum=21600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_ARMING_TIMEOUT,
+                default=defaults.get(
+                    CONF_ARMING_TIMEOUT,
+                    DEFAULT_ARMING_TIMEOUT,
+                ),
+            ): _number_selector(
+                minimum=0,
+                maximum=86400,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_FINISHED_RETENTION,
+                default=defaults.get(
+                    CONF_FINISHED_RETENTION,
+                    DEFAULT_FINISHED_RETENTION,
+                ),
+            ): _number_selector(
+                minimum=0,
+                maximum=86400,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_POWER_UNAVAILABLE_GRACE,
+                default=defaults.get(
+                    CONF_POWER_UNAVAILABLE_GRACE,
+                    DEFAULT_POWER_UNAVAILABLE_GRACE,
+                ),
+            ): _number_selector(
+                minimum=0,
+                maximum=3600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_SNAPSHOT_MAX_AGE,
+                default=defaults.get(
+                    CONF_SNAPSHOT_MAX_AGE,
+                    DEFAULT_SNAPSHOT_MAX_AGE,
+                ),
+            ): _number_selector(
+                minimum=3600,
+                maximum=604800,
                 step=1,
                 unit=UnitOfTime.SECONDS,
             ),

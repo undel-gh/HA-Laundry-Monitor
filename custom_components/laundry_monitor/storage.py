@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -41,11 +41,16 @@ class RuntimeSnapshot:
         }
 
     @classmethod
-    def from_storage_dict(cls, data: dict[str, Any]) -> RuntimeSnapshot | None:
+    def from_storage_dict(
+        cls,
+        data: dict[str, Any],
+    ) -> RuntimeSnapshot | None:
         """Deserialize and validate stored data."""
         try:
             cycle_state = LaundryCycleState(data["cycle_state"])
-            last_state_change = dt_util.parse_datetime(data["last_state_change"])
+            last_state_change = dt_util.parse_datetime(
+                data["last_state_change"]
+            )
             cycle_started_at = (
                 dt_util.parse_datetime(data["cycle_started_at"])
                 if data.get("cycle_started_at")
@@ -84,6 +89,7 @@ class LaundryStateStore:
         """Load storage once."""
         if self._loaded:
             return
+
         stored = await self._store.async_load()
         self._data = stored if isinstance(stored, dict) else {}
         self._loaded = True
@@ -92,9 +98,17 @@ class LaundryStateStore:
         """Return a validated snapshot."""
         await self.async_load()
         raw = self._data.get(entry_id)
-        return RuntimeSnapshot.from_storage_dict(raw) if isinstance(raw, dict) else None
+        return (
+            RuntimeSnapshot.from_storage_dict(raw)
+            if isinstance(raw, dict)
+            else None
+        )
 
-    async def async_save(self, entry_id: str, snapshot: RuntimeSnapshot) -> None:
+    async def async_save(
+        self,
+        entry_id: str,
+        snapshot: RuntimeSnapshot,
+    ) -> None:
         """Persist one snapshot."""
         await self.async_load()
         self._data[entry_id] = snapshot.as_storage_dict()
@@ -113,19 +127,66 @@ def select_recovery_state(
     door_open: bool | None,
     activity_detected: bool,
     vibration_active: bool | None,
+    now: datetime | None = None,
+    tracking_enabled: bool = True,
+    arming_timeout_seconds: int | None = None,
+    finished_retention_seconds: int | None = None,
+    max_active_snapshot_age_seconds: int | None = None,
+    power_available: bool = False,
+    require_final_spin_context: bool = False,
 ) -> LaundryCycleState:
-    """Select a conservative state after restart."""
+    """Select a conservative state after restart.
+
+    Optional policy arguments default to the legacy recovery behavior so the
+    function remains useful in unit tests and migrations. Runtime setup passes
+    the configured lifecycle policy explicitly.
+    """
+    timestamp = now or dt_util.utcnow()
+    age = max(timestamp - snapshot.last_state_change, timedelta())
     state = snapshot.cycle_state
 
     if state is LaundryCycleState.ARMED:
-        return LaundryCycleState.ARMED if door_open is False else LaundryCycleState.IDLE
+        if door_open is not False:
+            return LaundryCycleState.IDLE
+        if (
+            arming_timeout_seconds is not None
+            and age >= timedelta(seconds=arming_timeout_seconds)
+        ):
+            return LaundryCycleState.IDLE
+        return LaundryCycleState.ARMED
 
     if state in {
         LaundryCycleState.RUNNING,
         LaundryCycleState.FINAL_SPIN,
-        LaundryCycleState.FINISHED,
-        LaundryCycleState.ERROR,
     }:
+        if (
+            max_active_snapshot_age_seconds is not None
+            and age
+            >= timedelta(seconds=max_active_snapshot_age_seconds)
+        ):
+            return LaundryCycleState.IDLE
+
+        if (
+            state is LaundryCycleState.FINAL_SPIN
+            and require_final_spin_context
+            and vibration_active is not True
+        ):
+            return LaundryCycleState.RUNNING
+
         return state
+
+    if state is LaundryCycleState.FINISHED:
+        if tracking_enabled or finished_retention_seconds is None:
+            return LaundryCycleState.FINISHED
+        if age < timedelta(seconds=finished_retention_seconds):
+            return LaundryCycleState.FINISHED
+        return LaundryCycleState.IDLE
+
+    if state is LaundryCycleState.ERROR:
+        return (
+            LaundryCycleState.IDLE
+            if power_available
+            else LaundryCycleState.ERROR
+        )
 
     return LaundryCycleState.IDLE
