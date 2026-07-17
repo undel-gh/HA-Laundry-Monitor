@@ -12,7 +12,7 @@ Version: 0.1
 
 ## FR-001
 
-The integration shall require a power sensor. It shall support optional door and vibration sensors.
+The integration shall require a power sensor. It shall support optional current, door and vibration sensors.
 
 ---
 
@@ -130,6 +130,54 @@ Public entity identifiers shall remain stable between compatible releases.
 
 ---
 
+## FR-021
+
+The integration shall operate correctly without a current sensor.
+
+---
+
+## FR-022
+
+When a current sensor is configured, the Activity Detector may treat current above a configurable threshold as supplemental meaningful activity.
+
+---
+
+## FR-023
+
+Cycle-start confirmation shall remain based on the required power sensor. Current activity may corroborate diagnostics but shall not independently start a cycle.
+
+---
+
+## FR-024
+
+Current activity may reset or cancel finish confirmation and may contribute supporting evidence to spin detection.
+
+---
+
+## FR-025
+
+Current activity alone shall not confirm final spin or cycle completion.
+
+---
+
+## FR-026
+
+Unavailable, unknown, or invalid current data shall not be interpreted as zero current or inactivity.
+
+---
+
+## FR-027
+
+Loss of the optional current sensor shall degrade the integration to power-only operation without changing the public cycle state.
+
+---
+
+## FR-028
+
+Diagnostics shall identify whether power activity, current activity, or both contributed to a detector decision.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
@@ -189,3 +237,15 @@ The integration should use native Home Assistant entity types whenever possible.
 ## NFR-010
 
 The architecture should support future detector implementations without requiring changes to the public API.
+
+---
+
+## NFR-011
+
+Adding or removing an optional current source shall not introduce new public cycle states.
+
+---
+
+## NFR-012
+
+Current-assisted detection shall remain deterministic for a given ordered sequence of source observations and timestamps.
