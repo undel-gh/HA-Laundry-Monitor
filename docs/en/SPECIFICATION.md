@@ -12,10 +12,11 @@ Laundry Monitor is a Home Assistant custom integration for monitoring washing ma
 The integration does not communicate with the washing machine directly. Instead, it analyzes signals from sensors such as:
 
 - power meter / smart plug;
+- optional current sensor;
 - door sensor;
 - vibration sensor;
 - optional leak sensor;
-- optional energy sensor for diagnostics.
+- optional energy sensor for diagnostics and cycle statistics.
 
 Laundry Monitor is designed to answer:
 
@@ -34,8 +35,9 @@ Laundry Monitor is designed to answer:
 Laundry Monitor shall support:
 
 - washing machines;
-- power-based activity detection;
-- door-based laundry removal detection;
+- power-based activity and cycle-start detection;
+- optional current-assisted electrical activity detection;
+- door-based cycle context and access detection;
 - vibration-based spin detection;
 - optional leak detection;
 - diagnostic entities;
@@ -86,7 +88,9 @@ The user should be able to understand:
 - confidence;
 - last activity time;
 - last vibration time;
-- last power activity time.
+- last power activity time;
+- last current activity time, when a current sensor is configured;
+- the siurce evidence used to classify meaningful activity.
 
 ### 3.3 Explainability
 
@@ -104,6 +108,7 @@ The confidence value is intended as a diagnostic indicator only. Confidence calc
 Evidence:
 - final spin detected
 - power below activity threshold
+- current below activity threshold, when configured
 - no vibration
 - door still closed
 
@@ -150,20 +155,42 @@ sensor.washing_machine_power
 
 Optional sensors:
 
-- door sensor
-- vibration sensor
+- current sensor;
+- door sensor;
+- vibration sensor;
 - leak sensor;
 - energy sensor;
 - plug switch state.
 
+Examples:
+
 ```text
-sensor.washing_machine_door
-sensor.washing_machine_vibration
+sensor.washing_machine_current
+binary_sensor.washing_machine_door
+binary_sensor.washing_machine_vibration
 ```
 
-Optional sensors may improve diagnostics and statistics but must not be required for basic operation.
-Door sensor allow the detection of laundry removal.
-Vibration sensor allow the detection of final spin.
+The optional sources have the following roles:
+
+- the current sensor may provide additional electrical-activity evidence, especially during motor or pump operation;
+- the door sensor may provide arming context and post-finish access diagnostics;
+- the vibration sensor may provide evidence for final-spin detection;
+- the leak sensor belongs to the independent leak layer;
+- the energy sensor is used for cycle statistics;
+- the plug switch state is diagnostic only.
+
+The power sensor remains the required and authoritative source for basic cycle-start detection. A current sensor must not be used as the only basis for declaring a cycle started, a final spin detected, or a cycle finished.
+
+### 4.3 Optional source degradation
+
+Loss or unavailability of an optional source must not stop basic cycle detection.
+
+An unavailable current sensor must:
+
+- disable current-assisted evidence;
+- preserve power-only activity detection;
+- not be interpreted as zero current or inactivity;
+- be reported in diagnostics.
 
 ## 5. State Model
 ### 5.1 Public states
@@ -286,19 +313,44 @@ Laundry is marked as removed only when the user presses `button.<device>_mark_un
 ## 7. Detection Logic
 ### 7.1 Activity detection
 
+Activity is detected primarily from power. When a current sensor is configured, current may provide supplemental electrical-activity evidence.
 
-Activity is detected primarily from power.
+The Activity Detector should normalize source-specific observations:
+
+```text
+power_activity
+current_activity
+meaningful_activity
+```
+
+The initial current-assisted model is:
+
+```text
+meaningful_activity = power_activity OR current_activity
+```
+
+This model is intended to prevent low active-power motor or pump operation from being misclassified as inactivity.
+
+Rules:
+
+- cycle-start confirmation remains power-based;
+- current activity may reset or cancel a pending finish confirmation;
+- current activity may support spin confidence;
+- current alone must not confirm final spin;
+- current alone must not declare a cycle finished;
+- unavailable current data must not be treated as inactivity.
 
 Example defaults:
 
 |Parameter	|Default|
-|--- | --- |
+|--- | ---:|
 |Start threshold	|10 W|
-|Activity threshold	|5 W|
-|Start confirmation	|30 s|
-|Finish timeout	|10 min|
+| Power activity threshold | 5 W |
+| Current activity threshold | Implementation-defined until validated |
+| Start confirmation | 30 s |
+| Running-state finish timeout | 10 min |
 
-These values must be configurable.
+All active thresholds and timing values must be configurable.
 
 ## 7.2 Final spin detection
 
@@ -309,7 +361,10 @@ A possible first implementation:
 - machine is already running;
 - vibration events occur frequently;
 - vibration lasts longer than configured minimum duration;
-- power activity exists during or near the vibration window.
+- recent power activity exists during or near the vibration window;
+- optional current activity may strengthen the evidence that a motor is running.
+
+Current activity is supporting evidence only. It must not independently produce a final-spin transition.
 
 Example defaults:
 
@@ -335,6 +390,7 @@ Instead, finish should be inferred from absence of meaningful activity over time
 
 | Option | Default | Purpose |
 |---|---:|---|
+| `current_activity_threshold` | Implementation-defined | Current at or above this value counts as supplemental activity 
 | `running_finish_confirmation` | 600 s | Conservative `running → finished` fallback |
 | `arming_timeout` | 1800 s | Prevents an indefinite `armed` state |
 | `finished_retention` | 300 s | Keeps `finished` observable when tracking is off |
@@ -379,7 +435,7 @@ Users may create their own automations based on the leak event.
 |binary_sensor.<device>_running	|Current cycle is running|
 |binary_sensor.<device>_finished	|Cycle finished|
 |binary_sensor.<device>_final_spin_detected	|Final spin was detected|
-|binary_sensor.<device>_activity_detected	|Current activity detected|
+|binary_sensor.<device>_activity_detected	|Meaningful power or current activity detected|
 |binary_sensor.<device>_leak_alarm	|Leak sensor active|
 
 ### 9.3 Diagnostic entities
@@ -392,6 +448,9 @@ Diagnostic entities may include:
 - spin detection status;
 - last vibration event;
 - last power activity;
+- last current activity, when configured;
+- power activity state;
+- current activity state, when configured;
 - current evidence list;
 - raw sensor availability.
 
@@ -434,8 +493,9 @@ Required fields:
 
 Optional fields:
 
+- current sensor;
 - door sensor;
-- vibration sensor.
+- vibration sensor;
 - leak sensor;
 - energy sensor;
 - plug switch.
@@ -445,7 +505,8 @@ Optional fields:
 User-configurable options:
 
 - start threshold;
-- activity threshold;
+- power activity threshold;
+- current activity threshold, when a current sensor is configured;
 - finish timeout;
 - spin minimum duration
 - running → finished` fallback 
@@ -519,7 +580,7 @@ Diagnostics should include:
 * the last transition reason and timestamp;
 * current confidence and evidence counters;
 * current source entity states and availability;
-* raw power, door, vibration, leak, and energy values when configured;
+* raw current, power, door, vibration, leak, and energy values when configured;
 * activity, spin, and finish detector state;
 * configured algorithm parameters;
 * laundry tracking state and `last_unloaded_at`;
@@ -585,6 +646,9 @@ Laundry Monitor is not:
 ### v0.4
 - leak sensor support;
 - leak state;
+- optional current sensor support;
+- current-assisted activity evidence;
+- current-assisted spin evidence;
 - event payload improvements.
 
 ### v1.0
@@ -597,3 +661,6 @@ Laundry Monitor is not:
 ## 17. Open Questions
 - Should confidence be a percentage or diagnostic enum?
 - Should final spin detection be enabled by default?
+- What default current activity threshold is reliable across smart plugs and washing machines?
+- Should current ever corroborate cycle-start confirmation, or remain finish/spin evidence only?
+- Should load-type or phase classification remain diagnostic-only in the stable public API?
