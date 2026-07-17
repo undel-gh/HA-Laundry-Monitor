@@ -17,7 +17,7 @@ The state machine represents the integration's current understanding of the wash
 * diagnostic evidence;
 * Home Assistant events.
 
-The state machine does not directly analyze raw sensor values. Raw power, door, vibration, and other sensor data must first be processed by the corresponding detectors.
+The state machine does not directly analyze raw sensor values. Raw power, optional current, door, vibration, and other sensor data must first be processed by the corresponding detectors.
 
 The following modules are outside the cycle state machine:
 
@@ -33,7 +33,8 @@ The state machine shall:
 
 * provide a small and stable public state model;
 * tolerate low-power pauses during a washing cycle;
-* avoid relying on exact standby power values;
+* use optional current evidence without making it mandatory;
+* avoid relying on exact standby power or current values;
 * explain every public state transition;
 * recover safely after Home Assistant restarts;
 * avoid assuming that opening the door means laundry was removed;
@@ -91,10 +92,14 @@ The state machine receives normalized observations from other components.
 
 The Activity Detector may provide:
 
+* `power_activity`;
+* `current_activity`, when a current sensor is configured;
 * `activity_detected`;
 * `start_candidate`;
 * `start_confirmed`;
 * `last_activity_at`;
+* `last_power_activity_at`;
+* `last_current_activity_at`, when configured;
 * activity evidence;
 * activity confidence.
 
@@ -102,7 +107,17 @@ The Activity Detector answers:
 
 > Was there meaningful activity since the previous evaluation?
 
-It does not directly change the public cycle state.
+The initial current-assisted activity rule is:
+
+```text
+activity_detected = power_activity OR current_activity
+```
+
+where unavailable optional current data is excluded rather than treated as `false`.
+
+Power remains the required source for cycle-start confirmation. Current activity may preserve `running`, reset finish timing, and support spin evidence, but must not independently confirm a cycle start.
+
+The Activity Detector does not directly change the public cycle state.
 
 ### 5.2 Spin Detector inputs
 
@@ -115,7 +130,7 @@ The Spin Detector may provide:
 * spin evidence;
 * spin confidence.
 
-A detected spin is not automatically assumed to be the final spin. Confirmation logic may use duration, event frequency, power activity, cycle age, and other available evidence.
+A detected spin is not automatically assumed to be the final spin. Confirmation logic may use duration, event frequency, power activity, optional current activity, cycle age, and other available evidence.
 
 ### 5.3 Finish Detector inputs
 
@@ -129,7 +144,11 @@ The Finish Detector may provide:
 
 Finish detection should primarily depend on the absence of meaningful activity for a configurable duration.
 
-It must not depend on distinguishing small differences between:
+When an optional current sensor is configured and available, either power activity or current activity counts as meaningful activity. Any such activity must reset or cancel finish confirmation.
+
+Current alone must not declare completion, and missing current data must not be interpreted as inactivity.
+
+Finish detection must not depend on distinguishing small differences between:
 
 * smart plug self-consumption;
 * washing machine standby consumption;
@@ -278,6 +297,8 @@ A washing cycle has been confirmed.
 
 Short periods of low or near-zero power do not cause an immediate state transition. Such periods are expected during normal washing programs.
 
+When a current sensor is configured, current activity may show that a motor or pump is still operating while active power is below the configured power activity threshold. In that case, the state remains `running` and pending finish confirmation is reset or cancelled.
+
 #### Entry actions for a new cycle
 
 When entering `running` because a new cycle has started, the state machine should:
@@ -304,8 +325,8 @@ When returning from `final_spin` because activity resumed, the existing cycle mu
 
 #### Meaning
 
-The Spin Detector has identified a vibration and activity pattern that probably represents the final spin stage.
-
+The Spin Detector has identified a vibration and activity pattern that probably represents the final spin stage. Optional current evidence may strengthen this conclusion but cannot replace the required spin evidence defined by the active detector algorithm.
+ 
 This state expresses a probable cycle phase, not guaranteed cycle completion.
 
 #### Entry actions
@@ -418,6 +439,8 @@ Recovery behavior must be recorded as a state transition with an explicit reason
 A single power reading above the start threshold should normally create a start candidate rather than immediately starting a cycle.
 
 The candidate becomes confirmed after the configured start confirmation duration or another implementation-specific confirmation rule.
+
+The optional current sensor must not independently create or confirm a start candidate in the initial current-assisted model. Current may be recorded as corroborating diagnostic evidence only.
 
 ### 9.2 Start from `idle`
 
@@ -551,7 +574,21 @@ While the required power sensor is temporarily unavailable:
 
 If unavailability exceeds the configured tolerance, the implementation may enter `error`.
 
-### 12.2 Door sensor unavailable
+### 12.2 Current sensor unavailable
+
+Loss of the optional current sensor must not stop cycle detection.
+
+The state machine should:
+
+* disable current-assisted activity and spin evidence;
+* continue using power-based start, activity, and finish detection;
+* preserve the current public state;
+* cancel no lifecycle state solely because current became unavailable;
+* expose the degraded mode in diagnostics.
+
+Unavailable or invalid current data must not be interpreted as zero current or inactivity.
+
+### 12.3 Door sensor unavailable
 
 Loss of the door sensor must not stop cycle detection.
 
@@ -562,7 +599,7 @@ The state machine should:
 * preserve the current cycle state;
 * expose the sensor problem in diagnostics.
 
-### 12.3 Vibration sensor unavailable
+### 12.4 Vibration sensor unavailable
 
 Loss of the vibration sensor must not stop cycle detection.
 
@@ -573,13 +610,13 @@ The state machine should:
 * permit `running → finished`;
 * expose the degraded mode in diagnostics.
 
-### 12.4 Leak sensor unavailable
+### 12.5 Leak sensor unavailable
 
 Loss of the leak sensor must not affect the cycle state.
 
 Only leak-related diagnostics and leak reporting are affected.
 
-### 12.5 Energy sensor unavailable
+### 12.6 Energy sensor unavailable
 
 Loss of an optional energy sensor must not affect state transitions.
 
@@ -659,8 +696,8 @@ Configuration reloads, entity unavailability, and Home Assistant restarts must n
 
 The finish timeout starts from the last meaningful activity, not merely from the latest low-power reading.
 
-Any new meaningful activity must reset or cancel the pending finish confirmation.
-
+Any new meaningful activity must reset or cancel the pending finish confirmation. When a current sensor is configured and available, this includes current activity even if power remains below the power activity threshold.
+ 
 ### 14.4 Arming timeout
 
 The `armed` state should have a configurable timeout to avoid remaining active indefinitely after an ordinary door closure.
@@ -723,13 +760,15 @@ The implementation must preserve the following invariants:
 3. Leak detection must not determine the cycle state.
 4. Door opening must not imply laundry removal.
 5. Missing optional sensors must not stop basic cycle detection.
-6. Missing sensor data must not be interpreted as zero power or inactivity.
-7. A cycle-start event must be emitted no more than once per cycle.
-8. A cycle-finished event must be emitted no more than once per cycle.
-9. Returning from `final_spin` to `running` must not create a new cycle.
-10. Restoring state after restart must not create duplicate lifecycle events.
-11. The `finished` state must not assert that laundry has been removed.
-12. Public state values must not be localized.
+6. Missing sensor data must not be interpreted as zero power, zero current or inactivity.
+7. Power remains required for cycle-start confirmation.
+8. Current activity alone must not confirm final spin or cycle completion.
+9. A cycle-start event must be emitted no more than once per cycle.
+10. A cycle-finished event must be emitted no more than once per cycle.
+11. Returning from `final_spin` to `running` must not create a new cycle.
+12. Restoring state after restart must not create duplicate lifecycle events.
+13. The `finished` state must not assert that laundry has been removed.
+14. Public state values must not be localized.
 
 ## 18. Edge Cases
 
@@ -742,7 +781,17 @@ Expected behavior:
 * cancel finish evaluation when meaningful activity resumes;
 * do not emit a completion event unless the full finish rule is satisfied.
 
-### 18.2 Final spin is not detected
+### 18.2 Low power while current remains active
+
+Expected behavior when a current sensor is configured:
+
+* remain in `running`;
+* classify the observation as meaningful activity;
+* reset or cancel pending finish confirmation;
+* preserve source-specific evidence in diagnostics;
+* do not create a new cycle-start event.
+
+### 18.3 Final spin is not detected
 
 Expected behavior:
 
@@ -750,7 +799,7 @@ Expected behavior:
 * allow direct transition to `finished` when the Finish Detector confirms completion;
 * report that final-spin evidence was unavailable or absent.
 
-### 18.3 Multiple spin periods
+### 18.4 Multiple spin periods
 
 Expected behavior:
 
@@ -759,7 +808,7 @@ Expected behavior:
 * a later spin may again be evaluated as final spin;
 * only confirmed detector output changes the public state.
 
-### 18.4 Door is opened during a running cycle
+### 18.5 Door is opened during a running cycle
 
 Expected behavior:
 
@@ -767,7 +816,7 @@ Expected behavior:
 * record the door event diagnostically;
 * do not mark laundry as removed.
 
-### 18.5 Door is opened after finish
+### 18.6 Door is opened after finish
 
 Expected behavior:
 
@@ -775,7 +824,7 @@ Expected behavior:
 * optionally emit `laundry_monitor.door_opened_after_finish`;
 * do not modify Laundry Tracking.
 
-### 18.6 User forgets to mark laundry as unloaded
+### 18.7 User forgets to mark laundry as unloaded
 
 Expected behavior when Laundry Tracking is enabled:
 
@@ -784,7 +833,7 @@ Expected behavior when Laundry Tracking is enabled:
 * a new cycle may still be detected;
 * no cycle detection functionality is blocked.
 
-### 18.7 New cycle begins while state is `finished`
+### 18.8 New cycle begins while state is `finished`
 
 Expected behavior:
 
@@ -793,13 +842,13 @@ Expected behavior:
 * emit one new cycle-start event;
 * retain diagnostics showing that the previous completed load was not explicitly marked as unloaded, when Laundry Tracking is enabled.
 
-### 18.8 Smart plug is switched off
+### 18.9 Smart plug is switched off
 
 If the plug switch entity is available, switching it off may be recorded as diagnostic evidence.
 
 The state machine must not immediately interpret loss of power telemetry as normal cycle completion.
 
-### 18.9 Home Assistant starts during an active cycle
+### 18.10 Home Assistant starts during an active cycle
 
 Expected behavior:
 
@@ -807,7 +856,7 @@ Expected behavior:
 * otherwise wait for meaningful evidence before selecting a state;
 * do not generate a false cycle-start event solely because current power is already above the threshold.
 
-### 18.10 Configuration threshold changes during a cycle
+### 18.11 Configuration threshold changes during a cycle
 
 Threshold changes should apply without corrupting the current cycle.
 
@@ -897,7 +946,20 @@ running
   Reason: No meaningful activity for finish timeout
 ```
 
-### 20.4 Required power sensor becomes unavailable
+### 20.4 Current activity prevents a false finish
+
+```text
+running
+→ running
+  Evidence: Power below activity threshold, current above current activity threshold
+  Action: Pending finish confirmation is reset or cancelled
+
+running
+→ finished
+  Reason: No meaningful power or current activity for finish timeout
+```
+
+### 20.5 Required power sensor becomes unavailable
 
 ```text
 running
@@ -926,6 +988,12 @@ At minimum, automated tests should cover:
 * start confirmation;
 * false start rejection;
 * long low-power pauses;
+* low power while optional current remains active;
+* power-only operation without a current sensor;
+* current-sensor unavailability during an active cycle;
+* invalid current data not being interpreted as inactivity;
+* current activity not independently confirming cycle start;
+* current activity not independently confirming final spin or finish;
 * finish detection without final spin;
 * final spin followed by renewed activity;
 * final spin followed by completion;
@@ -952,6 +1020,9 @@ The following details remain implementation or configuration decisions:
 * exact start confirmation algorithm;
 * exact final-spin detection algorithm;
 * exact finish confidence calculation;
+* default current activity threshold;
+* whether current may corroborate start confirmation in a future detector;
+* whether load-type or detailed phase classification should remain diagnostic-only;
 * whether Mark Unloaded is accepted outside `finished`;
 * whether recovery from `error` may restore the previous active state;
 * whether `error` should be exposed as a public cycle state or through a separate diagnostic entity in the stable release.
