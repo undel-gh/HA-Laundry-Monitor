@@ -4,10 +4,11 @@
     "step": {
       "user": {
         "title": "Add a washing machine",
-        "description": "Select the Home Assistant entities used to monitor this washing machine. Power, door, and vibration sensors are required.",
+        "description": "Select the Home Assistant entities used to monitor this washing machine. The power sensor is required; all other sources are optional.",
         "data": {
           "name": "Name",
           "power_sensor": "Power sensor",
+          "current_sensor": "Current sensor",
           "door_sensor": "Door sensor",
           "vibration_sensor": "Vibration sensor",
           "leak_sensor": "Leak sensor",
@@ -17,9 +18,10 @@
         },
         "data_description": {
           "name": "A friendly name for this washing machine.",
-          "power_sensor": "A sensor that reports the current active power in watts.",
-          "door_sensor": "Required. Used to arm cycle detection and record door events.",
-          "vibration_sensor": "Required. Used to detect a probable final spin.",
+          "power_sensor": "Required. A sensor that reports the current active power in watts.",
+          "current_sensor": "Optional. A sensor that reports RMS current in amperes. It supplements activity detection but does not start a cycle by itself.",
+          "door_sensor": "Optional. Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Optional. Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
           "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
@@ -32,6 +34,7 @@
         "data": {
           "name": "Name",
           "power_sensor": "Power sensor",
+          "current_sensor": "Current sensor",
           "door_sensor": "Door sensor",
           "vibration_sensor": "Vibration sensor",
           "leak_sensor": "Leak sensor",
@@ -41,9 +44,10 @@
         },
         "data_description": {
           "name": "A friendly name for this washing machine.",
-          "power_sensor": "A sensor that reports the current active power in watts.",
-          "door_sensor": "Required. Used to arm cycle detection and record door events.",
-          "vibration_sensor": "Required. Used to detect a probable final spin.",
+          "power_sensor": "Required. A sensor that reports the current active power in watts.",
+          "current_sensor": "Optional. A sensor that reports RMS current in amperes. It supplements activity detection but does not start a cycle by itself.",
+          "door_sensor": "Optional. Used to arm cycle detection and record door events.",
+          "vibration_sensor": "Optional. Used to detect a probable final spin.",
           "leak_sensor": "Optional. Monitored independently by the Leak Detector.",
           "energy_sensor": "Optional. Used to calculate energy consumed by a cycle.",
           "plug_switch": "Optional. Used only as a diagnostic source; Laundry Monitor does not control it.",
@@ -81,14 +85,23 @@
       "current_power": {
         "name": "Current power"
       },
+      "current": {
+        "name": "Current draw"
+      },
       "last_activity": {
         "name": "Last activity"
+      },
+      "last_power_activity": {
+        "name": "Last power activity"
+      },
+      "last_current_activity": {
+        "name": "Last current activity"
       },
       "final_spin_confidence": {
         "name": "Final spin confidence"
       },
-       "final_spin_evidence_count": {
-         "name": "Final spin evidence count"
+      "final_spin_evidence_count": {
+        "name": "Final spin evidence count"
       },
       "finish_quiet_since": {
         "name": "Finish inactivity since"
@@ -134,6 +147,12 @@
       "activity_detected": {
         "name": "Activity detected"
       },
+      "power_activity_detected": {
+        "name": "Power activity detected"
+      },
+      "current_activity_detected": {
+        "name": "Current activity detected"
+      },
       "final_spin_detected": {
         "name": "Final spin detected"
       }
@@ -143,14 +162,15 @@
         "name": "Mark unloaded"
       }
     }
-  },  
+  },
   "options": {
     "step": {
       "init": {
         "title": "Detector thresholds",
-        "description": "Configure power thresholds and confirmation periods for cycle start, final spin, and cycle completion.",
+        "description": "Configure electrical-activity thresholds and confirmation periods for cycle start, final spin, and cycle completion.",
         "data": {
-          "activity_threshold": "Activity threshold",
+          "activity_threshold": "Power activity threshold",
+          "current_activity_threshold": "Current activity threshold",
           "start_threshold": "Start threshold",
           "start_confirmation": "Start confirmation",
           "spin_required_events": "Required vibration events",
@@ -166,14 +186,15 @@
         },
         "data_description": {
           "activity_threshold": "Power at or above this value counts as meaningful machine activity.",
+          "current_activity_threshold": "Optional current at or above this value counts as supplemental meaningful activity. It does not start a cycle by itself.",
           "start_threshold": "Power must remain at or above this value to confirm that a cycle has started.",
           "start_confirmation": "How long start-level power must remain present.",
           "spin_required_events": "Number of vibration OFF-to-ON events required to confirm a probable final spin.",
           "spin_window": "Rolling period in which the required vibration events must occur.",
           "spin_min_cycle_time": "Minimum elapsed cycle time before final-spin evidence can be accepted.",
-          "spin_activity_max_age": "Maximum age of the last meaningful power activity that can support final-spin detection.",
-          "finish_confirmation": "How long activity and vibration must remain absent after a detected final spin before the cycle is considered finished.",
-          "running_finish_confirmation": "How long meaningful power activity must remain absent before a cycle is considered finished when no final spin was detected.",
+          "spin_activity_max_age": "Maximum age of the last meaningful electrical activity that can support final-spin detection.",
+          "finish_confirmation": "How long electrical activity and vibration must remain absent after a detected final spin before the cycle is considered finished.",
+          "running_finish_confirmation": "How long meaningful electrical activity must remain absent before a cycle is considered finished when no final spin was detected.",
           "arming_timeout": "How long the integration may remain armed after the door is closed before returning to idle if the cycle does not start.",
           "finished_retention": "How long the finished state is retained before automatically returning to idle when laundry tracking is disabled.",
           "power_unavailable_grace": "How long the required power sensor may remain missing, unknown, unavailable, or non-numeric before the integration enters the error state.",
@@ -182,7 +203,7 @@
       }
     },
     "error": {
-    "activity_threshold_above_start": "The activity threshold must not be higher than the start threshold."
+      "activity_threshold_above_start": "The activity threshold must not be higher than the start threshold."
     }
   },
   "issues": {
@@ -190,5 +211,5 @@
       "title": "Required laundry sensor unavailable",
       "description": "Laundry Monitor cannot reliably monitor **{name}** because the required entity `{entity_id}` is missing, unknown, or unavailable. Restore the entity or reconfigure the integration."
     }
-  }  
+  }
 }
