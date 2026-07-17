@@ -9,6 +9,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.laundry_monitor.const import (
     CONF_ACTIVITY_THRESHOLD,
+    CONF_CURRENT_ACTIVITY_THRESHOLD,
+    CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_POWER_SENSOR,
     CONF_START_THRESHOLD,
@@ -37,6 +39,15 @@ async def _async_setup_entry(
         },
     )
     hass.states.async_set(
+        "sensor.washing_machine_current",
+        "0.25",
+        {
+            "device_class": "current",
+            "state_class": "measurement",
+            "unit_of_measurement": "A",
+        },
+    )
+    hass.states.async_set(
         "binary_sensor.washing_machine_door",
         STATE_OFF,
         {"device_class": "door"},
@@ -53,6 +64,7 @@ async def _async_setup_entry(
         data={
             CONF_NAME: "Washing Machine",
             CONF_POWER_SENSOR: "sensor.washing_machine_power",
+            CONF_CURRENT_SENSOR: "sensor.washing_machine_current",
             CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
             CONF_VIBRATION_SENSOR: (
                 "binary_sensor.washing_machine_vibration"
@@ -61,6 +73,7 @@ async def _async_setup_entry(
         },
         options={
             CONF_ACTIVITY_THRESHOLD: 4.5,
+            CONF_CURRENT_ACTIVITY_THRESHOLD: 0.2,
             CONF_START_THRESHOLD: 12.5,
         },
     )
@@ -93,6 +106,12 @@ async def test_config_entry_diagnostics(
     assert power["available"] is True
     assert power["state"] == "0.25"
 
+    current = diagnostics["sources"][CONF_CURRENT_SENSOR]
+    assert current["configured"] is True
+    assert current["required"] is False
+    assert current["available"] is True
+    assert current["state"] == "0.25"
+
     assert diagnostics["sources"][CONF_DOOR_SENSOR]["required"] is False
     assert (
         diagnostics["sources"][CONF_VIBRATION_SENSOR]["required"]
@@ -100,11 +119,24 @@ async def test_config_entry_diagnostics(
     )
 
     assert diagnostics["runtime"]["cycle_state"] == "running"
+    assert diagnostics["runtime"]["current"] == 0.25
     assert diagnostics["runtime"]["laundry_present"] is True
     assert (
         diagnostics["detectors"]["activity"]["activity_threshold"]
         == 4.5
     )
+    assert (
+        diagnostics["detectors"]["activity"][
+            "current_activity_threshold"
+        ]
+        == 0.2
+    )
+    assert diagnostics["detectors"]["activity"][
+        "current_activity_detected"
+    ] is True
+    assert diagnostics["detectors"]["activity"]["active_sources"] == [
+        "current"
+    ]
     assert (
         diagnostics["detectors"]["finish"][
             "running_fallback_confirmation_seconds"
@@ -152,6 +184,10 @@ async def test_optional_unavailable_source_is_reported_as_degraded(
     entry = await _async_setup_entry(hass)
 
     hass.states.async_set(
+        "sensor.washing_machine_current",
+        "unavailable",
+    )
+    hass.states.async_set(
         "binary_sensor.washing_machine_door",
         "unavailable",
     )
@@ -160,6 +196,10 @@ async def test_optional_unavailable_source_is_reported_as_degraded(
     diagnostics = await async_get_config_entry_diagnostics(hass, entry)
 
     assert diagnostics["required_sources_unavailable"] == []
+    current = diagnostics["sources"][CONF_CURRENT_SENSOR]
+    assert current["required"] is False
+    assert current["available"] is False
+
     door = diagnostics["sources"][CONF_DOOR_SENSOR]
     assert door["required"] is False
     assert door["available"] is False

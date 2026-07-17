@@ -11,6 +11,8 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.laundry_monitor.const import (
+    CONF_CURRENT_ACTIVITY_THRESHOLD,
+    CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_POWER_SENSOR,
     CONF_START_CONFIRMATION,
@@ -28,24 +30,36 @@ async def _setup_entry(
     hass: HomeAssistant,
     *,
     confirmation_seconds: int = 30,
+    with_current: bool = False,
 ) -> MockConfigEntry:
     """Set up an entry with Activity Detector options."""
     hass.states.async_set("sensor.washing_machine_power", "0.25")
+    if with_current:
+        hass.states.async_set("sensor.washing_machine_current", "0.0")
     hass.states.async_set("binary_sensor.washing_machine_door", STATE_OFF)
     hass.states.async_set("binary_sensor.washing_machine_vibration", STATE_OFF)
+
+    data = {
+        CONF_NAME: "Washing Machine",
+        CONF_POWER_SENSOR: "sensor.washing_machine_power",
+        CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+        CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
+        CONF_TRACK_LAUNDRY: True,
+    }
+    if with_current:
+        data[CONF_CURRENT_SENSOR] = "sensor.washing_machine_current"
 
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Washing Machine",
-        data={
-            CONF_NAME: "Washing Machine",
-            CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
-            CONF_TRACK_LAUNDRY: True,
-        },
+        data=data,
         options={
             CONF_START_CONFIRMATION: confirmation_seconds,
+            **(
+                {CONF_CURRENT_ACTIVITY_THRESHOLD: 0.1}
+                if with_current
+                else {}
+            ),
         },
     )
     entry.add_to_hass(hass)
@@ -150,3 +164,50 @@ async def test_idle_can_start_without_door_sequence(
     await hass.async_block_till_done()
 
     assert runtime.cycle_state is LaundryCycleState.RUNNING
+
+
+async def test_current_activity_does_not_start_cycle(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test current is supplemental and cannot confirm cycle start."""
+    entry = await _setup_entry(
+        hass,
+        confirmation_seconds=5,
+        with_current=True,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+
+    hass.states.async_set("sensor.washing_machine_current", "0.5")
+    await hass.async_block_till_done()
+
+    assert runtime.activity_detected is True
+    assert runtime.power_activity_detected is False
+    assert runtime.current_activity_detected is True
+    assert runtime.activity_detector.start_candidate is False
+
+    async_fire_time_changed(hass, now + timedelta(seconds=6))
+    await hass.async_block_till_done()
+    assert runtime.cycle_state is LaundryCycleState.IDLE
+
+
+async def test_unavailable_current_degrades_to_power_only(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test optional current loss does not create an integration error."""
+    entry = await _setup_entry(hass, with_current=True)
+    runtime = entry.runtime_data
+
+    hass.states.async_set("sensor.washing_machine_current", "0.5")
+    await hass.async_block_till_done()
+    assert runtime.activity_detected is True
+
+    hass.states.async_set("sensor.washing_machine_current", "unavailable")
+    await hass.async_block_till_done()
+
+    assert runtime.current is None
+    assert runtime.current_activity_detected is None
+    assert runtime.activity_detected is False
+    assert runtime.cycle_state is LaundryCycleState.IDLE

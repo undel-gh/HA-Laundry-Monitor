@@ -11,6 +11,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.laundry_monitor.const import (
+    CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_POWER_SENSOR,
     CONF_TRACK_LAUNDRY,
@@ -36,6 +37,7 @@ async def test_user_flow(
     user_input = {
         CONF_NAME: "Washing Machine",
         CONF_POWER_SENSOR: "sensor.washing_machine_power",
+        CONF_CURRENT_SENSOR: "sensor.washing_machine_current",
         CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
         CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
         CONF_TRACK_LAUNDRY: True,
@@ -108,7 +110,7 @@ async def test_only_power_sensor_is_required_in_schema(
     hass: HomeAssistant,
     enable_custom_integrations: None,
 ) -> None:
-    """Test door and vibration selectors are optional."""
+    """Test only the power selector is required."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN,
         context={"source": config_entries.SOURCE_USER},
@@ -120,5 +122,6 @@ async def test_only_power_sensor_is_required_in_schema(
     }
 
     assert isinstance(markers[CONF_POWER_SENSOR], vol.Required)
+    assert isinstance(markers[CONF_CURRENT_SENSOR], vol.Optional)
     assert isinstance(markers[CONF_DOOR_SENSOR], vol.Optional)
     assert isinstance(markers[CONF_VIBRATION_SENSOR], vol.Optional)

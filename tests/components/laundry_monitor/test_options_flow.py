@@ -11,6 +11,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.laundry_monitor.const import (
     CONF_ACTIVITY_THRESHOLD,
     CONF_ARMING_TIMEOUT,
+    CONF_CURRENT_ACTIVITY_THRESHOLD,
+    CONF_CURRENT_SENSOR,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
     CONF_POWER_SENSOR,
@@ -26,6 +28,7 @@ from custom_components.laundry_monitor.const import (
     CONF_TRACK_LAUNDRY,
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
+    DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
@@ -78,16 +81,21 @@ CUSTOM_OPTIONS = {
 def _create_entry(
     *,
     options: dict[str, int | float] | None = None,
+    with_current: bool = False,
 ) -> MockConfigEntry:
-    """Create a power-only Laundry Monitor test entry."""
+    """Create a Laundry Monitor test entry."""
+    data = {
+        CONF_NAME: "Washing Machine",
+        CONF_POWER_SENSOR: "sensor.washing_machine_power",
+        CONF_TRACK_LAUNDRY: False,
+    }
+    if with_current:
+        data[CONF_CURRENT_SENSOR] = "sensor.washing_machine_current"
+
     return MockConfigEntry(
         domain=DOMAIN,
         title="Washing Machine",
-        data={
-            CONF_NAME: "Washing Machine",
-            CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_TRACK_LAUNDRY: False,
-        },
+        data=data,
         options=options or {},
     )
 
@@ -188,3 +196,60 @@ async def test_options_are_saved_and_entry_is_reloaded(
     assert runtime.finished_retention_seconds == 420
     assert runtime.power_unavailable_grace_seconds == 90
     assert runtime.snapshot_max_age_seconds == 43200
+
+
+async def test_current_threshold_is_shown_only_when_configured(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test current threshold follows the optional source selection."""
+    power_only = _create_entry()
+    power_only.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(
+        power_only.entry_id
+    )
+    assert CONF_CURRENT_ACTIVITY_THRESHOLD not in {
+        marker.schema for marker in result["data_schema"].schema
+    }
+
+    current_entry = _create_entry(with_current=True)
+    current_entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(
+        current_entry.entry_id
+    )
+    defaults = result["data_schema"]({})
+    assert (
+        defaults[CONF_CURRENT_ACTIVITY_THRESHOLD]
+        == DEFAULT_CURRENT_ACTIVITY_THRESHOLD
+    )
+
+
+async def test_current_threshold_is_saved_and_loaded(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test current threshold configures the runtime detector."""
+    hass.states.async_set("sensor.washing_machine_power", "0.25")
+    hass.states.async_set("sensor.washing_machine_current", "0.0")
+    entry = _create_entry(with_current=True)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    submitted = {
+        **DEFAULT_OPTIONS,
+        CONF_CURRENT_ACTIVITY_THRESHOLD: 0.2,
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        submitted,
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_CURRENT_ACTIVITY_THRESHOLD] == 0.2
+    assert (
+        entry.runtime_data.activity_detector.current_activity_threshold
+        == 0.2
+    )

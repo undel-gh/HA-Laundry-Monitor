@@ -17,6 +17,8 @@ from pytest_homeassistant_custom_component.common import (
 )
 
 from custom_components.laundry_monitor.const import (
+    CONF_CURRENT_ACTIVITY_THRESHOLD,
+    CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_FINISH_CONFIRMATION,
     CONF_POWER_SENSOR,
@@ -36,9 +38,12 @@ async def _setup_final_spin_entry(
     *,
     confirmation_seconds: int = 30,
     running_confirmation_seconds: int = 600,
+    with_current: bool = False,
 ) -> MockConfigEntry:
     """Set up an entry already placed in final_spin."""
     hass.states.async_set("sensor.washing_machine_power", "45")
+    if with_current:
+        hass.states.async_set("sensor.washing_machine_current", "0.0")
     hass.states.async_set(
         "binary_sensor.washing_machine_door",
         STATE_OFF,
@@ -48,22 +53,31 @@ async def _setup_final_spin_entry(
         STATE_ON,
     )
 
+    data = {
+        CONF_NAME: "Washing Machine",
+        CONF_POWER_SENSOR: "sensor.washing_machine_power",
+        CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
+        CONF_VIBRATION_SENSOR: (
+            "binary_sensor.washing_machine_vibration"
+        ),
+        CONF_TRACK_LAUNDRY: True,
+    }
+    if with_current:
+        data[CONF_CURRENT_SENSOR] = "sensor.washing_machine_current"
+
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Washing Machine",
-        data={
-            CONF_NAME: "Washing Machine",
-            CONF_POWER_SENSOR: "sensor.washing_machine_power",
-            CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-            CONF_VIBRATION_SENSOR: (
-                "binary_sensor.washing_machine_vibration"
-            ),
-            CONF_TRACK_LAUNDRY: True,
-        },
+        data=data,
         options={
             CONF_FINISH_CONFIRMATION: confirmation_seconds,
             CONF_RUNNING_FINISH_CONFIRMATION: (
                 running_confirmation_seconds
+            ),
+            **(
+                {CONF_CURRENT_ACTIVITY_THRESHOLD: 0.1}
+                if with_current
+                else {}
             ),
         },
     )
@@ -215,3 +229,27 @@ async def test_running_uses_longer_fallback_timeout(
         runtime.last_transition_reason
         == REASON_FINISH_FALLBACK_CONFIRMED
     )
+
+
+async def test_current_activity_rejects_false_final_spin(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test supplemental current cancels a pending finish decision."""
+    entry = await _setup_final_spin_entry(hass, with_current=True)
+    runtime = entry.runtime_data
+
+    hass.states.async_set("sensor.washing_machine_power", "0.25")
+    hass.states.async_set("binary_sensor.washing_machine_vibration", STATE_OFF)
+    await hass.async_block_till_done()
+    assert runtime.finish_deadline is not None
+
+    hass.states.async_set("sensor.washing_machine_current", "0.5")
+    await hass.async_block_till_done()
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert (
+        runtime.last_transition_reason
+        == REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN
+    )
+    assert runtime.finish_deadline is None
