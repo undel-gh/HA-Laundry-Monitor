@@ -14,6 +14,7 @@ from homeassistant.core import HomeAssistant, State
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_ENERGY_SENSOR,
     CONF_LEAK_SENSOR,
@@ -27,6 +28,7 @@ type LaundryMonitorConfigEntry = ConfigEntry[LaundryMonitorRuntime]
 
 _SOURCE_DEFINITIONS: tuple[tuple[str, bool, bool], ...] = (
     (CONF_POWER_SENSOR, True, True),
+    (CONF_CURRENT_SENSOR, False, True),
     (CONF_DOOR_SENSOR, False, False),
     (CONF_VIBRATION_SENSOR, False, False),
     (CONF_LEAK_SENSOR, False, False),
@@ -158,6 +160,7 @@ async def _async_build_diagnostics(
             ),
             "tracking_enabled": runtime.tracking_enabled,
             "power": runtime.power,
+            "current": runtime.current,
             "door_open": runtime.door_open,
             "vibration_active": runtime.vibration_active,
             "leak_detected": runtime.leak_detected,
@@ -191,15 +194,38 @@ async def _async_build_diagnostics(
                 "activity_threshold": (
                     runtime.activity_detector.activity_threshold
                 ),
+                "current_activity_threshold": (
+                    runtime.activity_detector.current_activity_threshold
+                ),
                 "start_confirmation_seconds": (
                     runtime.start_confirmation_seconds
                 ),
                 "activity_detected": runtime.activity_detected,
+                "power_activity_detected": (
+                    runtime.power_activity_detected
+                ),
+                "current_activity_detected": (
+                    runtime.current_activity_detected
+                ),
+                "active_sources": [
+                    source
+                    for source, active in (
+                        ("power", runtime.power_activity_detected),
+                        ("current", runtime.current_activity_detected),
+                    )
+                    if active is True
+                ],
                 "start_candidate": (
                     runtime.activity_detector.start_candidate
                 ),
                 "last_activity": _serialize_datetime(
                     runtime.last_activity
+                ),
+                "last_power_activity": _serialize_datetime(
+                    runtime.last_power_activity
+                ),
+                "last_current_activity": _serialize_datetime(
+                    runtime.last_current_activity
                 ),
             },
             "spin": {

@@ -15,6 +15,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     EntityCategory,
+    UnitOfElectricCurrent,
     UnitOfPower,
     UnitOfRatio,
     UnitOfTime,
@@ -23,7 +24,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import LaundryMonitorConfigEntry
-from .const import CONF_ENERGY_SENSOR, LaundryCycleState
+from .const import (
+    CONF_CURRENT_SENSOR,
+    CONF_ENERGY_SENSOR,
+    LaundryCycleState,
+)
 from .entity import LaundryMonitorEntity
 from .runtime import LaundryMonitorRuntime
 
@@ -90,6 +95,13 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         value_fn=lambda runtime: runtime.last_activity,
     ),
     LaundryMonitorSensorDescription(
+        key="last_power_activity",
+        translation_key="last_power_activity",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.last_power_activity,
+    ),
+    LaundryMonitorSensorDescription(
         key="final_spin_confidence",
         translation_key="final_spin_confidence",
         native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
@@ -136,6 +148,28 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     ),
 )
 
+CURRENT_SENSOR_DESCRIPTIONS: tuple[
+    LaundryMonitorSensorDescription, ...
+] = (
+    LaundryMonitorSensorDescription(
+        key="current",
+        translation_key="current",
+        device_class=SensorDeviceClass.CURRENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.current,
+    ),
+    LaundryMonitorSensorDescription(
+        key="last_current_activity",
+        translation_key="last_current_activity",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.last_current_activity,
+    ),
+)
+
+
 ENERGY_SENSOR_DESCRIPTIONS: tuple[
     LaundryMonitorSensorDescription, ...
 ] = (
@@ -169,6 +203,8 @@ async def async_setup_entry(
     """Set up Laundry Monitor sensor entities."""
     runtime = entry.runtime_data
     descriptions = SENSOR_DESCRIPTIONS
+    if entry.data.get(CONF_CURRENT_SENSOR):
+        descriptions += CURRENT_SENSOR_DESCRIPTIONS
     if entry.data.get(CONF_ENERGY_SENSOR):
         descriptions += ENERGY_SENSOR_DESCRIPTIONS
     if runtime.tracking_enabled:

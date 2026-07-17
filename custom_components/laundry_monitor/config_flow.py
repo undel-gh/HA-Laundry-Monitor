@@ -17,6 +17,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import (
     CONF_NAME,
+    UnitOfElectricCurrent,
     UnitOfPower,
     UnitOfTime,
 )
@@ -38,6 +39,8 @@ from .const import (
     CONFIG_ENTRY_VERSION,
     CONF_ACTIVITY_THRESHOLD,
     CONF_ARMING_TIMEOUT,
+    CONF_CURRENT_ACTIVITY_THRESHOLD,
+    CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_ENERGY_SENSOR,
     CONF_FINISHED_RETENTION,
@@ -58,6 +61,7 @@ from .const import (
     CONF_VIBRATION_SENSOR,
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
+    DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
@@ -155,6 +159,15 @@ def _config_schema(
                 device_class=SensorDeviceClass.POWER,
             ),
             vol.Optional(
+                CONF_CURRENT_SENSOR,
+                description=_suggested_value(
+                    defaults.get(CONF_CURRENT_SENSOR)
+                ),
+            ): _entity_selector(
+                domain="sensor",
+                device_class=SensorDeviceClass.CURRENT,
+            ),
+            vol.Optional(
                 CONF_DOOR_SENSOR,
                 description=_suggested_value(
                     defaults.get(CONF_DOOR_SENSOR)
@@ -212,6 +225,8 @@ def _config_schema(
 
 def _options_schema(
     defaults: Mapping[str, Any] | None = None,
+    *,
+    current_sensor_configured: bool = False,
 ) -> vol.Schema:
     """Build the detector-options schema."""
     defaults = defaults or {}
@@ -229,6 +244,24 @@ def _options_schema(
                 maximum=10000,
                 step=0.1,
                 unit=UnitOfPower.WATT,
+            ),
+            **(
+                {
+                    vol.Required(
+                        CONF_CURRENT_ACTIVITY_THRESHOLD,
+                        default=defaults.get(
+                            CONF_CURRENT_ACTIVITY_THRESHOLD,
+                            DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+                        ),
+                    ): _number_selector(
+                        minimum=0.01,
+                        maximum=100,
+                        step=0.01,
+                        unit=UnitOfElectricCurrent.AMPERE,
+                    )
+                }
+                if current_sensor_configured
+                else {}
             ),
             vol.Required(
                 CONF_START_THRESHOLD,
@@ -390,6 +423,11 @@ def _normalize_options(
         ),
     }
 
+    if CONF_CURRENT_ACTIVITY_THRESHOLD in user_input:
+        normalized[CONF_CURRENT_ACTIVITY_THRESHOLD] = float(
+            user_input[CONF_CURRENT_ACTIVITY_THRESHOLD]
+        )
+
     normalized.update(
         {
             key: int(user_input[key])
@@ -512,7 +550,10 @@ class LaundryMonitorOptionsFlow(OptionsFlowWithReload):
             data_schema=_options_schema(
                 user_input
                 if user_input is not None
-                else self.config_entry.options
+                else self.config_entry.options,
+                current_sensor_configured=bool(
+                    self.config_entry.data.get(CONF_CURRENT_SENSOR)
+                ),
             ),
             errors=errors,
         )

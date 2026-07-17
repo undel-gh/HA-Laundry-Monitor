@@ -7,6 +7,7 @@ DOMAIN: Final = "laundry_monitor"
 
 # Config-entry data keys.
 CONF_POWER_SENSOR: Final = "power_sensor"
+CONF_CURRENT_SENSOR: Final = "current_sensor"
 CONF_DOOR_SENSOR: Final = "door_sensor"
 CONF_VIBRATION_SENSOR: Final = "vibration_sensor"
 CONF_LEAK_SENSOR: Final = "leak_sensor"
@@ -17,6 +18,7 @@ CONF_TRACK_LAUNDRY: Final = "track_laundry"
 # Activity Detector option keys.
 CONF_START_THRESHOLD: Final = "start_threshold"
 CONF_ACTIVITY_THRESHOLD: Final = "activity_threshold"
+CONF_CURRENT_ACTIVITY_THRESHOLD: Final = "current_activity_threshold"
 CONF_START_CONFIRMATION: Final = "start_confirmation"
 
 # Spin Detector option keys.
@@ -37,6 +39,7 @@ DEFAULT_NAME: Final = "Washing Machine"
 DEFAULT_TRACK_LAUNDRY: Final = False
 DEFAULT_START_THRESHOLD: Final = 10.0
 DEFAULT_ACTIVITY_THRESHOLD: Final = 5.0
+DEFAULT_CURRENT_ACTIVITY_THRESHOLD: Final = 0.1
 DEFAULT_START_CONFIRMATION: Final = 30
 DEFAULT_SPIN_REQUIRED_EVENTS: Final = 3
 DEFAULT_SPIN_WINDOW: Final = 180

@@ -15,7 +15,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import LaundryMonitorConfigEntry
-from .const import CONF_LEAK_SENSOR, LaundryCycleState
+from .const import (
+    CONF_CURRENT_SENSOR,
+    CONF_LEAK_SENSOR,
+    LaundryCycleState,
+)
 from .entity import LaundryMonitorEntity
 from .runtime import LaundryMonitorRuntime
 
@@ -24,7 +28,7 @@ from .runtime import LaundryMonitorRuntime
 class LaundryMonitorBinarySensorDescription(BinarySensorEntityDescription):
     """Describe a Laundry Monitor binary sensor."""
 
-    value_fn: Callable[[LaundryMonitorRuntime], bool]
+    value_fn: Callable[[LaundryMonitorRuntime], bool | None]
 
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[
@@ -54,6 +58,12 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.activity_detected,
     ),
+    LaundryMonitorBinarySensorDescription(
+        key="power_activity_detected",
+        translation_key="power_activity_detected",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda runtime: runtime.power_activity_detected,
+    ),
 )
 
 
@@ -68,6 +78,21 @@ async def async_setup_entry(
         LaundryMonitorBinarySensor(runtime, description)
         for description in BINARY_SENSOR_DESCRIPTIONS
     ]
+
+    if entry.data.get(CONF_CURRENT_SENSOR):
+        entities.append(
+            LaundryMonitorBinarySensor(
+                runtime,
+                LaundryMonitorBinarySensorDescription(
+                    key="current_activity_detected",
+                    translation_key="current_activity_detected",
+                    entity_category=EntityCategory.DIAGNOSTIC,
+                    value_fn=lambda runtime: (
+                        runtime.current_activity_detected
+                    ),
+                ),
+            )
+        )
 
     if entry.data.get(CONF_LEAK_SENSOR):
         entities.append(LaundryMonitorLeakBinarySensor(runtime))
@@ -96,7 +121,7 @@ class LaundryMonitorBinarySensor(
         self.entity_description = description
 
     @property
-    def is_on(self) -> bool:
+    def is_on(self) -> bool | None:
         """Return the binary sensor state."""
         return self.entity_description.value_fn(self.runtime)
 

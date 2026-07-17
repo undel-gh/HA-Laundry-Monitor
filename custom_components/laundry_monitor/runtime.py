@@ -35,6 +35,8 @@ from .activity import ActivityDetector, ActivityEvaluation
 from .const import (
     CONF_ACTIVITY_THRESHOLD,
     CONF_ARMING_TIMEOUT,
+    CONF_CURRENT_ACTIVITY_THRESHOLD,
+    CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_ENERGY_SENSOR,
     CONF_FINISHED_RETENTION,
@@ -54,6 +56,7 @@ from .const import (
     CONF_VIBRATION_SENSOR,
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
+    DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
@@ -123,6 +126,7 @@ class LaundryMonitorRuntime:
     last_state_change: datetime = field(default_factory=dt_util.utcnow)
 
     power: float | None = None
+    current: float | None = None
     door_open: bool | None = None
     vibration_active: bool | None = None
     leak_detected: bool = False
@@ -197,6 +201,16 @@ class LaundryMonitorRuntime:
                     CONF_ACTIVITY_THRESHOLD,
                     DEFAULT_ACTIVITY_THRESHOLD,
                 )
+            ),
+            current_activity_threshold=(
+                float(
+                    self.entry.options.get(
+                        CONF_CURRENT_ACTIVITY_THRESHOLD,
+                        DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+                    )
+                )
+                if self.entry.data.get(CONF_CURRENT_SENSOR)
+                else None
             ),
         )
         self.spin_detector = SpinDetector(
@@ -304,13 +318,33 @@ class LaundryMonitorRuntime:
 
     @property
     def activity_detected(self) -> bool:
-        """Return whether meaningful power activity is present."""
+        """Return whether meaningful electrical activity is present."""
         return self.activity_detector.activity_detected
 
     @property
+    def power_activity_detected(self) -> bool:
+        """Return whether the power source currently indicates activity."""
+        return self.activity_detector.power_activity_detected
+
+    @property
+    def current_activity_detected(self) -> bool | None:
+        """Return optional current-source activity or unknown."""
+        return self.activity_detector.current_activity_detected
+
+    @property
     def last_activity(self) -> datetime | None:
-        """Return the last meaningful power activity timestamp."""
+        """Return the last meaningful electrical activity timestamp."""
         return self.activity_detector.last_activity
+
+    @property
+    def last_power_activity(self) -> datetime | None:
+        """Return the last power-source activity timestamp."""
+        return self.activity_detector.last_power_activity
+
+    @property
+    def last_current_activity(self) -> datetime | None:
+        """Return the last current-source activity timestamp."""
+        return self.activity_detector.last_current_activity
 
     @property
     def current_cycle_duration(self) -> float | None:
@@ -338,6 +372,7 @@ class LaundryMonitorRuntime:
         """Return configured source entity IDs."""
         keys = (
             CONF_POWER_SENSOR,
+            CONF_CURRENT_SENSOR,
             CONF_DOOR_SENSOR,
             CONF_VIBRATION_SENSOR,
             CONF_LEAK_SENSOR,
@@ -370,11 +405,13 @@ class LaundryMonitorRuntime:
         self._resume_lifecycle_after_start()
         _LOGGER.debug(
             "Laundry Monitor runtime ready for entry %s (%s): "
-            "state=%s, power=%s, door_open=%s, vibration_active=%s",
+            "state=%s, power=%s, current=%s, door_open=%s, "
+            "vibration_active=%s",
             self.entry.entry_id,
             self.name,
             self.cycle_state.value,
             self.power,
+            self.current,
             self.door_open,
             self.vibration_active,
         )
@@ -565,8 +602,14 @@ class LaundryMonitorRuntime:
         for entity_id in self.source_entity_ids:
             self._update_source(entity_id, self.hass.states.get(entity_id))
 
-        if self.power is not None:
-            self.activity_detector.evaluate(self.power)
+        self.activity_detector.evaluate(
+            self.power,
+            self.current,
+            power_updated=True,
+            current_updated=bool(
+                self.entry.data.get(CONF_CURRENT_SENSOR)
+            ),
+        )
         self.spin_detector.reset(vibration_active=self.vibration_active)
 
     @callback
@@ -598,15 +641,18 @@ class LaundryMonitorRuntime:
             return
 
         power_entity = self.entry.data.get(CONF_POWER_SENSOR)
+        current_entity = self.entry.data.get(CONF_CURRENT_SENSOR)
         door_entity = self.entry.data.get(CONF_DOOR_SENSOR)
         vibration_entity = self.entry.data.get(CONF_VIBRATION_SENSOR)
 
         if entity_id == power_entity:
             self._handle_power_update()
+        elif entity_id == current_entity:
+            self._handle_current_update()
         elif entity_id == door_entity:
             self._handle_door_update(old_door_open)
 
-        if entity_id in (power_entity, vibration_entity):
+        if entity_id in (power_entity, current_entity, vibration_entity):
             self._evaluate_spin()
             self._evaluate_finish()
 
@@ -626,6 +672,13 @@ class LaundryMonitorRuntime:
     @callback
     def _handle_power_update(self) -> None:
         """Evaluate power activity, availability, and cycle starts."""
+        evaluation = self.activity_detector.evaluate(
+            self.power,
+            self.current,
+            power_updated=True,
+            current_updated=False,
+        )
+
         if self.power is None:
             self._cancel_pending_start_confirmation("power unavailable")
             self._reset_finish_detection()
@@ -640,9 +693,10 @@ class LaundryMonitorRuntime:
                 REASON_POWER_SENSOR_RECOVERED,
             )
 
-        evaluation = self.activity_detector.evaluate(self.power)
-
-        if self._resume_running_after_final_spin(evaluation):
+        if self._resume_running_after_final_spin(
+            evaluation,
+            source="power",
+        ):
             return
 
         if evaluation.start_candidate:
@@ -660,9 +714,25 @@ class LaundryMonitorRuntime:
                 )
 
     @callback
+    def _handle_current_update(self) -> None:
+        """Evaluate optional current as supplemental activity evidence."""
+        evaluation = self.activity_detector.evaluate(
+            self.power,
+            self.current,
+            power_updated=False,
+            current_updated=True,
+        )
+        self._resume_running_after_final_spin(
+            evaluation,
+            source="current",
+        )
+
+    @callback
     def _resume_running_after_final_spin(
         self,
         evaluation: ActivityEvaluation,
+        *,
+        source: str,
     ) -> bool:
         """Return to running on a real inactivity-to-activity edge."""
         if (
@@ -672,10 +742,12 @@ class LaundryMonitorRuntime:
         ):
             _LOGGER.debug(
                 "Meaningful activity resumed after final spin for entry "
-                "%s (%s): power=%s",
+                "%s (%s): source=%s, power=%s, current=%s",
                 self.entry.entry_id,
                 self.name,
+                source,
                 self.power,
+                self.current,
             )
             return self.async_set_cycle_state(
                 LaundryCycleState.RUNNING,
@@ -1016,6 +1088,9 @@ class LaundryMonitorRuntime:
         if entity_id == self.entry.data.get(CONF_POWER_SENSOR):
             data_key = "power"
             value = _state_as_float(state)
+        elif entity_id == self.entry.data.get(CONF_CURRENT_SENSOR):
+            data_key = "current"
+            value = _state_as_float(state)
         elif entity_id == self.entry.data.get(CONF_DOOR_SENSOR):
             data_key = "door_open"
             value = _state_as_bool(state)
@@ -1344,6 +1419,10 @@ class LaundryMonitorRuntime:
             return
         if not self.entry.data.get(CONF_VIBRATION_SENSOR):
             return
+        # Current is supporting evidence only. The required power source must
+        # remain available before vibration can advance final-spin detection.
+        if self.power is None:
+            return
 
         evaluation = self.spin_detector.evaluate(
             vibration_active=self.vibration_active,
@@ -1364,7 +1443,8 @@ class LaundryMonitorRuntime:
             _LOGGER.debug(
                 "Evaluated final-spin evidence for entry %s (%s): "
                 "events=%s/%s, confidence=%.3f, detected=%s, "
-                "activity_detected=%s, vibration_active=%s",
+                "activity_detected=%s, power_activity=%s, "
+                "current_activity=%s, vibration_active=%s",
                 self.entry.entry_id,
                 self.name,
                 evaluation.evidence_count,
@@ -1372,6 +1452,8 @@ class LaundryMonitorRuntime:
                 evaluation.confidence,
                 evaluation.detected,
                 self.activity_detected,
+                self.power_activity_detected,
+                self.current_activity_detected,
                 self.vibration_active,
             )
 
