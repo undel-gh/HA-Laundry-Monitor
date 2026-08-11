@@ -148,7 +148,7 @@ It answers only one question:
 
 Purpose:
 
-Detect the washing machine's final spin.
+Detect that the washing machine has probably entered its terminal spin sequence.
 
 Primary inputs:
 
@@ -160,6 +160,10 @@ Primary inputs:
 Current activity may increase spin confidence by supporting the conclusion that a motor is operating during a vibration window.
 
 Current activity must not independently confirm final spin. The detector must still require the configured vibration evidence unless a future detector explicitly defines another compatible algorithm.
+
+The detector must not assume that the terminal sequence has a fixed duration or contains one uninterrupted spin. A validated terminal sequence may contain multiple spin stages and short pauses, and its duration may vary with program and load.
+
+A confirmed terminal-spin result is a phase marker. Subsequent meaningful activity is expected during final draining, pump operation, drum positioning, additional terminal spinning, electronics activity, or end-of-program signalling and must not automatically invalidate the result.
 
 The detector should expose evidence and a confidence level to the State Machine.
 
@@ -180,6 +184,8 @@ Inputs:
 * source availability.
 
 When a current sensor is configured and available, either power activity or current activity counts as meaningful activity and resets or cancels finish confirmation.
+
+In `final_spin`, meaningful activity after spin confirmation is treated as terminal-phase activity. The finish timer is anchored to the last such activity. The Finish Detector does not request a return to `running` merely because activity resumes after a short quiet interval.
 
 The Finish Detector must:
 
@@ -228,6 +234,8 @@ Outputs:
 * Home Assistant events.
 
 The addition or removal of an optional current sensor must not change the public state model.
+The State Machine must distinguish normal terminal-phase activity from a confirmed continuation of the ordinary program. A `final_spin → running` transition may occur only on an explicit `cycle_continuation_confirmed` detector decision, never on raw or normalized activity alone.
+
 ---
 
 ## 3.7 Laundry Tracking
