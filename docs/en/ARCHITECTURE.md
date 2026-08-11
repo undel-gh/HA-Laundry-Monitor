@@ -148,7 +148,7 @@ It answers only one question:
 
 Purpose:
 
-Detect that the washing machine has probably entered its terminal spin sequence.
+Detect that the washing machine has probably entered its **terminal spin sequence**, which is treated as the entry marker for the broader **terminal phase**.
 
 Primary inputs:
 
@@ -161,9 +161,9 @@ Current activity may increase spin confidence by supporting the conclusion that 
 
 Current activity must not independently confirm final spin. The detector must still require the configured vibration evidence unless a future detector explicitly defines another compatible algorithm.
 
-The detector must not assume that the terminal sequence has a fixed duration or contains one uninterrupted spin. A validated terminal sequence may contain multiple spin stages and short pauses, and its duration may vary with program and load.
+The detector must not assume that the terminal spin sequence has a fixed duration or contains one uninterrupted spin. A validated terminal spin sequence may contain multiple spin stages and short pauses, and its duration may vary with program and load. Draining may begin while the drum is still rotating and may continue after the drum has fully stopped.
 
-A confirmed terminal-spin result is a phase marker. Subsequent meaningful activity is expected during final draining, pump operation, drum positioning, additional terminal spinning, electronics activity, or end-of-program signalling and must not automatically invalidate the result.
+A confirmed terminal-spin-sequence result is a terminal-phase marker. Subsequent meaningful activity is expected during overlapping spin-and-drain operation, drain-only operation after drum stop, drum positioning, additional terminal spinning, electronics activity, or end-of-program signalling and must not automatically invalidate the result.
 
 The detector should expose evidence and a confidence level to the State Machine.
 
@@ -185,8 +185,8 @@ Inputs:
 
 When a current sensor is configured and available, either power activity or current activity counts as meaningful activity and resets or cancels finish confirmation.
 
-In `final_spin`, meaningful activity after spin confirmation is treated as terminal-phase activity. The finish timer is anchored to the last such activity. The Finish Detector does not request a return to `running` merely because activity resumes after a short quiet interval.
-
+In `final_spin`, meaningful activity after terminal-spin-sequence confirmation is treated as terminal-phase activity. The finish timer is anchored to the last such activity. The Finish Detector does not request a return to `running` merely because activity resumes after a short quiet interval.
+ 
 The Finish Detector must:
 
 * avoid relying on exact standby power values;
