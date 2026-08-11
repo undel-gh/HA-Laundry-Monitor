@@ -533,7 +533,7 @@ User-configurable options:
 - current activity threshold, when a current sensor is configured;
 - finish timeout;
 - spin minimum duration
-- running → finished` fallback 
+- running → finished fallback 
 - arming timeout
 - finished state retention
 - power_unavailable grace period
