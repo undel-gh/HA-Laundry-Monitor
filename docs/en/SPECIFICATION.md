@@ -414,7 +414,7 @@ Loss of the optional current sensor must fall back to power-only evaluation. Mis
 
 | Option | Default | Purpose |
 |---|---:|---|
-| `current_activity_threshold` | Implementation-defined | Current at or above this value counts as supplemental activity 
+| `current_activity_threshold` | Implementation-defined | Current at or above this value counts as supplemental activity |
 | `running_finish_confirmation` | 600 s | Conservative `running → finished` fallback |
 | `arming_timeout` | 1800 s | Prevents an indefinite `armed` state |
 | `finished_retention` | 300 s | Keeps `finished` observable when tracking is off |
