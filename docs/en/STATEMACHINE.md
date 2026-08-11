@@ -55,7 +55,7 @@ The state value must use stable, non-localized identifiers.
 | `idle`       | No active or completed cycle is currently being tracked. The integration is ready to detect a new cycle.             |
 | `armed`      | The door has been closed and the integration is waiting for meaningful activity indicating that a cycle has started. |
 | `running`    | A washing cycle is believed to be active.                                                                            |
-| `final_spin` | A probable final spin has been detected and the integration is waiting for cycle completion or renewed activity.     |
+| `final_spin` | A probable terminal spin sequence has been detected; terminal spinning, draining, positioning, and end-of-program activity may still continue.   |
 | `finished`   | The cycle is believed to have finished. Laundry may still be inside the machine.                                     |
 | `error`      | The integration cannot reliably continue normal cycle evaluation because of an abnormal internal or input condition. |
 
@@ -193,7 +193,7 @@ stateDiagram-v2
     Running --> FinalSpin: Final spin confirmed
     Running --> Finished: Finish confirmed without final spin
 
-    FinalSpin --> Running: Meaningful activity resumed
+    FinalSpin --> Running: Cycle continuation confirmed
     FinalSpin --> Finished: Finish confirmed
 
     Finished --> Running: New cycle start confirmed
@@ -222,7 +222,8 @@ The transition from `finished` to `idle` depends on the Laundry Tracking configu
 | `armed`          | Arming timeout                 | `idle`           | Prevent the integration from remaining armed indefinitely.                                       |
 | `running`        | Final spin confirmed           | `final_spin`     | Record spin evidence and emit the final-spin event.                                              |
 | `running`        | Finish confirmed               | `finished`       | Fallback path when final spin is unavailable or not detected.                                    |
-| `final_spin`     | Meaningful activity resumed    | `running`        | The detected spin was not terminal, or the cycle continued after it.                             |
+| `final_spin`     | Meaningful activity            | `final_spin`     | Normal terminal-phase activity; refresh activity time and reset/cancel finish confirmation.      |
+| `final_spin`     | Cycle continuation confirmed   | `running`        | Strong detector evidence shows that ordinary cycle execution continued after the spin candidate. |
 | `final_spin`     | Finish confirmed               | `finished`       | Confirm normal cycle completion.                                                                 |
 | `finished`       | Door opened                    | `finished`       | Diagnostic event only. Laundry removal must not be inferred.                                     |
 | `finished`       | Mark unloaded                  | `idle`           | Available when Laundry Tracking is enabled. Laundry Tracking is updated separately.              |
@@ -313,7 +314,7 @@ When entering `running` because a new cycle has started, the state machine shoul
 
 #### Re-entry from `final_spin`
 
-When returning from `final_spin` because activity resumed, the existing cycle must continue. A new cycle identifier must not be created.
+Ordinary meaningful activity after `final_spin` does not cause re-entry to `running`. If a dedicated detector later confirms that ordinary cycle execution truly continued, the existing cycle must return to `running` without creating a new cycle identifier.
 
 #### Valid exits
 
@@ -325,9 +326,12 @@ When returning from `final_spin` because activity resumed, the existing cycle mu
 
 #### Meaning
 
-The Spin Detector has identified a vibration and activity pattern that probably represents the final spin stage. Optional current evidence may strengthen this conclusion but cannot replace the required spin evidence defined by the active detector algorithm.
+The Spin Detector has identified a vibration and activity pattern that probably represents the terminal spin sequence. Optional current evidence may strengthen this conclusion but cannot replace the required spin evidence defined by the active detector algorithm.
+  
+The terminal spin sequence is not assumed to be one uninterrupted mechanical spin. Depending on program, load size, load distribution, and machine behavior, it may contain several spin stages separated by short pauses and may vary substantially in duration.
+
+The public state is therefore a terminal-phase marker. It does not assert that the drum is currently spinning and does not assert that the cycle has already finished.
  
-This state expresses a probable cycle phase, not guaranteed cycle completion.
 
 #### Entry actions
 
@@ -340,17 +344,21 @@ On entry, the state machine should:
 
 #### Activity after final spin
 
-If meaningful activity resumes, the state machine must return to `running`.
+Meaningful activity after final-spin confirmation is expected and must not by itself return the state machine to `running`.
 
-This does not necessarily mean that the spin detection was incorrect. Some washing machines perform additional pumping, balancing, drum movement, or another spin after an apparent final spin.
+Normal terminal-phase activity may include:
+* additional spin stages;
+* short stops followed by renewed drum movement;
+* balancing or positioning movement;
+* final draining and pump operation;
+* control-electronics activity;
+* an end-of-program chime or other signalling load.
 
-The transition reason should therefore avoid asserting an algorithm failure unless the evidence clearly supports that conclusion.
+While such activity is present, the state remains `final_spin`, `last_activity` is refreshed, and pending finish confirmation is reset or cancelled. Once meaningful activity ceases, the shorter final-spin finish confirmation begins from the last meaningful activity timestamp.
 
-Recommended reason:
+A return to `running` is permitted only when a dedicated detector produces `cycle_continuation_confirmed`. This decision must require stronger evidence than a single activity edge and should represent a real continuation of ordinary program execution after a spin that was incorrectly classified as terminal.
 
-```text
-Meaningful activity resumed after final spin detection
-```
+The exact continuation-confirmation algorithm is implementation-specific until sufficient field data exists.
 
 #### Valid exits
 
@@ -765,10 +773,11 @@ The implementation must preserve the following invariants:
 8. Current activity alone must not confirm final spin or cycle completion.
 9. A cycle-start event must be emitted no more than once per cycle.
 10. A cycle-finished event must be emitted no more than once per cycle.
-11. Returning from `final_spin` to `running` must not create a new cycle.
-12. Restoring state after restart must not create duplicate lifecycle events.
-13. The `finished` state must not assert that laundry has been removed.
-14. Public state values must not be localized.
+11. Meaningful activity after `final_spin` must not itself cause a return to `running`.
+12. Returning from `final_spin` to `running` on `cycle_continuation_confirmed` must not create a new cycle.
+13. Restoring state after restart must not create duplicate lifecycle events.
+14. The `finished` state must not assert that laundry has been removed.
+15. Public state values must not be localized.
 
 ## 18. Edge Cases
 
@@ -803,10 +812,11 @@ Expected behavior:
 
 Expected behavior:
 
-* the first qualifying spin may produce a candidate;
-* renewed activity returns the state to `running`;
-* a later spin may again be evaluated as final spin;
-* only confirmed detector output changes the public state.
+* early or intermediate spin evidence may remain an internal candidate while the public state stays `running`;
+* a terminal sequence may contain several spin stages separated by short pauses;
+* after `final_spin` is confirmed, additional spin, pump, drain, positioning, or signalling activity preserves `final_spin`;
+* ordinary activity does not itself prove that the terminal-spin decision was false;
+* only an explicit `cycle_continuation_confirmed` detector output may return the public state to `running`.
 
 ### 18.5 Door is opened during a running cycle
 
@@ -930,23 +940,41 @@ finished
   Reason: Completed-state retention period expired
 ```
 
-### 20.3 False final-spin candidate
+### 20.3 Final spin with terminal activity
 
 ```text
 running
 → final_spin
-  Reason: Probable final spin confirmed
+  Reason: Probable terminal spin sequence confirmed
+
+final_spin
+→ final_spin
+  Evidence: Further spin / drain / pump / positioning / signalling activity
+  Action: Refresh last activity and reset or cancel finish confirmation
+
+final_spin
+→ finished
+  Reason: No meaningful activity for final-spin finish timeout
+```
+
+### 20.4 False terminal-spin classification
+
+```text
+running
+→ final_spin
+  Reason: Probable terminal spin sequence confirmed
+
+final_spin
+→ final_spin
+  Evidence: Meaningful activity resumed
+  Action: Preserve terminal phase while continuation is unconfirmed
 
 final_spin
 → running
-  Reason: Meaningful activity resumed
+  Reason: Cycle continuation confirmed by dedicated detector evidence
+ ```
 
-running
-→ finished
-  Reason: No meaningful activity for finish timeout
-```
-
-### 20.4 Current activity prevents a false finish
+### 20.5 Current activity prevents a false finish
 
 ```text
 running
@@ -959,7 +987,7 @@ running
   Reason: No meaningful power or current activity for finish timeout
 ```
 
-### 20.5 Required power sensor becomes unavailable
+### 20.6 Required power sensor becomes unavailable
 
 ```text
 running
@@ -995,7 +1023,8 @@ At minimum, automated tests should cover:
 * current activity not independently confirming cycle start;
 * current activity not independently confirming final spin or finish;
 * finish detection without final spin;
-* final spin followed by renewed activity;
+* final spin followed by normal terminal activity without returning to `running`;
+* final spin followed by a dedicated `cycle_continuation_confirmed` return to `running`;
 * final spin followed by completion;
 * door opening during `running`;
 * door opening during `finished`;
@@ -1018,7 +1047,8 @@ The following details remain implementation or configuration decisions:
 * default arming timeout;
 * default completed-state retention when Laundry Tracking is disabled;
 * exact start confirmation algorithm;
-* exact final-spin detection algorithm;
+* exact final-spin / terminal-sequence detection algorithm;
+* exact `cycle_continuation_confirmed` algorithm and thresholds;
 * exact finish confidence calculation;
 * default current activity threshold;
 * whether current may corroborate start confirmation in a future detector;
