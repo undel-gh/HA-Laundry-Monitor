@@ -65,7 +65,7 @@ New public states should not be introduced without a clear use case and a compat
 
 ## 4. Internal States
 
-The implementation may use more detailed internal states.
+The  may use more detailed internal states.
 
 Possible internal states include:
 
@@ -82,7 +82,7 @@ Possible internal states include:
 | `FINISHED`                  | `finished`                | Cycle completion confirmed.                                                     |
 | `ERROR`                     | `error`                   | State evaluation cannot safely continue.                                        |
 
-Internal states are implementation details and may change between compatible releases.
+Internal states are  details and may change between compatible releases.
 
 ## 5. State Machine Inputs
 
@@ -358,7 +358,7 @@ While such activity is present, the state remains `final_spin`, `last_activity` 
 
 A return to `running` is permitted only when a dedicated detector produces `cycle_continuation_confirmed`. This decision must require stronger evidence than a single activity edge and should represent a real continuation of ordinary program execution after a spin that was incorrectly classified as terminal.
 
-The exact continuation-confirmation algorithm is implementation-specific until sufficient field data exists.
+The exact continuation-confirmation algorithm is -specific until sufficient field data exists.
 
 #### Valid exits
 
