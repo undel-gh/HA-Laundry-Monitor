@@ -245,7 +245,9 @@ async def test_current_activity_keeps_terminal_phase(
 
     assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
     assert runtime.last_transition_reason == "test_final_spin"
+    assert runtime.finish_quiet_since is None
     assert runtime.finish_deadline is None
+    assert runtime.finish_remaining_seconds is None
 
 
 async def test_terminal_activity_resets_finish_confirmation(
