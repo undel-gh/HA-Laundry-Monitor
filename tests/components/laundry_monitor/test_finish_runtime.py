@@ -283,5 +283,5 @@ async def test_terminal_activity_resets_finish_confirmation(
     await hass.async_block_till_done()
     assert runtime.cycle_state is LaundryCycleState.FINISHED
     assert runtime.last_transition_reason == REASON_FINISH_INACTIVITY_CONFIRMED
-    )
+    
     assert runtime.finish_deadline is None
