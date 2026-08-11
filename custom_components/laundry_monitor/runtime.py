@@ -708,44 +708,27 @@ class LaundryMonitorRuntime:
 
     @callback
     def _handle_current_update(self) -> None:
-        """Evaluate optional current as supplemental activity evidence."""
+        """Evaluate optional current as supplemental activity evidence.
+        
+         Current activity is part of the terminal phase and must never return
++        final_spin to running by itself. When current is active, explicitly
++        reset any pending finish confirmation so current-only motor or pump
++        activity cannot be mistaken for terminal inactivity.
++        """
         evaluation = self.activity_detector.evaluate(
             self.power,
             self.current,
             power_updated=False,
             current_updated=True,
         )
-        self._resume_running_after_final_spin(
-            evaluation,
-            source="current",
-        )
-
-    @callback
-    def _resume_running_after_final_spin(
-        self,
-        evaluation: ActivityEvaluation,
-        *,
-        source: str,
-    ) -> bool:
-        """Return to running on a real inactivity-to-activity edge."""
+       
         if (
-            self.cycle_state is LaundryCycleState.FINAL_SPIN
-            and evaluation.activity_detected
-            and evaluation.activity_changed
+            evaluation.current_activity_detected is True
+            and self.cycle_state in _FINISH_EVALUATION_STATES
         ):
-            _LOGGER.debug(
-                "Meaningful activity resumed after final spin for entry "
-                "%s (%s): source=%s, power=%s, current=%s",
-                self.entry.entry_id,
-                self.name,
-                source,
-                self.power,
-                self.current,
+            self._reset_finish_detection(
+                "meaningful current activity detected"
             )
-            return self.async_set_cycle_state(
-                LaundryCycleState.RUNNING,
-                        )
-        return False
 
     @callback
     def _handle_door_update(self, old_door_open: bool | None) -> None:
