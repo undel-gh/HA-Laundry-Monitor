@@ -180,7 +180,7 @@ Diagnostics shall identify whether power activity, current activity, or both con
 
 ## FR-029
 
-+The public `final_spin` state shall represent detection of a probable **terminal spin sequence / terminal phase** of the cycle, not an assertion that the drum is continuously spinning. The identifier `final_spin` shall remain stable for public-API compatibility.
+The public `final_spin` state shall represent detection of a probable **terminal spin sequence / terminal phase** of the cycle, not an assertion that the drum is continuously spinning. The identifier `final_spin` shall remain stable for public-API compatibility.
 
 ---
 
