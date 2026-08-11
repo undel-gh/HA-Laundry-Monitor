@@ -90,7 +90,7 @@ The user should be able to understand:
 - last vibration time;
 - last power activity time;
 - last current activity time, when a current sensor is configured;
-- the siurce evidence used to classify meaningful activity.
+- the source evidence used to classify meaningful activity.
 
 ### 3.3 Explainability
 
