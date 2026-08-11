@@ -719,8 +719,7 @@ class LaundryMonitorRuntime:
             self.current,
             power_updated=False,
             current_updated=True,
-        )
-       
+        )       
         if (
             evaluation.current_activity_detected is True
             and self.cycle_state in _FINISH_EVALUATION_STATES
