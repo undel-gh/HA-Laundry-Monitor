@@ -709,12 +709,11 @@ class LaundryMonitorRuntime:
     @callback
     def _handle_current_update(self) -> None:
         """Evaluate optional current as supplemental activity evidence.
-        
-         Current activity is part of the terminal phase and must never return
-+        final_spin to running by itself. When current is active, explicitly
-+        reset any pending finish confirmation so current-only motor or pump
-+        activity cannot be mistaken for terminal inactivity.
-+        """
+        Current activity is part of the terminal phase and must never return
+        final_spin to running by itself. When current is active, explicitly
+        reset any pending finish confirmation so current-only motor or pump
+        activity cannot be mistaken for terminal inactivity.
+        """
         evaluation = self.activity_detector.evaluate(
             self.power,
             self.current,
