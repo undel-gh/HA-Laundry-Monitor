@@ -178,6 +178,49 @@ Diagnostics shall identify whether power activity, current activity, or both con
 
 ---
 
+## FR-029
+
+The public `final_spin` state shall represent a probable terminal phase of the cycle, not an assertion that the drum is continuously spinning.
+
+---
+
+## FR-030
+
+Terminal-phase detection shall tolerate multiple spin stages, short pauses between spin stages, and cycle-to-cycle variation caused by program, load size, and load distribution.
+
+---
+
+## FR-031
+
+After `final_spin` is confirmed, meaningful power activity, current activity, vibration, final draining, pump operation, drum positioning, electronics activity, or end-of-program signalling shall not independently cause `final_spin → running`.
+
+---
+
+## FR-032
+
+Meaningful terminal-phase activity shall refresh the last-activity timestamp and reset or cancel pending finish confirmation while preserving the `final_spin` public state.
+
+---
+
+## FR-033
+
+A transition from `final_spin` back to `running` shall require an explicit `cycle_continuation_confirmed` decision based on evidence stronger than a single inactivity-to-activity edge.
+
+---
+
+## FR-034
+
+When `final_spin` has been confirmed, finish timing shall be measured from the last meaningful terminal activity rather than from the final-spin detection timestamp.
+
+---
+
+## FR-035
+
+The exact algorithm and timing thresholds used to confirm cycle continuation after `final_spin` shall remain implementation-specific until validated across multiple programs, loads, and machines.
+
+---
+
+
 # Non-Functional Requirements
 
 ## NFR-001
