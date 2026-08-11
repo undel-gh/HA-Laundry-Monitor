@@ -135,7 +135,7 @@ Current measurements supplement activity detection but **do not independently st
 
 The historical identifier `final_spin` is retained as part of the public API. Conceptually it represents entry into a probable terminal phase rather than an assertion that the drum is continuously spinning.
 
-A terminal phase may include multiple spin stages, short stops, overlapping spin and drain operation, drain-only operation after the drum stops, drum positioning, electronics activity, and end-of-program signalling. Detailed normative behavior is defined in [`docs/en/STATEMACHINE.md`](docs/en/STATEMACHINE.md).
+A terminal phase may include multiple spin stages, short stops, overlapping spin and drain operation, drain-only operation after the drum stops, drum positioning, electronics activity, and end-of-program signalling. Detailed normative behavior is defined in [`docs/en/STATE_MACHINE.md`](docs/en/STATE_MACHINE.md).
 
 ## Entities
 
@@ -257,7 +257,7 @@ For detailed behavior and invariants, use the canonical English documentation.
 - [`docs/en/SPECIFICATION.md`](docs/en/SPECIFICATION.md) — canonical product specification and detection model.
 - [`docs/en/ARCHITECTURE.md`](docs/en/ARCHITECTURE.md) — component boundaries and data flow.
 - [`docs/en/REQUIREMENTS.md`](docs/en/REQUIREMENTS.md) — normative functional and non-functional requirements.
-- [`docs/en/STATEMACHINE.md`](docs/en/STATEMACHINE.md) — detailed public/internal states, transitions, timers, recovery, edge cases, and invariants.
+- [`docs/en/STATE_MACHINE.md`](docs/en/STATE_MACHINE.md) — detailed public/internal states, transitions, timers, recovery, edge cases, and invariants.
 - [`docs/ru/`](docs/ru/) — Russian translations. English documentation remains canonical.
 
 When looking for implementation details, start with [`PROJECT_MAP.md`](PROJECT_MAP.md) instead of scanning the repository.
