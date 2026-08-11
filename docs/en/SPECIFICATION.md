@@ -202,7 +202,7 @@ The integration should expose a user-facing state sensor.
 | `idle` | Machine is idle and ready for a new cycle. |
 | `armed` | Door has been closed and the integration is waiting for the cycle to start. |
 | `running` | Washing cycle is active. |
-| `final_spin` | Final spin has likely been detected. |
+| `final_spin` | A probable terminal spin sequence has been detected; the machine may still perform final spinning, draining, positioning, or end-of-program activity. |
 | `finished` | Washing cycle has finished. Laundry may still be inside the machine. |
 | `error` | Abnormal condition detected. |
 
@@ -249,9 +249,10 @@ Internal states may evolve between releases without affecting the public API.
      └─ required source failure ─→ error
 
     final_spin
-     ├─ activity resumes ────────→ running
-     ├─ inactivity confirmed ────→ finished
-     └─ required source failure ─→ error
+     ├─ normal terminal activity ─→ final_spin
+     ├─ cycle continuation confirmed → running
+     ├─ inactivity confirmed ─────→ finished
+     └─ required source failure ──→ error
 
     finished
      ├─ new cycle confirmed ─────→ running
@@ -275,7 +276,8 @@ Internal states may evolve between releases without affecting the public API.
 | `armed` | Door opened | `idle` | Start cancelled |
 | `running` | Final spin detected | `final_spin` | Based on vibration pattern |
 | `running` | No activity timeout | `finished` | Fallback if spin is not detected |
-| `final_spin` | Activity detected | `running` | False final spin candidate |
+| `final_spin` | Meaningful activity | `final_spin` | Normal terminal activity; reset or cancel finish confirmation |
+| `final_spin` | Cycle continuation confirmed | `running` | Strong evidence that the detected spin was not terminal |
 | `final_spin` | No activity timeout | `finished` | Cycle finished |
 | `finished` | Door opened | `finished` | Door opening is diagnostic only; it must not imply laundry removal |
 | `finished` | Mark unloaded | `idle` | Explicit user action via button or service |
@@ -352,19 +354,33 @@ Example defaults:
 
 All active thresholds and timing values must be configurable.
 
-## 7.2 Final spin detection
+## 7.2 Final spin and terminal-phase detection
 
-Final spin detection should use vibration data when available.
+Final-spin detection should use vibration data when available. The detector is not required to identify one exact mechanical instant at which the final high-speed rotation starts or stops. Its purpose is to recognize that the cycle has entered a probable terminal spin sequence.
 
-A possible first implementation:
+A terminal spin sequence may:
 
-- machine is already running;
-- vibration events occur frequently;
-- vibration lasts longer than configured minimum duration;
-- recent power activity exists during or near the vibration window;
-- optional current activity may strengthen the evidence that a motor is running.
+- contain one spin or several spin stages;
+- contain short pauses between spin stages;
+- vary substantially in duration with program, load size, load distribution, and machine behavior;
+- be followed immediately by final draining, pump activity, drum positioning, electronics activity, or an end-of-program chime.
+
+Consequently, the public `final_spin` state means **probable terminal phase detected**, not **the drum is currently spinning** and not **the cycle has already finished**.
+
+A possible detector implementation may use:
+
+- an already confirmed `running` cycle;
+- vibration-event frequency and timing;
+- cycle age;
+- recent meaningful electrical activity;
+- optional current activity as supporting evidence that a motor or pump is operating;
+- other implementation-specific evidence that improves discrimination between ordinary intermediate spins and the terminal sequence.
 
 Current activity is supporting evidence only. It must not independently produce a final-spin transition.
+
+After `final_spin` has been confirmed, ordinary meaningful electrical activity or further vibration does not by itself invalidate that state. Such observations are expected during the terminal sequence and must keep the state at `final_spin` while refreshing activity timestamps and resetting or cancelling finish confirmation.
+
+A return from `final_spin` to `running` requires a distinct **cycle continuation confirmed** decision. This decision must use stronger evidence than a single inactivity-to-activity edge. The exact continuation-confirmation algorithm remains implementation-specific until validated across more machines, programs, and loads.
 
 Example defaults:
 
@@ -385,6 +401,12 @@ The integration should avoid trying to distinguish:
 - low-power pauses during cycle.
 
 Instead, finish should be inferred from absence of meaningful activity over time.
+
+When a current sensor is configured and available, meaningful electrical activity remains present while either the power or current activity condition is true. A pending finish confirmation must be cancelled or reset when either source reports meaningful activity.
+ 
+For a cycle already in `final_spin`, final draining, pump operation, drum positioning, short spin restarts, electronics activity, and an end-of-program chime may all occur before electrical activity finally becomes quiet. These observations must delay completion rather than return the cycle to `running`. The shorter final-spin finish timeout starts from the **last meaningful terminal activity**, not from the final-spin detection timestamp.
+
+Loss of the optional current sensor must fall back to power-only evaluation. Missing current data must not be interpreted as proof of inactivity.
 
 ## 7.4 State machine options and defaults
 
@@ -660,7 +682,7 @@ Laundry Monitor is not:
 
 ## 17. Open Questions
 - Should confidence be a percentage or diagnostic enum?
-- Should final spin detection be enabled by default?
-- What default current activity threshold is reliable across smart plugs and washing machines?
+- Should final spin / terminal-sequence detection be enabled by default?
+- What evidence and timing should be required for `cycle_continuation_confirmed` after `final_spin`?- What default current activity threshold is reliable across smart plugs and washing machines?
 - Should current ever corroborate cycle-start confirmation, or remain finish/spin evidence only?
 - Should load-type or phase classification remain diagnostic-only in the stable public API?
