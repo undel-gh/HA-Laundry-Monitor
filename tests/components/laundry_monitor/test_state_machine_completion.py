@@ -31,7 +31,6 @@ from custom_components.laundry_monitor.const import (
     EVENT_CYCLE_STARTED,
     EVENT_DOOR_OPENED_AFTER_FINISH,
     LaundryCycleState,
-    REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN,
     REASON_ARMING_TIMEOUT,
     REASON_FINISHED_RETENTION_EXPIRED,
     REASON_FINISH_FALLBACK_CONFIRMED,
@@ -205,11 +204,11 @@ async def test_new_cycle_is_detected_from_finished(
     assert events[0].data["new_state"] == "running"
 
 
-async def test_activity_resumes_after_final_spin(
+async def test_activity_after_final_spin_keeps_terminal_phase(
     hass: HomeAssistant,
     enable_custom_integrations: None,
 ) -> None:
-    """Test renewed meaningful activity returns final_spin to running."""
+    """Test terminal electrical activity does not leave final_spin."""
     entry = await _async_setup_entry(
         hass,
         include_vibration=True,
@@ -234,11 +233,10 @@ async def test_activity_resumes_after_final_spin(
     hass.states.async_set("sensor.washing_machine_power", "45")
     await hass.async_block_till_done()
 
-    assert runtime.cycle_state is LaundryCycleState.RUNNING
-    assert (
-        runtime.last_transition_reason
-        == REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN
-    )
+    assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
+    assert runtime.last_transition_reason == "test_final_spin"
+    assert runtime.cycle_started_at == started_at
+    assert runtime.finish_deadline is None
     assert runtime.cycle_started_at == started_at
 
 
