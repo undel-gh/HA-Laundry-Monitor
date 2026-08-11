@@ -15,12 +15,12 @@ Home Assistant custom integration that infers washing-machine cycle state from e
 | Overall product behavior and scope | `docs/en/SPECIFICATION.md` | — | — |
 | Architecture / component responsibilities | `docs/en/ARCHITECTURE.md` | package files below | — |
 | Normative functional requirements | `docs/en/REQUIREMENTS.md` | — | — |
-| States, transitions, timers, recovery, edge cases | `docs/en/STATEMACHINE.md` | `runtime.py`, `state_machine.py`, `storage.py` | `test_state_machine.py`, `test_state_machine_runtime.py`, `test_storage.py` |
-| Power/current meaningful activity and cycle start | `SPECIFICATION.md §7.1`, `STATEMACHINE.md §5.1/§9` | `activity.py`, `runtime.py` | `test_activity.py`, `test_activity_runtime.py` |
-| Terminal spin sequence / terminal phase | `SPECIFICATION.md §7.2`, `STATEMACHINE.md §8.4` | `spin.py`, `runtime.py` | `test_spin.py`, `test_spin_runtime.py` |
-| Cycle finish / quiet timers / fallback finish | `SPECIFICATION.md §7.3`, `STATEMACHINE.md §10/§14` | `finish.py`, `runtime.py` | `test_finish.py`, `test_finish_runtime.py` |
-| Door arming / unload behavior | `STATEMACHINE.md §8/§10` | `runtime.py`, `button.py` | `test_state_machine_runtime.py`, `test_entities.py` |
-| Persisted state / restart recovery | `STATEMACHINE.md §13` | `storage.py`, `runtime.py` | `test_storage.py`, `test_state_machine_runtime.py` |
+| States, transitions, timers, recovery, edge cases | `docs/en/STATE_MACHINE.md` | `runtime.py`, `state_machine.py`, `storage.py` | `test_state_machine.py`, `test_state_machine_runtime.py`, `test_storage.py` |
+| Power/current meaningful activity and cycle start | `SPECIFICATION.md §7.1`, `STATE_MACHINE.md §5.1/§9` | `activity.py`, `runtime.py` | `test_activity.py`, `test_activity_runtime.py` |
+| Terminal spin sequence / terminal phase | `SPECIFICATION.md §7.2`, `STATE_MACHINE.md §8.4` | `spin.py`, `runtime.py` | `test_spin.py`, `test_spin_runtime.py` |
+| Cycle finish / quiet timers / fallback finish | `SPECIFICATION.md §7.3`, `STATE_MACHINE.md §10/§14` | `finish.py`, `runtime.py` | `test_finish.py`, `test_finish_runtime.py` |
+| Door arming / unload behavior | `STATE_MACHINE.md §8/§10` | `runtime.py`, `button.py` | `test_state_machine_runtime.py`, `test_entities.py` |
+| Persisted state / restart recovery | `STATE_MACHINE.md §13` | `storage.py`, `runtime.py` | `test_storage.py`, `test_state_machine_runtime.py` |
 | Config flow / reconfigure / options validation | `SPECIFICATION.md §11` | `config_flow.py`, `const.py` | `test_config_flow.py` |
 | HA entities exposed to users | `SPECIFICATION.md §9` | `sensor.py`, `binary_sensor.py`, `button.py`, `entity.py` | `test_entities.py` |
 | Downloadable diagnostics | `SPECIFICATION.md` diagnostics sections | `diagnostics.py` | relevant diagnostics/entity tests |
@@ -45,7 +45,7 @@ Component boundaries and data flow: source normalization → Activity Detector /
 ### `docs/en/REQUIREMENTS.md`
 Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase rules are currently FR-029 through FR-037.
 
-### `docs/en/STATEMACHINE.md`
+### `docs/en/STATE_MACHINE.md`
 Most detailed behavioral document. Defines public/internal states, allowed transitions, detector inputs, state entry/exit semantics, timers, source failures, restart recovery, invariants, edge cases, examples, and test expectations. Start here for any state-transition question.
 
 ### `docs/ru/`
@@ -184,7 +184,7 @@ MIT license.
 For behavioral changes, use this order:
 
 1. `docs/en/REQUIREMENTS.md` — is there a normative rule?
-2. `docs/en/STATEMACHINE.md` — what exact state/timer behavior is intended?
+2. `docs/en/STATE_MACHINE.md` — what exact state/timer behavior is intended?
 3. `docs/en/SPECIFICATION.md` — broader product semantics and public API.
 4. `docs/en/ARCHITECTURE.md` — which component owns the behavior?
 5. `runtime.py` plus the relevant detector (`activity.py`, `spin.py`, `finish.py`) — what is actually implemented?
