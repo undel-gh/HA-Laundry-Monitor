@@ -31,7 +31,7 @@ from homeassistant.helpers.event import (
 )
 from homeassistant.util import dt as dt_util
 
-from .activity import ActivityDetector, ActivityEvaluation
+from .activity import ActivityDetector
 from .const import (
     CONF_ACTIVITY_THRESHOLD,
     CONF_ARMING_TIMEOUT,
@@ -76,8 +76,7 @@ from .const import (
     EVENT_MACHINE_UNLOADED,
     EVENT_STATE_CHANGED,
     EVENT_TRANSITION_REJECTED,
-    LaundryCycleState,
-    REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN,
+    LaundryCycleState,    
     REASON_ARMING_TIMEOUT,
     REASON_DOOR_CLOSED,
     REASON_DOOR_OPENED_BEFORE_START,
@@ -693,12 +692,6 @@ class LaundryMonitorRuntime:
                 REASON_POWER_SENSOR_RECOVERED,
             )
 
-        if self._resume_running_after_final_spin(
-            evaluation,
-            source="power",
-        ):
-            return
-
         if evaluation.start_candidate:
             self._schedule_start_confirmation()
         else:
@@ -751,8 +744,7 @@ class LaundryMonitorRuntime:
             )
             return self.async_set_cycle_state(
                 LaundryCycleState.RUNNING,
-                REASON_ACTIVITY_RESUMED_AFTER_FINAL_SPIN,
-            )
+                        )
         return False
 
     @callback
