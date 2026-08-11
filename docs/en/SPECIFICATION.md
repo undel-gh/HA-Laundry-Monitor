@@ -386,11 +386,16 @@ A return from `final_spin` to `running` requires a distinct **cycle continuation
 
 Example defaults:
 
-|Parameter	|Default|
-|--- | --- |
-|Minimum spin duration	|120 s|
-|Spin cooldown	|300 s|
-|Required confidence	|70%|
+| Parameter | Default | Purpose |
+|---|---:|---|
+| Spin required events | 3 | Number of vibration events required inside the rolling spin window |
+| Spin window | 180 s | Rolling time window used to accumulate vibration evidence |
+| Spin minimum cycle time | 600 s | Minimum confirmed cycle age before terminal-spin detection is allowed |
+| Spin activity max age | 120 s | Maximum age of meaningful electrical activity that may support spin evidence |
+
+These values describe the current event-based detector model. Confidence is diagnostic and implementation-specific; it is not a replacement for the configured evidence gates above.
+
+The detector must not assume a fixed mechanical spin duration. A terminal spin sequence may be much shorter or longer depending on program, load size, load distribution, and machine behavior.
 
 ## 7.3 Finish detection
 
