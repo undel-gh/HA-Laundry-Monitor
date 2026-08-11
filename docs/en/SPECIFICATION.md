@@ -354,18 +354,20 @@ Example defaults:
 
 All active thresholds and timing values must be configurable.
 
-## 7.2 Final spin and terminal-phase detection
+## 7.2 Terminal spin sequence and terminal-phase detection
 
-Final-spin detection should use vibration data when available. The detector is not required to identify one exact mechanical instant at which the final high-speed rotation starts or stops. Its purpose is to recognize that the cycle has entered a probable terminal spin sequence.
+Terminal-spin-sequence detection should use vibration data when available. The detector is not required to identify one exact mechanical instant at which the final high-speed rotation starts or stops. Its purpose is to recognize that the cycle has entered a probable **terminal spin sequence** and therefore a probable **terminal phase** of the program.
 
 A terminal spin sequence may:
 
 - contain one spin or several spin stages;
 - contain short pauses between spin stages;
 - vary substantially in duration with program, load size, load distribution, and machine behavior;
-- be followed immediately by final draining, pump activity, drum positioning, electronics activity, or an end-of-program chime.
+- overlap with draining: the drain pump may start while the drum is still spinning;
+- continue into draining after drum rotation has fully stopped;
+- include pump activity, drum positioning, electronics activity, or an end-of-program chime after the mechanical spin portion has ended.
 
-Consequently, the public `final_spin` state means **probable terminal phase detected**, not **the drum is currently spinning** and not **the cycle has already finished**.
+Consequently, the public `final_spin` state means **terminal spin sequence / terminal phase detected**, not **the drum is currently spinning** and not **the cycle has already finished**. The historical state identifier `final_spin` is retained as part of the public API even though the semantic meaning is broader than continuous drum rotation.
 
 A possible detector implementation may use:
 
@@ -404,7 +406,7 @@ Instead, finish should be inferred from absence of meaningful activity over time
 
 When a current sensor is configured and available, meaningful electrical activity remains present while either the power or current activity condition is true. A pending finish confirmation must be cancelled or reset when either source reports meaningful activity.
  
-For a cycle already in `final_spin`, final draining, pump operation, drum positioning, short spin restarts, electronics activity, and an end-of-program chime may all occur before electrical activity finally becomes quiet. These observations must delay completion rather than return the cycle to `running`. The shorter final-spin finish timeout starts from the **last meaningful terminal activity**, not from the final-spin detection timestamp.
+For a cycle already in `final_spin`, the drain pump may start before the drum has fully stopped and may continue after drum rotation ends. Final draining, pump operation, drum positioning, short spin restarts, electronics activity, and an end-of-program chime may all occur before electrical activity finally becomes quiet. These observations must delay completion rather than return the cycle to `running`. The shorter final-spin finish timeout starts from the **last meaningful terminal activity**, not from the final-spin detection timestamp.
 
 Loss of the optional current sensor must fall back to power-only evaluation. Missing current data must not be interpreted as proof of inactivity.
 
