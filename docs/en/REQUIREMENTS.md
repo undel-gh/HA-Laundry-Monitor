@@ -180,19 +180,19 @@ Diagnostics shall identify whether power activity, current activity, or both con
 
 ## FR-029
 
-The public `final_spin` state shall represent a probable terminal phase of the cycle, not an assertion that the drum is continuously spinning.
++The public `final_spin` state shall represent detection of a probable **terminal spin sequence / terminal phase** of the cycle, not an assertion that the drum is continuously spinning. The identifier `final_spin` shall remain stable for public-API compatibility.
 
 ---
 
 ## FR-030
 
-Terminal-phase detection shall tolerate multiple spin stages, short pauses between spin stages, and cycle-to-cycle variation caused by program, load size, and load distribution.
+Terminal-spin-sequence / terminal-phase detection shall tolerate multiple spin stages, short pauses between spin stages, and cycle-to-cycle variation caused by program, load size, and load distribution.
 
 ---
 
 ## FR-031
 
-After `final_spin` is confirmed, meaningful power activity, current activity, vibration, final draining, pump operation, drum positioning, electronics activity, or end-of-program signalling shall not independently cause `final_spin → running`.
+After `final_spin` is confirmed, meaningful power activity, current activity, vibration, overlapping spin-and-drain operation, drain-only operation after drum stop, pump operation, drum positioning, electronics activity, or end-of-program signalling shall not independently cause `final_spin → running`.
 
 ---
 
@@ -220,6 +220,17 @@ The exact algorithm and timing thresholds used to confirm cycle continuation aft
 
 ---
 
+## FR-036
+
+The terminal phase shall permit draining to begin before the drum has fully stopped after the terminal spin sequence.
+
+---
+
+## FR-037
+
+The terminal phase shall permit draining and other meaningful electrical activity to continue after drum rotation has fully stopped. Such activity shall remain terminal-phase activity and shall reset or cancel pending finish confirmation.
+
+---
 
 # Non-Functional Requirements
 
