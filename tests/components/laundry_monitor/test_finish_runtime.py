@@ -267,8 +267,9 @@ async def test_terminal_activity_resets_finish_confirmation(
 
     hass.states.async_set("sensor.washing_machine_power", "45")
     await hass.async_block_till_done()
+    
     assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
-     assert runtime.finish_deadline is None
+    assert runtime.finish_deadline is None
 
     quiet_started = dt_util.utcnow()
     hass.states.async_set("sensor.washing_machine_power", "0.25")
