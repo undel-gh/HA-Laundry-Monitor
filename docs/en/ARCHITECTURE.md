@@ -78,15 +78,15 @@ State Machine ─────────────► independent Laundry Tra
 User interaction ──────────► Laundry Tracking
  ```
  
-+Power remains the only required electrical source. Current is optional and supplements, but does not replace, power-based cycle-start detection.
-+
+Power remains the only required electrical source. Current is optional and supplements, but does not replace, power-based cycle-start detection.
+
 ---
 
 # 3. Components
 
 ## 3.1 Source Normalization
 
-+Purpose:
+Purpose:
 
 Convert raw Home Assistant source states into validated, unit-aware observations.
 
@@ -308,7 +308,7 @@ The initial implementation should use it conservatively:
 
 Load-type or detailed washing-phase classification is not part of the public state model. Such classification may be introduced later as diagnostic evidence after validation across multiple machines and programs.
 
-+---
+---
 
 # 6. Public API
 
