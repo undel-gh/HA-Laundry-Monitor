@@ -55,7 +55,7 @@ The state value must use stable, non-localized identifiers.
 | `idle`       | No active or completed cycle is currently being tracked. The integration is ready to detect a new cycle.             |
 | `armed`      | The door has been closed and the integration is waiting for meaningful activity indicating that a cycle has started. |
 | `running`    | A washing cycle is believed to be active.                                                                            |
-| `final_spin` | A probable terminal spin sequence has been detected; terminal spinning, draining, positioning, and end-of-program activity may still continue.   |
+| `final_spin` | A probable terminal spin sequence / terminal phase has been detected; spinning and draining may overlap, and draining or other end-of-program activity may continue after the drum stops. |
 | `finished`   | The cycle is believed to have finished. Laundry may still be inside the machine.                                     |
 | `error`      | The integration cannot reliably continue normal cycle evaluation because of an abnormal internal or input condition. |
 
@@ -326,13 +326,12 @@ Ordinary meaningful activity after `final_spin` does not cause re-entry to `runn
 
 #### Meaning
 
-The Spin Detector has identified a vibration and activity pattern that probably represents the terminal spin sequence. Optional current evidence may strengthen this conclusion but cannot replace the required spin evidence defined by the active detector algorithm.
-  
-The terminal spin sequence is not assumed to be one uninterrupted mechanical spin. Depending on program, load size, load distribution, and machine behavior, it may contain several spin stages separated by short pauses and may vary substantially in duration.
+The Spin Detector has identified a vibration and activity pattern that probably represents the **terminal spin sequence**, which marks entry into the broader **terminal phase**. Optional current evidence may strengthen this conclusion but cannot replace the required spin evidence defined by the active detector algorithm.
 
-The public state is therefore a terminal-phase marker. It does not assert that the drum is currently spinning and does not assert that the cycle has already finished.
+The terminal spin sequence is not assumed to be one uninterrupted mechanical spin. Depending on program, load size, load distribution, and machine behavior, it may contain several spin stages separated by short pauses and may vary substantially in duration. The drain pump may start before the drum has fully stopped, so spinning and draining may overlap. Draining may then continue after drum rotation has ended.
+
+The public state is therefore a **terminal spin sequence / terminal phase** marker. It does not assert that the drum is currently spinning and does not assert that the cycle has already finished.
  
-
 #### Entry actions
 
 On entry, the state machine should:
@@ -350,7 +349,8 @@ Normal terminal-phase activity may include:
 * additional spin stages;
 * short stops followed by renewed drum movement;
 * balancing or positioning movement;
-* final draining and pump operation;
+* drain operation that begins while the drum is still spinning;
+* drain-only operation after the drum has fully stopped;
 * control-electronics activity;
 * an end-of-program chime or other signalling load.
 
@@ -940,16 +940,16 @@ finished
   Reason: Completed-state retention period expired
 ```
 
-### 20.3 Final spin with terminal activity
+### 20.3 Terminal spin sequence with terminal-phase activity
 
 ```text
 running
 → final_spin
-  Reason: Probable terminal spin sequence confirmed
+  Reason: Terminal spin sequence / terminal phase confirmed
 
 final_spin
 → final_spin
-  Evidence: Further spin / drain / pump / positioning / signalling activity
+  Evidence: Further spin, overlapping spin-and-drain, drain-only, positioning, or signalling activity
   Action: Refresh last activity and reset or cancel finish confirmation
 
 final_spin
@@ -957,12 +957,12 @@ final_spin
   Reason: No meaningful activity for final-spin finish timeout
 ```
 
-### 20.4 False terminal-spin classification
+### 20.4 False terminal-spin-sequence classification
 
 ```text
 running
 → final_spin
-  Reason: Probable terminal spin sequence confirmed
+  Reason: Terminal spin sequence / terminal phase confirmed
 
 final_spin
 → final_spin
