@@ -180,7 +180,7 @@ Inputs:
 
 * last meaningful activity;
 * spin detection;
-* configurable timeoutж
+* configurable timeout
 * source availability.
 
 When a current sensor is configured and available, either power activity or current activity counts as meaningful activity and resets or cancels finish confirmation.
