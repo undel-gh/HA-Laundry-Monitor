@@ -685,6 +685,7 @@ Laundry Monitor is not:
 ## 17. Open Questions
 - Should confidence be a percentage or diagnostic enum?
 - Should final spin / terminal-sequence detection be enabled by default?
-- What evidence and timing should be required for `cycle_continuation_confirmed` after `final_spin`?- What default current activity threshold is reliable across smart plugs and washing machines?
+- What evidence and timing should be required for `cycle_continuation_confirmed` after `final_spin`?
+- What default current activity threshold is reliable across smart plugs and washing machines?
 - Should current ever corroborate cycle-start confirmation, or remain finish/spin evidence only?
 - Should load-type or phase classification remain diagnostic-only in the stable public API?
