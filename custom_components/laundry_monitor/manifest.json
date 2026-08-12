@@ -2,7 +2,7 @@
   "domain": "laundry_monitor",
   "name": "Laundry Monitor",
   "codeowners": [
-    "@undel-gh"
+    "@undel-gh", "@codex", "@claude"
   ],
   "config_flow": true,
   "documentation": "https://github.com/undel-gh/HA-Laundry-Monitor",
