@@ -232,6 +232,48 @@ The terminal phase shall permit draining and other meaningful electrical activit
 
 ---
 
+## FR-038
+
+A compatible hybrid spin detector may use a sustained electrical spin signature as corroborating evidence for terminal-spin-sequence detection.
+
+---
+
+## FR-039
+
+Electrical spin corroboration shall be based on observations over time, such as a rolling statistic or sustained-duration condition. A single instantaneous power or current sample shall not be sufficient to establish the electrical spin candidate.
+
+---
+
+## FR-040
+
+Electrical evidence alone shall not confirm `final_spin`. A final-spin decision shall continue to require meaningful mechanical spin evidence from the active detector algorithm.
+
+---
+
+## FR-041
+
+A hybrid detector may require less vibration evidence than the vibration-only detector only when the sustained electrical spin candidate and all applicable cycle-age and timing gates are simultaneously satisfied.
+
+---
+
+## FR-042
+
+Power shall be the primary electrical input for hybrid spin corroboration. Optional current measurements may strengthen the electrical candidate, but power and current originating from the same measurement device shall not be treated as fully independent evidence channels.
+
+---
+
+## FR-043
+
+Electrical-spin thresholds, rolling-window lengths, and sustained-duration gates shall be configurable or implementation-specific until validated across multiple washing machines, programs, and loads. Machine-specific field values shall not become universal defaults without broader validation.
+
+---
+
+## FR-044
+
+When hybrid spin detection is implemented, diagnostics shall identify whether final-spin confirmation used vibration-only evidence or hybrid vibration-plus-electrical evidence and should expose the relevant supporting electrical statistics.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
