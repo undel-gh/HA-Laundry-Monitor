@@ -326,11 +326,31 @@ Ordinary meaningful activity after `final_spin` does not cause re-entry to `runn
 
 #### Meaning
 
-The Spin Detector has identified a vibration and activity pattern that probably represents the **terminal spin sequence**, which marks entry into the broader **terminal phase**. Optional current evidence may strengthen this conclusion but cannot replace the required spin evidence defined by the active detector algorithm.
+The Spin Detector has identified evidence that probably represents the terminal spin sequence, which marks entry into the broader **terminal phase**. The active detector algorithm may be vibration-only or, in a future compatible implementation, hybrid vibration-plus-electrical. Electrical evidence may strengthen the conclusion but cannot replace meaningful mechanical spin evidence.
 
 The terminal spin sequence is not assumed to be one uninterrupted mechanical spin. Depending on program, load size, load distribution, and machine behavior, it may contain several spin stages separated by short pauses and may vary substantially in duration. The drain pump may start before the drum has fully stopped, so spinning and draining may overlap. Draining may then continue after drum rotation has ended.
 
 The public state is therefore a **terminal spin sequence / terminal phase** marker. It does not assert that the drum is currently spinning and does not assert that the cycle has already finished.
+
+#### Detector evidence
+
+The State Machine does not depend on the internal implementation of the Spin Detector. It consumes a confirmed terminal-spin result together with its evidence and diagnostic confidence.
+
+The current vibration-only path requires the configured vibration evidence and cycle-age gates.
+
+A future compatible hybrid path may combine:
+
+* reduced but still meaningful vibration evidence;
+* a sustained electrical spin candidate derived primarily from power;
+* optional current corroboration;
+* minimum cycle age and other timing gates.
+
+The hybrid path must not treat a single power/current spike as sufficient evidence and must not confirm `final_spin` from electrical measurements alone.
+
+If power and current are supplied by the same smart plug or measurement device, they are correlated measurements of one electrical load and must not be interpreted as two independent votes.
+
+The confirmation path and supporting evidence should be retained for diagnostics. Introducing a hybrid detector must not add or rename any public cycle state.
+
  
 #### Entry actions
 
@@ -358,7 +378,7 @@ While such activity is present, the state remains `final_spin`, `last_activity` 
 
 A return to `running` is permitted only when a dedicated detector produces `cycle_continuation_confirmed`. This decision must require stronger evidence than a single activity edge and should represent a real continuation of ordinary program execution after a spin that was incorrectly classified as terminal.
 
-The exact continuation-confirmation algorithm is -specific until sufficient field data exists.
+The exact continuation-confirmation algorithm is implementation-specific until sufficient field data exists.
 
 #### Valid exits
 
@@ -778,6 +798,7 @@ The implementation must preserve the following invariants:
 13. Restoring state after restart must not create duplicate lifecycle events.
 14. The `finished` state must not assert that laundry has been removed.
 15. Public state values must not be localized.
+16. Electrical evidence alone must not confirm `final_spin`.
 
 ## 18. Edge Cases
 
