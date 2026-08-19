@@ -17,7 +17,7 @@ Home Assistant custom integration that infers washing-machine cycle state from e
 | Normative functional requirements | `docs/en/REQUIREMENTS.md` | — | — |
 | States, transitions, timers, recovery, edge cases | `docs/en/STATE_MACHINE.md` | `runtime.py`, `state_machine.py`, `storage.py` | `test_state_machine.py`, `test_state_machine_runtime.py`, `test_storage.py` |
 | Power/current meaningful activity and cycle start | `SPECIFICATION.md §7.1`, `STATE_MACHINE.md §5.1/§9` | `activity.py`, `runtime.py` | `test_activity.py`, `test_activity_runtime.py` |
-| Terminal spin sequence / terminal phase | `SPECIFICATION.md §7.2`, `STATE_MACHINE.md §8.4` | `spin.py`, `runtime.py` | `test_spin.py`, `test_spin_runtime.py` |
+| Terminal spin sequence / terminal phase / planned hybrid spin detection | `SPECIFICATION.md §7.2`, `STATE_MACHINE.md §8.4` | `spin.py`, `runtime.py` | `test_spin.py`, `test_spin_runtime.py` |
 | Cycle finish / quiet timers / fallback finish | `SPECIFICATION.md §7.3`, `STATE_MACHINE.md §10/§14` | `finish.py`, `runtime.py` | `test_finish.py`, `test_finish_runtime.py` |
 | Door arming / unload behavior | `STATE_MACHINE.md §8/§10` | `runtime.py`, `button.py` | `test_state_machine_runtime.py`, `test_entities.py` |
 | Persisted state / restart recovery | `STATE_MACHINE.md §13` | `storage.py`, `runtime.py` | `test_storage.py`, `test_state_machine_runtime.py` |
@@ -43,7 +43,7 @@ Canonical product specification. Defines scope/non-goals, inputs, public state m
 Component boundaries and data flow: source normalization → Activity Detector / Spin Detector / Finish Detector → State Machine, with Laundry Tracking, Leak Detector, statistics, diagnostics, and HA entities separated. Start here when deciding **which component should own new logic**.
 
 ### `docs/en/REQUIREMENTS.md`
-Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase rules are currently FR-029 through FR-037.
+Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase rules are currently FR-029 through FR-044.
 
 ### `docs/en/STATE_MACHINE.md`
 Most detailed behavioral document. Defines public/internal states, allowed transitions, detector inputs, state entry/exit semantics, timers, source failures, restart recovery, invariants, edge cases, examples, and test expectations. Start here for any state-transition question.
@@ -68,7 +68,7 @@ UI configuration, reconfiguration, and options flow. Validates selected source e
 Activity Detector. Normalizes/evaluates power and optional current activity, cycle-start candidate state, source-specific activity state/timestamps, combined meaningful activity, and activity edges.
 
 ### `spin.py`
-Spin Detector. Maintains vibration-event evidence/windowing, cycle-age gate, activity recency and confidence used to detect the probable terminal spin sequence.
+Spin Detector. Current implementation maintains vibration-event evidence/windowing, cycle-age gate, activity recency and confidence used to detect the probable terminal spin sequence. Planned hybrid vibration + sustained electrical evidence.
 
 ### `finish.py`
 Finish Detector. Evaluates sustained absence of meaningful activity and exposes quiet-period/deadline/confirmation information. Runtime uses separate confirmation durations for final-spin and running fallback paths.
@@ -129,7 +129,7 @@ Unit tests for Activity Detector semantics: thresholds, power/current combinatio
 ### `test_activity_runtime.py`
 Runtime integration tests around source updates and activity/start behavior.
 
-### `test_spin.py`
+### `test_`
 Unit tests for Spin Detector evidence accumulation, rolling window, cycle-age/activity gates, and detection confidence.
 
 ### `test_spin_runtime.py`
