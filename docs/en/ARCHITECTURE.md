@@ -187,7 +187,7 @@ The detector must not assume that the terminal spin sequence has a fixed duratio
 
 A confirmed terminal-spin-sequence result is a terminal-phase marker. Subsequent meaningful activity is expected during overlapping spin-and-drain operation, drain-only operation after drum stop, drum positioning, additional terminal spinning, electronics activity, or end-of-program signalling and must not automatically invalidate the result.
 
-+The detector should expose evidence, the confirmation path used, and a confidence level to the State Machine. When hybrid detection is implemented, diagnostics should distinguish vibration-only confirmation from hybrid vibration-plus-electrical confirmation.
+The detector should expose evidence, the confirmation path used, and a confidence level to the State Machine. When hybrid detection is implemented, diagnostics should distinguish vibration-only confirmation from hybrid vibration-plus-electrical confirmation.
 
 ---
 
