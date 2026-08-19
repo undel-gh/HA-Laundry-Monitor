@@ -375,10 +375,43 @@ A possible detector implementation may use:
 - vibration-event frequency and timing;
 - cycle age;
 - recent meaningful electrical activity;
-- optional current activity as supporting evidence that a motor or pump is operating;
+- sustained power characteristics that are consistent with high-speed motor operation;
+- optional current characteristics as corroborating electrical evidence;
 - other implementation-specific evidence that improves discrimination between ordinary intermediate spins and the terminal sequence.
 
 Current activity is supporting evidence only. It must not independently produce a final-spin transition.
+
+
+#### Planned hybrid electrical corroboration
+
+The current event-based detector remains vibration-driven. A future compatible detector may additionally derive an internal **electrical spin candidate** from sustained power behavior and, when available, current behavior.
+
+The electrical candidate is intended to corroborate mechanical evidence, not replace it. A compatible hybrid detector may therefore support two confirmation paths:
+
+```text
+vibration-only path:
+    configured vibration evidence
+    + minimum cycle age
+    -> final_spin
+
+hybrid path:
+    reduced but still meaningful vibration evidence
+    + sustained electrical spin signature
+    + minimum cycle age
+    -> final_spin
+```
+
+For example, a future hybrid detector may accept two vibration events instead of the current default requirement of three only when a sustained electrical spin signature is simultaneously confirmed. This is a design direction, not a current default.
+
+Electrical spin evidence must be based on behavior over time, such as a rolling median, sustained-duration gate, or equivalent windowed statistic. A single power or current spike must not be sufficient.
+
+Power is the primary electrical input. Current, when configured, may corroborate the electrical candidate but should not be treated as a fully independent vote when power and current originate from the same smart plug or measurement device.
+
+No universal high-speed-spin power or current threshold is defined by this specification. Motor design, program, load, supply voltage, and measurement hardware can substantially change the observed values. Any thresholds and observation windows introduced by a hybrid detector must therefore be configurable and field-validated before becoming recommended defaults.
+
+Electrical evidence alone must never confirm `final_spin`. If vibration evidence is unavailable or insufficient and no compatible hybrid rule is satisfied, the integration must remain in `running` and retain the conservative running-state finish fallback.
+
+Experimental diagnostics for this work may include internal values such as `spin_electrical_candidate`, `spin_power_rolling_median`, `spin_current_rolling_median`, and `spin_electrical_candidate_since`. These names are diagnostic implementation details and are not part of the stable public API until explicitly promoted.
 
 After `final_spin` has been confirmed, ordinary meaningful electrical activity or further vibration does not by itself invalidate that state. Such observations are expected during the terminal sequence and must keep the state at `final_spin` while refreshing activity timestamps and resetting or cancelling finish confirmation.
 
