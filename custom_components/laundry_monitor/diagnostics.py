@@ -245,6 +245,45 @@ async def _async_build_diagnostics(
                 "evidence_count": (
                     runtime.final_spin_evidence_count
                 ),
+                "confirmation_path": runtime.final_spin_confirmation_path,
+                "hybrid": {
+                    "enabled": runtime.hybrid_spin_enabled,
+                    "required_events": runtime.hybrid_spin_required_events,
+                },
+                "electrical_candidate": {
+                    "experimental": True,
+                    "candidate": runtime.spin_electrical_candidate,
+                    "candidate_since": _serialize_datetime(
+                        runtime.spin_electrical_candidate_since
+                    ),
+                    "window_seconds": (
+                        runtime.electrical_spin_detector.window_seconds
+                    ),
+                    "min_coverage_seconds": (
+                        runtime.electrical_spin_detector.min_coverage_seconds
+                    ),
+                    "power_threshold_w": (
+                        runtime.electrical_spin_detector.power_threshold_w
+                    ),
+                    "current_threshold_a": (
+                        runtime.electrical_spin_detector.current_threshold_a
+                    ),
+                    "power_rolling_median": (
+                        runtime.spin_power_rolling_median
+                    ),
+                    "current_rolling_median": (
+                        runtime.spin_current_rolling_median
+                    ),
+                    "current_corroborated": (
+                        runtime.electrical_spin_detector.current_corroborated
+                    ),
+                    "power_coverage_seconds": (
+                        runtime.electrical_spin_detector.power_coverage_seconds
+                    ),
+                    "current_coverage_seconds": (
+                        runtime.electrical_spin_detector.current_coverage_seconds
+                    ),
+                },
             },
             "finish": {
                 "confirmation_seconds": (
