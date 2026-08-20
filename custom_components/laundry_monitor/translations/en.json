@@ -103,6 +103,18 @@
       "final_spin_evidence_count": {
         "name": "Final spin evidence count"
       },
+      "final_spin_confirmation_path": {
+        "name": "Final spin confirmation path"
+      },
+      "spin_power_rolling_median": {
+        "name": "Spin power rolling median"
+      },
+      "spin_current_rolling_median": {
+        "name": "Spin current rolling median"
+      },
+      "spin_electrical_candidate_since": {
+        "name": "Electrical spin candidate since"
+      },
       "finish_quiet_since": {
         "name": "Finish inactivity since"
       },
@@ -153,6 +165,9 @@
       "current_activity_detected": {
         "name": "Current activity detected"
       },
+      "spin_electrical_candidate": {
+        "name": "Electrical spin candidate"
+      },
       "final_spin_detected": {
         "name": "Final spin detected"
       }
@@ -177,6 +192,12 @@
           "spin_window": "Vibration event window",
           "spin_min_cycle_time": "Minimum cycle time before final spin",
           "spin_activity_max_age": "Maximum age of supporting activity",
+          "electrical_spin_window": "Electrical spin rolling window",
+          "electrical_spin_min_coverage": "Minimum electrical coverage",
+          "electrical_spin_power_threshold": "Electrical spin power threshold",
+          "electrical_spin_current_threshold": "Electrical spin current threshold",
+          "hybrid_spin_enabled": "Enable hybrid spin confirmation",
+          "hybrid_spin_required_events": "Hybrid required vibration events",
           "finish_confirmation": "Final-spin finish confirmation",
           "running_finish_confirmation": "Running-state finish confirmation",
           "arming_timeout": "Arming timeout",
@@ -193,6 +214,12 @@
           "spin_window": "Rolling period in which the required vibration events must occur.",
           "spin_min_cycle_time": "Minimum elapsed cycle time before final-spin evidence can be accepted.",
           "spin_activity_max_age": "Maximum age of the last meaningful electrical activity that can support final-spin detection.",
+          "electrical_spin_window": "Rolling window used for the experimental time-weighted electrical signature.",
+          "electrical_spin_min_coverage": "Minimum observed time inside the electrical window before a candidate can become active.",
+          "electrical_spin_power_threshold": "Optional machine-specific rolling-median power threshold. Leave unset to disable electrical candidate confirmation; no universal default is assumed.",
+          "electrical_spin_current_threshold": "Optional machine-specific rolling-median current threshold used only as corroborating diagnostics. Current never creates the candidate by itself.",
+          "hybrid_spin_enabled": "Allow reduced vibration evidence to confirm final spin only while the sustained electrical candidate is active. Disabled by default.",
+          "hybrid_spin_required_events": "Reduced vibration-event requirement for the hybrid path. It must be lower than the normal vibration-only requirement.",
           "finish_confirmation": "How long electrical activity and vibration must remain absent after a detected final spin before the cycle is considered finished.",
           "running_finish_confirmation": "How long meaningful electrical activity must remain absent before a cycle is considered finished when no final spin was detected.",
           "arming_timeout": "How long the integration may remain armed after the door is closed before returning to idle if the cycle does not start.",
@@ -203,7 +230,11 @@
       }
     },
     "error": {
-      "activity_threshold_above_start": "The activity threshold must not be higher than the start threshold."
+      "activity_threshold_above_start": "The activity threshold must not be higher than the start threshold.",
+      "electrical_spin_coverage_above_window": "Minimum electrical coverage must not exceed the electrical rolling window.",
+      "hybrid_spin_requires_vibration_sensor": "Hybrid spin confirmation requires a configured vibration sensor.",
+      "hybrid_spin_requires_power_threshold": "Hybrid spin confirmation requires a machine-specific electrical spin power threshold.",
+      "hybrid_spin_events_not_reduced": "Hybrid vibration events must be fewer than the normal vibration-only requirement."
     }
   },
   "issues": {
