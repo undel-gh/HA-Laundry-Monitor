@@ -38,9 +38,15 @@ from .const import (
     CONF_CURRENT_ACTIVITY_THRESHOLD,
     CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
+    CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD,
+    CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
+    CONF_ELECTRICAL_SPIN_WINDOW,
     CONF_ENERGY_SENSOR,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
+    CONF_HYBRID_SPIN_ENABLED,
+    CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_LEAK_SENSOR,
     CONF_POWER_SENSOR,
     CONF_POWER_UNAVAILABLE_GRACE,
@@ -57,8 +63,12 @@ from .const import (
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
     DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+    DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+    DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_HYBRID_SPIN_ENABLED,
+    DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
     DEFAULT_RUNNING_FINISH_CONFIRMATION,
     DEFAULT_SNAPSHOT_MAX_AGE,
@@ -94,7 +104,7 @@ from .const import (
     SIGNAL_RUNTIME_UPDATED,
 )
 from .finish import FinishDetector, FinishEvaluation
-from .spin import SpinDetector
+from .spin import ElectricalSpinCandidateDetector, SpinDetector
 from .state_machine import LaundryStateMachine, TransitionStatus
 from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
 
@@ -143,6 +153,7 @@ class LaundryMonitorRuntime:
 
     final_spin_confidence: float = 0.0
     final_spin_evidence_count: int = 0
+    final_spin_confirmation_path: str | None = None
     finish_quiet_since: datetime | None = None
     finish_deadline: datetime | None = None
     finish_remaining_seconds: float | None = None
@@ -153,6 +164,7 @@ class LaundryMonitorRuntime:
 
     activity_detector: ActivityDetector = field(init=False)
     spin_detector: SpinDetector = field(init=False)
+    electrical_spin_detector: ElectricalSpinCandidateDetector = field(init=False)
     finish_detector: FinishDetector = field(init=False)
     running_finish_detector: FinishDetector = field(init=False)
 
@@ -238,6 +250,31 @@ class LaundryMonitorRuntime:
                 )
             ),
         )
+        self.electrical_spin_detector = ElectricalSpinCandidateDetector(
+            window_seconds=int(
+                self.entry.options.get(
+                    CONF_ELECTRICAL_SPIN_WINDOW,
+                    DEFAULT_ELECTRICAL_SPIN_WINDOW,
+                )
+            ),
+            min_coverage_seconds=int(
+                self.entry.options.get(
+                    CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+                    DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+                )
+            ),
+            power_threshold_w=(
+                float(self.entry.options[CONF_ELECTRICAL_SPIN_POWER_THRESHOLD])
+                if CONF_ELECTRICAL_SPIN_POWER_THRESHOLD in self.entry.options
+                else None
+            ),
+            current_threshold_a=(
+                float(self.entry.options[CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD])
+                if self.entry.data.get(CONF_CURRENT_SENSOR)
+                and CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD in self.entry.options
+                else None
+            ),
+        )
         self.finish_detector = FinishDetector(
             confirmation_seconds=int(
                 self.entry.options.get(
@@ -245,7 +282,7 @@ class LaundryMonitorRuntime:
                     DEFAULT_FINISH_CONFIRMATION,
                 )
             )
-        )
+        )        
         self.running_finish_detector = FinishDetector(
             confirmation_seconds=int(
                 self.entry.options.get(
@@ -344,6 +381,46 @@ class LaundryMonitorRuntime:
     def last_current_activity(self) -> datetime | None:
         """Return the last current-source activity timestamp."""
         return self.activity_detector.last_current_activity
+
+    @property
+    def hybrid_spin_enabled(self) -> bool:
+        """Return whether hybrid vibration/electrical confirmation is enabled."""
+        return bool(
+            self.entry.options.get(
+                CONF_HYBRID_SPIN_ENABLED,
+                DEFAULT_HYBRID_SPIN_ENABLED,
+            )
+        )
+
+    @property
+    def hybrid_spin_required_events(self) -> int:
+        """Return the reduced vibration requirement for the hybrid path."""
+        return int(
+            self.entry.options.get(
+                CONF_HYBRID_SPIN_REQUIRED_EVENTS,
+                DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
+            )
+        )
+
+    @property
+    def spin_electrical_candidate(self) -> bool:
+        """Return the experimental electrical-spin candidate state."""
+        return self.electrical_spin_detector.candidate
+
+    @property
+    def spin_power_rolling_median(self) -> float | None:
+        """Return the diagnostic rolling power median."""
+        return self.electrical_spin_detector.power_rolling_median
+
+    @property
+    def spin_current_rolling_median(self) -> float | None:
+        """Return the optional diagnostic rolling current median."""
+        return self.electrical_spin_detector.current_rolling_median
+
+    @property
+    def spin_electrical_candidate_since(self) -> datetime | None:
+        """Return when the current electrical candidate started."""
+        return self.electrical_spin_detector.candidate_since
 
     @property
     def current_cycle_duration(self) -> float | None:
@@ -551,6 +628,11 @@ class LaundryMonitorRuntime:
         )
 
         self.spin_detector.reset(vibration_active=self.vibration_active)
+        self.electrical_spin_detector.reset(
+            now=dt_util.utcnow(),
+            power=self.power,
+            current=self.current,
+        )
         self.final_spin_confidence = 0.0
         self.final_spin_evidence_count = 0
         self._reset_finish_detection()
@@ -593,6 +675,7 @@ class LaundryMonitorRuntime:
 
         if self.cycle_state in _FINISH_EVALUATION_STATES:
             self._start_cycle_statistics_updates()
+            self._evaluate_electrical_spin_candidate()
             self._evaluate_finish()
 
     @callback
@@ -610,6 +693,11 @@ class LaundryMonitorRuntime:
             ),
         )
         self.spin_detector.reset(vibration_active=self.vibration_active)
+        self.electrical_spin_detector.reset(
+            now=dt_util.utcnow(),
+            power=self.power,
+            current=self.current,
+        )
 
     @callback
     def _async_source_state_changed(
@@ -652,6 +740,10 @@ class LaundryMonitorRuntime:
             self._handle_door_update(old_door_open)
 
         if entity_id in (power_entity, current_entity, vibration_entity):
+            self._evaluate_electrical_spin_candidate(
+                power_updated=entity_id == power_entity,
+                current_updated=entity_id == current_entity,
+            )
             self._evaluate_spin()
             self._evaluate_finish()
 
@@ -1210,7 +1302,13 @@ class LaundryMonitorRuntime:
                 self._initialize_cycle_statistics()
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
+            self.final_spin_confirmation_path = None
             self.spin_detector.reset(vibration_active=self.vibration_active)
+            self.electrical_spin_detector.reset(
+                now=dt_util.utcnow(),
+                power=self.power,
+                current=self.current,
+            )
             self._reset_finish_detection()
             self._start_cycle_statistics_updates()
             return
@@ -1232,7 +1330,9 @@ class LaundryMonitorRuntime:
             self.cycle_energy_unit = None
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
+            self.final_spin_confirmation_path = None
             self.spin_detector.reset(vibration_active=self.vibration_active)
+            self.electrical_spin_detector.reset()
             self._reset_finish_detection()
             if not self.tracking_enabled:
                 self.laundry_present = False
@@ -1244,6 +1344,7 @@ class LaundryMonitorRuntime:
             self._cancel_pending_start_confirmation()
             self._finalize_cycle_statistics()
             self._cancel_cycle_statistics_updates()
+            self.electrical_spin_detector.reset()
             self._reset_finish_detection()
             self._schedule_finished_retention()
             return
@@ -1255,6 +1356,7 @@ class LaundryMonitorRuntime:
             self._cancel_pending_finished_retention()
             self._reset_finish_detection()
             self.spin_detector.reset(vibration_active=self.vibration_active)
+            self.electrical_spin_detector.reset()
 
     @callback
     def _initialize_cycle_statistics(self) -> None:
@@ -1331,8 +1433,9 @@ class LaundryMonitorRuntime:
 
     @callback
     def _async_cycle_statistics_tick(self, _now: datetime) -> None:
-        """Publish an updated live cycle duration."""
+        """Publish live duration and refresh electrical-spin diagnostics."""
         if self.cycle_state in _FINISH_EVALUATION_STATES:
+            self._evaluate_electrical_spin_candidate(now=_now)
             self._notify_entities()
 
     @callback
@@ -1386,6 +1489,41 @@ class LaundryMonitorRuntime:
         async_dispatcher_send(self.hass, self.signal)
 
     @callback
+    def _evaluate_electrical_spin_candidate(
+        self,
+        *,
+        power_updated: bool = False,
+        current_updated: bool = False,
+        now: datetime | None = None,
+    ) -> None:
+        """Refresh electrical-spin evidence without changing cycle state."""
+        if self.cycle_state not in _FINISH_EVALUATION_STATES:
+            return
+
+        evaluation = self.electrical_spin_detector.evaluate(
+            power=self.power,
+            current=self.current,
+            power_updated=power_updated,
+            current_updated=current_updated,
+            now=now or dt_util.utcnow(),
+        )
+        _LOGGER.debug(
+            "Electrical spin evidence for entry %s (%s): "
+            "candidate=%s, candidate_since=%s, power_median=%s W, "
+            "current_median=%s A, current_corroborated=%s, "
+            "power_coverage=%.1fs, current_coverage=%.1fs",
+            self.entry.entry_id,
+            self.name,
+            evaluation.candidate,
+            evaluation.candidate_since,
+            evaluation.power_rolling_median,
+            evaluation.current_rolling_median,
+            evaluation.current_corroborated,
+            evaluation.power_coverage_seconds,
+            evaluation.current_coverage_seconds,
+        )
+
+    @callback
     def _evaluate_spin(self) -> None:
         """Evaluate final-spin evidence when vibration is configured."""
         if self.cycle_state is not LaundryCycleState.RUNNING:
@@ -1429,12 +1567,26 @@ class LaundryMonitorRuntime:
                 self.current_activity_detected,
                 self.vibration_active,
             )
-
+            
+        confirmation_path: str | None = None
         if evaluation.detected:
+            confirmation_path = "vibration_only"
+        elif (
+            self.hybrid_spin_enabled
+            and self.spin_electrical_candidate
+            and evaluation.activity_recent
+            and evaluation.cycle_mature
+            and evaluation.evidence_count >= self.hybrid_spin_required_events
+        ):
+            confirmation_path = "hybrid"
+
+        if confirmation_path is not None:
+            self.final_spin_confirmation_path = confirmation_path
             if not self.async_set_cycle_state(
                 LaundryCycleState.FINAL_SPIN,
                 REASON_FINAL_SPIN_CONFIRMED,
             ):
+                self.final_spin_confirmation_path = None
                 return
             self.hass.bus.async_fire(
                 EVENT_FINAL_SPIN_DETECTED,
@@ -1444,6 +1596,10 @@ class LaundryMonitorRuntime:
                     "confidence": evaluation.confidence,
                     "evidence_count": evaluation.evidence_count,
                     "window_seconds": self.spin_detector.window_seconds,
+                    "confirmation_path": confirmation_path,
+                    "electrical_candidate": self.spin_electrical_candidate,
+                    "power_rolling_median": self.spin_power_rolling_median,
+                    "current_rolling_median": self.spin_current_rolling_median,
                     "timestamp": dt_util.utcnow().isoformat(),
                 },
             )
