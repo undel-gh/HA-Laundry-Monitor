@@ -11,6 +11,9 @@ from custom_components.laundry_monitor.const import (
     CONF_CURRENT_ACTIVITY_THRESHOLD,
     CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
+    CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
+    CONF_HYBRID_SPIN_ENABLED,
+    CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_POWER_SENSOR,
     CONF_SPIN_MIN_CYCLE_TIME,
     CONF_SPIN_REQUIRED_EVENTS,
@@ -28,6 +31,8 @@ async def _setup_entry(
     *,
     start_running: bool = True,
     with_current: bool = False,
+    hybrid_enabled: bool = False,
+    electrical_power_threshold: float | None = None,
 ) -> MockConfigEntry:
     """Set up a Spin Detector test entry."""
     hass.states.async_set(
@@ -64,6 +69,13 @@ async def _setup_entry(
             CONF_SPIN_REQUIRED_EVENTS: 3,
             CONF_SPIN_WINDOW: 180,
             CONF_SPIN_MIN_CYCLE_TIME: 0,
+            CONF_HYBRID_SPIN_ENABLED: hybrid_enabled,
+            CONF_HYBRID_SPIN_REQUIRED_EVENTS: 2,
+            **(
+                {CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: electrical_power_threshold}
+                if electrical_power_threshold is not None
+                else {}
+            ),
             **(
                 {CONF_CURRENT_ACTIVITY_THRESHOLD: 0.1}
                 if with_current
@@ -122,6 +134,7 @@ async def test_repeated_vibration_transitions_to_final_spin(
     assert runtime.last_transition_reason == REASON_FINAL_SPIN_CONFIRMED
     assert runtime.final_spin_evidence_count == 3
     assert runtime.final_spin_confidence == 1.0
+    assert runtime.final_spin_confirmation_path == "vibration_only"
 
 
 async def test_vibration_is_ignored_outside_running(
@@ -190,3 +203,80 @@ async def test_current_cannot_replace_unavailable_power_for_spin(
     assert runtime.final_spin_evidence_count == 0
     assert runtime.final_spin_confidence == 0.0
 
+
+async def test_hybrid_path_is_disabled_by_default(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Two vibration events plus electrical evidence do nothing by default."""
+    entry = await _setup_entry(
+        hass,
+        electrical_power_threshold=100.0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    runtime.electrical_spin_detector.reset(
+        now=now - timedelta(seconds=30),
+        power=150.0,
+    )
+    hass.states.async_set("sensor.washing_machine_power", "150")
+    await hass.async_block_till_done()
+
+    assert runtime.spin_electrical_candidate is True
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.final_spin_evidence_count == 2
+    assert runtime.final_spin_confirmation_path is None
+
+
+async def test_hybrid_path_confirms_after_two_vibration_events(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Two vibration events can confirm spin with sustained electrical evidence."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    runtime.electrical_spin_detector.reset(
+        now=now - timedelta(seconds=30),
+        power=150.0,
+    )
+    hass.states.async_set("sensor.washing_machine_power", "150")
+    await hass.async_block_till_done()
+
+    assert runtime.spin_electrical_candidate is True
+    await _vibration_pulse(hass)
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
+    assert runtime.final_spin_evidence_count == 2
+    assert runtime.final_spin_confirmation_path == "hybrid"
+    assert runtime.final_spin_confidence < 1.0
+
+
+async def test_hybrid_path_requires_electrical_candidate(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Reduced vibration evidence cannot confirm spin without electricity."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+    )
+    runtime = entry.runtime_data
+
+    assert runtime.spin_electrical_candidate is False
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.final_spin_evidence_count == 2
+    assert runtime.final_spin_confirmation_path is None
