@@ -42,9 +42,15 @@ from .const import (
     CONF_CURRENT_ACTIVITY_THRESHOLD,
     CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
+    CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD,
+    CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
+    CONF_ELECTRICAL_SPIN_WINDOW,
     CONF_ENERGY_SENSOR,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
+    CONF_HYBRID_SPIN_ENABLED,
+    CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_LEAK_SENSOR,
     CONF_PLUG_SWITCH,
     CONF_POWER_SENSOR,
@@ -62,8 +68,12 @@ from .const import (
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
     DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+    DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+    DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_HYBRID_SPIN_ENABLED,
+    DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
     DEFAULT_RUNNING_FINISH_CONFIRMATION,
     DEFAULT_SNAPSHOT_MAX_AGE,
@@ -84,6 +94,9 @@ _INTEGER_OPTION_KEYS = (
     CONF_SPIN_WINDOW,
     CONF_SPIN_MIN_CYCLE_TIME,
     CONF_SPIN_ACTIVITY_MAX_AGE,
+    CONF_ELECTRICAL_SPIN_WINDOW,
+    CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_FINISH_CONFIRMATION,
     CONF_RUNNING_FINISH_CONFIRMATION,
     CONF_ARMING_TIMEOUT,
@@ -335,6 +348,78 @@ def _options_schema(
                 unit=UnitOfTime.SECONDS,
             ),
             vol.Required(
+                CONF_ELECTRICAL_SPIN_WINDOW,
+                default=defaults.get(
+                    CONF_ELECTRICAL_SPIN_WINDOW,
+                    DEFAULT_ELECTRICAL_SPIN_WINDOW,
+                ),
+            ): _number_selector(
+                minimum=5,
+                maximum=600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+                default=defaults.get(
+                    CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+                    DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Optional(
+                CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
+                description=_suggested_value(
+                    defaults.get(CONF_ELECTRICAL_SPIN_POWER_THRESHOLD)
+                ),
+            ): _number_selector(
+                minimum=0.1,
+                maximum=10000,
+                step=0.1,
+                unit=UnitOfPower.WATT,
+            ),
+            **(
+                {
+                    vol.Optional(
+                        CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD,
+                        description=_suggested_value(
+                            defaults.get(
+                                CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD
+                            )
+                        ),
+                    ): _number_selector(
+                        minimum=0.01,
+                        maximum=100,
+                        step=0.01,
+                        unit=UnitOfElectricCurrent.AMPERE,
+                    )
+                }
+                if current_sensor_configured
+                else {}
+            ),
+            vol.Required(
+                CONF_HYBRID_SPIN_ENABLED,
+                default=defaults.get(
+                    CONF_HYBRID_SPIN_ENABLED,
+                    DEFAULT_HYBRID_SPIN_ENABLED,
+                ),
+            ): BooleanSelector(),
+            vol.Required(
+                CONF_HYBRID_SPIN_REQUIRED_EVENTS,
+                default=defaults.get(
+                    CONF_HYBRID_SPIN_REQUIRED_EVENTS,
+                    DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=20,
+                step=1,
+            ),
+            vol.Required(
                 CONF_FINISH_CONFIRMATION,
                 default=defaults.get(
                     CONF_FINISH_CONFIRMATION,
@@ -412,9 +497,9 @@ def _options_schema(
 
 def _normalize_options(
     user_input: Mapping[str, Any],
-) -> dict[str, int | float]:
+) -> dict[str, bool | int | float]:
     """Normalize selector values before storing them."""
-    normalized: dict[str, int | float] = {
+    normalized: dict[str, bool | int | float] = {
         CONF_ACTIVITY_THRESHOLD: float(
             user_input[CONF_ACTIVITY_THRESHOLD]
         ),
@@ -427,7 +512,19 @@ def _normalize_options(
         normalized[CONF_CURRENT_ACTIVITY_THRESHOLD] = float(
             user_input[CONF_CURRENT_ACTIVITY_THRESHOLD]
         )
+    if CONF_ELECTRICAL_SPIN_POWER_THRESHOLD in user_input:
+        normalized[CONF_ELECTRICAL_SPIN_POWER_THRESHOLD] = float(
+            user_input[CONF_ELECTRICAL_SPIN_POWER_THRESHOLD]
+        )
+    if CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD in user_input:
+        normalized[CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD] = float(
+            user_input[CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD]
+        )
 
+    normalized[CONF_HYBRID_SPIN_ENABLED] = bool(
+        user_input[CONF_HYBRID_SPIN_ENABLED]
+    )
+    
     normalized.update(
         {
             key: int(user_input[key])
@@ -539,6 +636,36 @@ class LaundryMonitorOptionsFlow(OptionsFlowWithReload):
                 errors[
                     CONF_ACTIVITY_THRESHOLD
                 ] = "activity_threshold_above_start"
+            elif (
+                normalized[CONF_ELECTRICAL_SPIN_MIN_COVERAGE]
+                > normalized[CONF_ELECTRICAL_SPIN_WINDOW]
+            ):
+                errors[
+                    CONF_ELECTRICAL_SPIN_MIN_COVERAGE
+                ] = "electrical_spin_coverage_above_window"
+            elif (
+                normalized[CONF_HYBRID_SPIN_ENABLED]
+                and not self.config_entry.data.get(CONF_VIBRATION_SENSOR)
+            ):
+                errors[CONF_HYBRID_SPIN_ENABLED] = (
+                    "hybrid_spin_requires_vibration_sensor"
+                )
+            elif (
+                normalized[CONF_HYBRID_SPIN_ENABLED]
+                and CONF_ELECTRICAL_SPIN_POWER_THRESHOLD
+                not in normalized
+            ):
+                errors[CONF_HYBRID_SPIN_ENABLED] = (
+                    "hybrid_spin_requires_power_threshold"
+                )
+            elif (
+                normalized[CONF_HYBRID_SPIN_ENABLED]
+                and normalized[CONF_HYBRID_SPIN_REQUIRED_EVENTS]
+                >= normalized[CONF_SPIN_REQUIRED_EVENTS]
+            ):
+                errors[CONF_HYBRID_SPIN_REQUIRED_EVENTS] = (
+                    "hybrid_spin_events_not_reduced"
+                )
             else:
                 return self.async_create_entry(
                     title="",
