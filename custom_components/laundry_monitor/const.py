@@ -27,6 +27,14 @@ CONF_SPIN_WINDOW: Final = "spin_window"
 CONF_SPIN_MIN_CYCLE_TIME: Final = "spin_min_cycle_time"
 CONF_SPIN_ACTIVITY_MAX_AGE: Final = "spin_activity_max_age"
 
+# Experimental electrical / hybrid spin option keys.
+CONF_ELECTRICAL_SPIN_WINDOW: Final = "electrical_spin_window"
+CONF_ELECTRICAL_SPIN_MIN_COVERAGE: Final = "electrical_spin_min_coverage"
+CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: Final = "electrical_spin_power_threshold"
+CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD: Final = "electrical_spin_current_threshold"
+CONF_HYBRID_SPIN_ENABLED: Final = "hybrid_spin_enabled"
+CONF_HYBRID_SPIN_REQUIRED_EVENTS: Final = "hybrid_spin_required_events"
+
 # Finish Detector and lifecycle option keys.
 CONF_FINISH_CONFIRMATION: Final = "finish_confirmation"
 CONF_RUNNING_FINISH_CONFIRMATION: Final = "running_finish_confirmation"
@@ -45,6 +53,10 @@ DEFAULT_SPIN_REQUIRED_EVENTS: Final = 3
 DEFAULT_SPIN_WINDOW: Final = 180
 DEFAULT_SPIN_MIN_CYCLE_TIME: Final = 600
 DEFAULT_SPIN_ACTIVITY_MAX_AGE: Final = 120
+DEFAULT_ELECTRICAL_SPIN_WINDOW: Final = 30
+DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE: Final = 20
+DEFAULT_HYBRID_SPIN_ENABLED: Final = False
+DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS: Final = 2
 DEFAULT_FINISH_CONFIRMATION: Final = 180
 DEFAULT_RUNNING_FINISH_CONFIRMATION: Final = 600
 DEFAULT_ARMING_TIMEOUT: Final = 1800
