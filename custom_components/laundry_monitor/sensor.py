@@ -117,6 +117,31 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         value_fn=lambda runtime: runtime.final_spin_evidence_count,
     ),
     LaundryMonitorSensorDescription(
+        key="final_spin_confirmation_path",
+        translation_key="final_spin_confirmation_path",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda runtime: runtime.final_spin_confirmation_path,
+    ),
+    LaundryMonitorSensorDescription(
+        key="spin_power_rolling_median",
+        translation_key="spin_power_rolling_median",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda runtime: runtime.spin_power_rolling_median,
+    ),
+    LaundryMonitorSensorDescription(
+        key="spin_electrical_candidate_since",
+        translation_key="spin_electrical_candidate_since",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda runtime: runtime.spin_electrical_candidate_since,
+    ),
+    LaundryMonitorSensorDescription(
         key="finish_quiet_since", translation_key="finish_quiet_since",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -166,6 +191,16 @@ CURRENT_SENSOR_DESCRIPTIONS: tuple[
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.last_current_activity,
+    ),
+    LaundryMonitorSensorDescription(
+        key="spin_current_rolling_median",
+        translation_key="spin_current_rolling_median",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda runtime: runtime.spin_current_rolling_median,
     ),
 )
 
