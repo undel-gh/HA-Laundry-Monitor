@@ -2,7 +2,10 @@
 
 from datetime import datetime, timedelta, timezone
 
-from custom_components.laundry_monitor.spin import SpinDetector
+from custom_components.laundry_monitor.spin import (
+    ElectricalSpinCandidateDetector,
+    SpinDetector,
+)
 
 
 def _pulse(
@@ -164,3 +167,107 @@ def test_minimum_cycle_time_is_required() -> None:
     assert result.detected is False
     assert result.cycle_mature is False
     assert result.confidence == 0.5
+
+
+def test_electrical_candidate_requires_configured_power_threshold() -> None:
+    """No universal power threshold means no electrical candidate."""
+    detector = ElectricalSpinCandidateDetector(
+        window_seconds=30,
+        min_coverage_seconds=20,
+    )
+    start = datetime(2026, 8, 19, 10, 0, tzinfo=timezone.utc)
+    detector.reset(now=start, power=150.0)
+
+    result = detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=start + timedelta(seconds=30),
+    )
+
+    assert result.power_rolling_median == 150.0
+    assert result.candidate is False
+
+
+def test_electrical_candidate_detects_sustained_configured_power() -> None:
+    """A configured sustained power signature becomes a candidate."""
+    detector = ElectricalSpinCandidateDetector(
+        window_seconds=30,
+        min_coverage_seconds=20,
+        power_threshold_w=100.0,
+    )
+    start = datetime(2026, 8, 19, 10, 0, tzinfo=timezone.utc)
+    detector.reset(now=start, power=150.0)
+
+    result = detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=start + timedelta(seconds=20),
+    )
+
+    assert result.candidate is True
+    assert result.candidate_since == start + timedelta(seconds=20)
+    assert result.power_rolling_median == 150.0
+
+
+def test_electrical_candidate_uses_time_weighted_median() -> None:
+    """Publication frequency cannot dominate the rolling median."""
+    detector = ElectricalSpinCandidateDetector(
+        window_seconds=30,
+        min_coverage_seconds=20,
+        power_threshold_w=100.0,
+    )
+    start = datetime(2026, 8, 19, 10, 0, tzinfo=timezone.utc)
+    detector.reset(now=start, power=20.0)
+    detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=True,
+        current_updated=False,
+        now=start + timedelta(seconds=20),
+    )
+    for seconds in (21, 22, 23, 24, 25):
+        detector.evaluate(
+            power=150.0,
+            current=None,
+            power_updated=True,
+            current_updated=False,
+            now=start + timedelta(seconds=seconds),
+        )
+
+    result = detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=start + timedelta(seconds=30),
+    )
+
+    assert result.power_rolling_median == 20.0
+    assert result.candidate is False
+
+
+def test_current_is_corroborating_only() -> None:
+    """Current cannot create an electrical candidate when power is low."""
+    detector = ElectricalSpinCandidateDetector(
+        window_seconds=30,
+        min_coverage_seconds=20,
+        power_threshold_w=100.0,
+        current_threshold_a=0.7,
+    )
+    start = datetime(2026, 8, 19, 10, 0, tzinfo=timezone.utc)
+    detector.reset(now=start, power=30.0, current=1.1)
+
+    result = detector.evaluate(
+        power=30.0,
+        current=1.1,
+        power_updated=False,
+        current_updated=False,
+        now=start + timedelta(seconds=20),
+    )
+
+    assert result.candidate is False
+    assert result.current_corroborated is True
