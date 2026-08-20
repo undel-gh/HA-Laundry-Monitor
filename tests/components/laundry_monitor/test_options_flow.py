@@ -13,8 +13,12 @@ from custom_components.laundry_monitor.const import (
     CONF_ARMING_TIMEOUT,
     CONF_CURRENT_ACTIVITY_THRESHOLD,
     CONF_CURRENT_SENSOR,
+    CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_ELECTRICAL_SPIN_WINDOW,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
+    CONF_HYBRID_SPIN_ENABLED,
+    CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_POWER_SENSOR,
     CONF_POWER_UNAVAILABLE_GRACE,
     CONF_RUNNING_FINISH_CONFIRMATION,
@@ -29,8 +33,12 @@ from custom_components.laundry_monitor.const import (
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
     DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+    DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+    DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_HYBRID_SPIN_ENABLED,
+    DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
     DEFAULT_RUNNING_FINISH_CONFIRMATION,
     DEFAULT_SNAPSHOT_MAX_AGE,
@@ -51,6 +59,10 @@ DEFAULT_OPTIONS = {
     CONF_SPIN_WINDOW: DEFAULT_SPIN_WINDOW,
     CONF_SPIN_MIN_CYCLE_TIME: DEFAULT_SPIN_MIN_CYCLE_TIME,
     CONF_SPIN_ACTIVITY_MAX_AGE: DEFAULT_SPIN_ACTIVITY_MAX_AGE,
+    CONF_ELECTRICAL_SPIN_WINDOW: DEFAULT_ELECTRICAL_SPIN_WINDOW,
+    CONF_ELECTRICAL_SPIN_MIN_COVERAGE: DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_HYBRID_SPIN_ENABLED: DEFAULT_HYBRID_SPIN_ENABLED,
+    CONF_HYBRID_SPIN_REQUIRED_EVENTS: DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_FINISH_CONFIRMATION: DEFAULT_FINISH_CONFIRMATION,
     CONF_RUNNING_FINISH_CONFIRMATION: (
         DEFAULT_RUNNING_FINISH_CONFIRMATION
@@ -69,6 +81,10 @@ CUSTOM_OPTIONS = {
     CONF_SPIN_WINDOW: 240,
     CONF_SPIN_MIN_CYCLE_TIME: 900,
     CONF_SPIN_ACTIVITY_MAX_AGE: 150,
+    CONF_ELECTRICAL_SPIN_WINDOW: 30,
+    CONF_ELECTRICAL_SPIN_MIN_COVERAGE: 20,
+    CONF_HYBRID_SPIN_ENABLED: False,
+    CONF_HYBRID_SPIN_REQUIRED_EVENTS: 2,
     CONF_FINISH_CONFIRMATION: 240,
     CONF_RUNNING_FINISH_CONFIRMATION: 900,
     CONF_ARMING_TIMEOUT: 1200,
@@ -80,7 +96,7 @@ CUSTOM_OPTIONS = {
 
 def _create_entry(
     *,
-    options: dict[str, int | float] | None = None,
+    options: dict[str, bool | int | float] | None = None,
     with_current: bool = False,
 ) -> MockConfigEntry:
     """Create a Laundry Monitor test entry."""
@@ -190,6 +206,12 @@ async def test_options_are_saved_and_entry_is_reloaded(
     assert runtime.spin_detector.window_seconds == 240
     assert runtime.spin_detector.min_cycle_seconds == 900
     assert runtime.spin_detector.activity_max_age_seconds == 150
+    assert runtime.electrical_spin_detector.window_seconds == 30
+    assert runtime.electrical_spin_detector.min_coverage_seconds == 20
+    assert runtime.electrical_spin_detector.power_threshold_w is None
+    assert runtime.electrical_spin_detector.current_threshold_a is None
+    assert runtime.hybrid_spin_enabled is False
+    assert runtime.hybrid_spin_required_events == 2
     assert runtime.finish_detector.confirmation_seconds == 240
     assert runtime.running_finish_detector.confirmation_seconds == 900
     assert runtime.arming_timeout_seconds == 1200
