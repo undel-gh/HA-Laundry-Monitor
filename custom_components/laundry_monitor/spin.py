@@ -111,3 +111,200 @@ class SpinDetector:
         cutoff = now - timedelta(seconds=self.window_seconds)
         while self._evidence and self._evidence[0] < cutoff:
             self._evidence.popleft()
+
+
+@dataclass(frozen=True, slots=True)
+class ElectricalSpinEvaluation:
+    """Result of one experimental electrical-spin evaluation."""
+
+    candidate: bool
+    candidate_since: datetime | None
+    power_rolling_median: float | None
+    current_rolling_median: float | None
+    current_corroborated: bool | None
+    power_coverage_seconds: float
+    current_coverage_seconds: float
+
+
+@dataclass(slots=True)
+class ElectricalSpinCandidateDetector:
+    """Track an experimental sustained electrical spin signature.
+
+    The detector is independent from the vibration detector. Power is the
+    authoritative electrical signal. Optional current is corroborating only.
+    A missing power threshold disables the candidate while rolling statistics
+    remain available for diagnostics.
+    """
+
+    window_seconds: int
+    min_coverage_seconds: int
+    power_threshold_w: float | None = None
+    current_threshold_a: float | None = None
+
+    candidate: bool = field(default=False, init=False)
+    candidate_since: datetime | None = field(default=None, init=False)
+    power_rolling_median: float | None = field(default=None, init=False)
+    current_rolling_median: float | None = field(default=None, init=False)
+    current_corroborated: bool | None = field(default=None, init=False)
+    power_coverage_seconds: float = field(default=0.0, init=False)
+    current_coverage_seconds: float = field(default=0.0, init=False)
+
+    _power_samples: deque[tuple[datetime, float]] = field(
+        default_factory=deque,
+        init=False,
+    )
+    _current_samples: deque[tuple[datetime, float]] = field(
+        default_factory=deque,
+        init=False,
+    )
+
+    def reset(
+        self,
+        *,
+        now: datetime | None = None,
+        power: float | None = None,
+        current: float | None = None,
+    ) -> None:
+        """Reset diagnostics and optionally seed current source values."""
+        self._power_samples.clear()
+        self._current_samples.clear()
+        self.candidate = False
+        self.candidate_since = None
+        self.power_rolling_median = None
+        self.current_rolling_median = None
+        self.current_corroborated = None
+        self.power_coverage_seconds = 0.0
+        self.current_coverage_seconds = 0.0
+
+        if now is not None:
+            if power is not None:
+                self._power_samples.append((now, power))
+            if current is not None:
+                self._current_samples.append((now, current))
+
+    def evaluate(
+        self,
+        *,
+        power: float | None,
+        current: float | None,
+        power_updated: bool,
+        current_updated: bool,
+        now: datetime,
+    ) -> ElectricalSpinEvaluation:
+        """Update source history and calculate the electrical candidate."""
+        self._update_samples(
+            self._power_samples,
+            value=power,
+            updated=power_updated,
+            now=now,
+        )
+        self._update_samples(
+            self._current_samples,
+            value=current,
+            updated=current_updated,
+            now=now,
+        )
+
+        (
+            self.power_rolling_median,
+            self.power_coverage_seconds,
+        ) = self._rolling_median(self._power_samples, now)
+        (
+            self.current_rolling_median,
+            self.current_coverage_seconds,
+        ) = self._rolling_median(self._current_samples, now)
+
+        power_ready = (
+            self.power_threshold_w is not None
+            and self.power_rolling_median is not None
+            and self.power_coverage_seconds >= self.min_coverage_seconds
+        )
+        new_candidate = bool(
+            power_ready
+            and self.power_rolling_median >= self.power_threshold_w
+        )
+
+        if self.current_threshold_a is None:
+            self.current_corroborated = None
+        elif (
+            self.current_rolling_median is None
+            or self.current_coverage_seconds < self.min_coverage_seconds
+        ):
+            self.current_corroborated = None
+        else:
+            self.current_corroborated = (
+                self.current_rolling_median >= self.current_threshold_a
+            )
+
+        if new_candidate and not self.candidate:
+            self.candidate_since = now
+        elif not new_candidate:
+            self.candidate_since = None
+        self.candidate = new_candidate
+
+        return ElectricalSpinEvaluation(
+            candidate=self.candidate,
+            candidate_since=self.candidate_since,
+            power_rolling_median=self.power_rolling_median,
+            current_rolling_median=self.current_rolling_median,
+            current_corroborated=self.current_corroborated,
+            power_coverage_seconds=self.power_coverage_seconds,
+            current_coverage_seconds=self.current_coverage_seconds,
+        )
+
+    def _update_samples(
+        self,
+        samples: deque[tuple[datetime, float]],
+        *,
+        value: float | None,
+        updated: bool,
+        now: datetime,
+    ) -> None:
+        """Record source changes and retain one cutoff anchor sample."""
+        if updated:
+            if value is None:
+                samples.clear()
+            elif samples and samples[-1][0] == now:
+                samples[-1] = (now, value)
+            elif not samples or samples[-1][1] != value:
+                samples.append((now, value))
+
+        cutoff = now - timedelta(seconds=self.window_seconds)
+        while len(samples) >= 2 and samples[1][0] <= cutoff:
+            samples.popleft()
+
+    def _rolling_median(
+        self,
+        samples: deque[tuple[datetime, float]],
+        now: datetime,
+    ) -> tuple[float | None, float]:
+        """Return a time-weighted rolling median and observed coverage."""
+        if not samples:
+            return None, 0.0
+
+        cutoff = now - timedelta(seconds=self.window_seconds)
+        weighted_values: list[tuple[float, float]] = []
+
+        for index, (sample_time, value) in enumerate(samples):
+            start = max(sample_time, cutoff)
+            end = (
+                min(samples[index + 1][0], now)
+                if index + 1 < len(samples)
+                else now
+            )
+            weight = max((end - start).total_seconds(), 0.0)
+            if weight > 0:
+                weighted_values.append((value, weight))
+
+        coverage = sum(weight for _, weight in weighted_values)
+        if coverage <= 0:
+            return None, 0.0
+
+        midpoint = coverage / 2.0
+        cumulative = 0.0
+        for value, weight in sorted(weighted_values):
+            cumulative += weight
+            if cumulative >= midpoint:
+                return value, coverage
+
+        return weighted_values[-1][0], coverage
