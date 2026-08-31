@@ -27,6 +27,8 @@ Laundry Monitor is intended to answer questions such as:
 - Power-based cycle-start detection with a configurable confirmation period.
 - Optional current-assisted meaningful-activity detection.
 - Optional vibration-based detection of a probable **terminal spin sequence / terminal phase**.
+- Experimental opt-in hybrid confirmation can combine reduced vibration evidence with a fresh, sustained electrical spin candidate.
+- Electrical confirmation uses power as the primary signal; optional current is corroborating diagnostics only.
 - Two finish paths:
   - shorter confirmation after terminal-phase detection;
   - conservative fallback when terminal spin was not detected.
@@ -111,6 +113,13 @@ Current implementation defaults:
 | Spin window | 180 s | Rolling window used for vibration evidence. |
 | Spin minimum cycle time | 600 s | Terminal-spin detection is not considered before this cycle age. |
 | Spin activity max age | 120 s | Meaningful electrical activity must be sufficiently recent to support spin evidence. |
+| Electrical spin window | 30 s | Time window used for the experimental time-weighted electrical rolling statistics. |
+| Electrical spin minimum coverage | 20 s | Minimum observed coverage required before an electrical candidate is valid. |
+| Electrical spin maximum source age | 30 s | Maximum age for the last real source update to remain valid evidence. |
+| Electrical spin power threshold | unset | Machine-specific power threshold. No universal project default is defined. |
+| Electrical spin current threshold | unset | Optional machine-specific current corroboration threshold. |
+| Hybrid spin enabled | false | Enables the experimental `reduced vibration + electrical candidate` confirmation path. |
+| Hybrid spin required events | 2 | Vibration evidence required by the hybrid path when it is enabled. |
 | Finish confirmation | 180 s | Quiet period used after `final_spin`. |
 | Running-state finish confirmation | 600 s | Conservative quiet-period fallback when terminal spin was not detected. |
 | Arming timeout | 1800 s | Returns `armed` to `idle` when no cycle starts. |
@@ -176,6 +185,10 @@ Laundry Monitor also exposes diagnostic entities such as:
 - separate power and current activity states;
 - last combined, power, and current activity timestamps;
 - final-spin confidence and evidence count;
+- electrical-spin candidate state and candidate timestamp;
+- time-weighted rolling power and optional current medians;
+- electrical source freshness and observed coverage in downloadable diagnostics;
+- final-spin confirmation path (`vibration_only` or `hybrid`);
 - finish quiet-since timestamp, deadline, and remaining time;
 - rejected-transition counters;
 - optional leak state.
@@ -242,6 +255,11 @@ Important design rules:
 - Power remains the required and authoritative source for cycle-start confirmation.
 - Optional current contributes supplemental meaningful-activity evidence.
 - Optional current alone cannot confirm cycle start, terminal spin, or completion.
+- The normal terminal-spin path remains vibration-only and uses the configured full vibration requirement.
+- When explicitly enabled, the experimental hybrid path may confirm the same `final_spin` state from reduced vibration evidence plus a fresh, sustained electrical candidate.
+- Electrical evidence alone can never confirm `final_spin`.
+- Machine-specific electrical thresholds have no universal defaults and must be configured explicitly.
+- Stale electrical samples must not continue supporting an electrical candidate after the configured maximum source age.
 - Finish is inferred from the absence of meaningful electrical activity over time rather than from an exact standby-power value.
 - Optional vibration provides terminal-spin evidence.
 - Leak detection operates independently and does not change the cycle state.
