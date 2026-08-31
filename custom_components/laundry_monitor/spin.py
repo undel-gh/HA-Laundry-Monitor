@@ -122,6 +122,8 @@ class ElectricalSpinEvaluation:
     power_rolling_median: float | None
     current_rolling_median: float | None
     current_corroborated: bool | None
+    power_source_fresh: bool
+    current_source_fresh: bool
     power_coverage_seconds: float
     current_coverage_seconds: float
 
@@ -138,6 +140,7 @@ class ElectricalSpinCandidateDetector:
 
     window_seconds: int
     min_coverage_seconds: int
+    max_source_age_seconds: int = 30
     power_threshold_w: float | None = None
     current_threshold_a: float | None = None
 
@@ -146,6 +149,8 @@ class ElectricalSpinCandidateDetector:
     power_rolling_median: float | None = field(default=None, init=False)
     current_rolling_median: float | None = field(default=None, init=False)
     current_corroborated: bool | None = field(default=None, init=False)
+    power_source_fresh: bool = field(default=False, init=False)
+    current_source_fresh: bool = field(default=False, init=False)
     power_coverage_seconds: float = field(default=0.0, init=False)
     current_coverage_seconds: float = field(default=0.0, init=False)
 
@@ -173,14 +178,18 @@ class ElectricalSpinCandidateDetector:
         self.power_rolling_median = None
         self.current_rolling_median = None
         self.current_corroborated = None
+        self.power_source_fresh = False
+        self.current_source_fresh = False
         self.power_coverage_seconds = 0.0
         self.current_coverage_seconds = 0.0
 
         if now is not None:
             if power is not None:
                 self._power_samples.append((now, power))
+                self.power_source_fresh = True
             if current is not None:
                 self._current_samples.append((now, current))
+                self.current_source_fresh = True
 
     def evaluate(
         self,
@@ -213,9 +222,16 @@ class ElectricalSpinCandidateDetector:
             self.current_rolling_median,
             self.current_coverage_seconds,
         ) = self._rolling_median(self._current_samples, now)
+        self.power_source_fresh = self._source_is_fresh(
+            self._power_samples, now
+        )
+        self.current_source_fresh = self._source_is_fresh(
+            self._current_samples, now
+        )
 
         power_ready = (
             self.power_threshold_w is not None
+            and self.power_source_fresh
             and self.power_rolling_median is not None
             and self.power_coverage_seconds >= self.min_coverage_seconds
         )
@@ -227,7 +243,8 @@ class ElectricalSpinCandidateDetector:
         if self.current_threshold_a is None:
             self.current_corroborated = None
         elif (
-            self.current_rolling_median is None
+            not self.current_source_fresh
+            or self.current_rolling_median is None
             or self.current_coverage_seconds < self.min_coverage_seconds
         ):
             self.current_corroborated = None
@@ -248,6 +265,8 @@ class ElectricalSpinCandidateDetector:
             power_rolling_median=self.power_rolling_median,
             current_rolling_median=self.current_rolling_median,
             current_corroborated=self.current_corroborated,
+            power_source_fresh=self.power_source_fresh,
+            current_source_fresh=self.current_source_fresh,
             power_coverage_seconds=self.power_coverage_seconds,
             current_coverage_seconds=self.current_coverage_seconds,
         )
@@ -260,18 +279,33 @@ class ElectricalSpinCandidateDetector:
         updated: bool,
         now: datetime,
     ) -> None:
-        """Record source changes and retain one cutoff anchor sample."""
+        """Record source updates and prune samples that cannot cover the window."""
         if updated:
             if value is None:
                 samples.clear()
             elif samples and samples[-1][0] == now:
                 samples[-1] = (now, value)
-            elif not samples or samples[-1][1] != value:
+            else:
+                # Keep same-value updates too. The median is time-weighted, so
+                # publication frequency cannot bias it, while these timestamps
+                # are required to prove that the source is still fresh.
                 samples.append((now, value))
 
         cutoff = now - timedelta(seconds=self.window_seconds)
-        while len(samples) >= 2 and samples[1][0] <= cutoff:
-            samples.popleft()
+        max_age = timedelta(seconds=self.max_source_age_seconds)
+        while len(samples) >= 2:
+            first_valid_until = min(
+                samples[1][0],
+                samples[0][0] + max_age,
+            )
+            if first_valid_until > cutoff:
+                break
+             samples.popleft()
+        if (
+            len(samples) == 1
+            and samples[0][0] + max_age <= cutoff
+        ):
+            samples.clear()
 
     def _rolling_median(
         self,
@@ -283,14 +317,20 @@ class ElectricalSpinCandidateDetector:
             return None, 0.0
 
         cutoff = now - timedelta(seconds=self.window_seconds)
+        max_age = timedelta(seconds=self.max_source_age_seconds)
         weighted_values: list[tuple[float, float]] = []
 
         for index, (sample_time, value) in enumerate(samples):
             start = max(sample_time, cutoff)
-            end = (
-                min(samples[index + 1][0], now)
+            next_update = (
+                samples[index + 1][0]
                 if index + 1 < len(samples)
                 else now
+            )
+            end = min(
+                next_update,
+                now,
+                sample_time + max_age,
             )
             weight = max((end - start).total_seconds(), 0.0)
             if weight > 0:
@@ -308,3 +348,15 @@ class ElectricalSpinCandidateDetector:
                 return value, coverage
 
         return weighted_values[-1][0], coverage
+
+    def _source_is_fresh(
+        self,
+        samples: deque[tuple[datetime, float]],
+        now: datetime,
+    ) -> bool:
+        """Return whether the source has a recent observed update."""
+        return bool(
+            samples
+            and now - samples[-1][0]
+            <= timedelta(seconds=self.max_source_age_seconds)
+        )
