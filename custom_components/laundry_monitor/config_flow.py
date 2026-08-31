@@ -548,8 +548,7 @@ def _normalize_options(
 
     normalized[CONF_HYBRID_SPIN_ENABLED] = bool(
         user_input[CONF_HYBRID_SPIN_ENABLED]
-    )
-    
+    )    
     normalized.update(
         {
             key: int(user_input[key])
