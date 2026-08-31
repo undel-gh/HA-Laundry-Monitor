@@ -1,6 +1,7 @@
 """Test Spin Detector integration with Laundry Monitor runtime."""
 
 from datetime import timedelta
+from unittest.mock import AsyncMock
 
 from homeassistant.const import CONF_NAME, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
@@ -11,6 +12,7 @@ from custom_components.laundry_monitor.const import (
     CONF_CURRENT_ACTIVITY_THRESHOLD,
     CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
+    CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD,
     CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
     CONF_HYBRID_SPIN_ENABLED,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS,
@@ -25,6 +27,7 @@ from custom_components.laundry_monitor.const import (
     REASON_FINAL_SPIN_CONFIRMED,
 )
 
+from custom_components.laundry_monitor.storage import RuntimeSnapshot
 
 async def _setup_entry(
     hass: HomeAssistant,
@@ -33,6 +36,7 @@ async def _setup_entry(
     with_current: bool = False,
     hybrid_enabled: bool = False,
     electrical_power_threshold: float | None = None,
+    electrical_current_threshold: float | None = None,
 ) -> MockConfigEntry:
     """Set up a Spin Detector test entry."""
     hass.states.async_set(
@@ -79,6 +83,14 @@ async def _setup_entry(
             **(
                 {CONF_CURRENT_ACTIVITY_THRESHOLD: 0.1}
                 if with_current
+                else {}
+            ),
+            **(
+                {
+                    CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD:
+                        electrical_current_threshold
+                }
+                if with_current and electrical_current_threshold is not None
                 else {}
             ),
         },
@@ -279,4 +291,112 @@ async def test_hybrid_path_requires_electrical_candidate(
 
     assert runtime.cycle_state is LaundryCycleState.RUNNING
     assert runtime.final_spin_evidence_count == 2
+    assert runtime.final_spin_confirmation_path is None
+
+
+async def test_hybrid_path_reports_current_corroboration(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Current corroboration remains diagnostic while hybrid confirms."""
+    entry = await _setup_entry(
+        hass,
+        with_current=True,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+        electrical_current_threshold=0.7,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    runtime.electrical_spin_detector.reset(
+        now=now - timedelta(seconds=20),
+        power=150.0,
+        current=1.0,
+    )
+    hass.states.async_set("sensor.washing_machine_power", "150")
+    hass.states.async_set("sensor.washing_machine_current", "1.0")
+    await hass.async_block_till_done()
+
+    assert runtime.spin_electrical_candidate is True
+    assert runtime.electrical_spin_detector.current_corroborated is True
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
+    assert runtime.final_spin_confirmation_path == "hybrid"
+
+
+async def test_electrical_candidate_resets_when_cycle_finishes(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Electrical history cannot leak into the next lifecycle state."""
+    entry = await _setup_entry(
+        hass,
+        electrical_power_threshold=100.0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    runtime.electrical_spin_detector.reset(
+        now=now - timedelta(seconds=20),
+        power=150.0,
+    )
+    runtime.electrical_spin_detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=now,
+    )
+    assert runtime.spin_electrical_candidate is True
+
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.FINISHED,
+        "test_finished",
+    )
+
+    assert runtime.spin_electrical_candidate is False
+    assert runtime.spin_power_rolling_median is None
+    assert runtime.electrical_spin_detector.power_coverage_seconds == 0.0
+
+
+async def test_snapshot_recovery_discards_electrical_and_confirmation_path(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Restart recovery requires fresh electrical data and loses path metadata."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    runtime.electrical_spin_detector.reset(
+        now=now - timedelta(seconds=20),
+        power=150.0,
+    )
+    runtime.electrical_spin_detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=now,
+    )
+    runtime.final_spin_confirmation_path = "hybrid"
+    snapshot = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="stored_running",
+        last_state_change=now - timedelta(minutes=1),
+        cycle_started_at=now - timedelta(minutes=10),
+        laundry_present=True,
+    )
+    runtime.state_store.async_get = AsyncMock(return_value=snapshot)
+
+    await runtime._async_restore_snapshot()
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.spin_electrical_candidate is False
+    assert runtime.spin_power_rolling_median is None
+    assert runtime.electrical_spin_detector.power_source_fresh is False
     assert runtime.final_spin_confirmation_path is None
