@@ -270,7 +270,7 @@ Electrical-spin thresholds, rolling-window lengths, and sustained-duration gates
 
 ## FR-044
 
-When hybrid spin detection is implemented, diagnostics shall identify whether final-spin confirmation used vibration-only evidence or hybrid vibration-plus-electrical evidence and should expose the relevant supporting electrical statistics.
+Diagnostics shall identify whether final-spin confirmation used the `vibration_only` or `hybrid` confirmation path and shall expose the relevant supporting electrical statistics when available.
 
 ---
 
