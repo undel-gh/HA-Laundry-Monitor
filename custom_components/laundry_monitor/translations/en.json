@@ -56,7 +56,8 @@
       }
     },
     "error": {
-      "already_configured": "This power sensor is already used by another Laundry Monitor entry."
+      "already_configured": "This power sensor is already used by another Laundry Monitor entry.",
+      "hybrid_spin_requires_vibration_sensor": "Hybrid spin confirmation is enabled, so a vibration sensor must remain configured."
     },
     "abort": {
       "already_configured": "This power sensor is already used by another Laundry Monitor entry.",
@@ -194,6 +195,7 @@
           "spin_activity_max_age": "Maximum age of supporting activity",
           "electrical_spin_window": "Electrical spin rolling window",
           "electrical_spin_min_coverage": "Minimum electrical coverage",
+          "electrical_spin_max_source_age": "Maximum electrical source age",
           "electrical_spin_power_threshold": "Electrical spin power threshold",
           "electrical_spin_current_threshold": "Electrical spin current threshold",
           "hybrid_spin_enabled": "Enable hybrid spin confirmation",
@@ -216,6 +218,7 @@
           "spin_activity_max_age": "Maximum age of the last meaningful electrical activity that can support final-spin detection.",
           "electrical_spin_window": "Rolling window used for the experimental time-weighted electrical signature.",
           "electrical_spin_min_coverage": "Minimum observed time inside the electrical window before a candidate can become active.",
+          "electrical_spin_max_source_age": "Maximum age of the latest power/current update that may support the electrical spin signature. Older source values are treated as stale and cannot confirm the hybrid path.",
           "electrical_spin_power_threshold": "Optional machine-specific rolling-median power threshold. Leave unset to disable electrical candidate confirmation; no universal default is assumed.",
           "electrical_spin_current_threshold": "Optional machine-specific rolling-median current threshold used only as corroborating diagnostics. Current never creates the candidate by itself.",
           "hybrid_spin_enabled": "Allow reduced vibration evidence to confirm final spin only while the sustained electrical candidate is active. Disabled by default.",
