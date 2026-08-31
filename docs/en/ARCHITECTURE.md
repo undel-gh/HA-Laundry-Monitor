@@ -160,12 +160,9 @@ Primary inputs:
 
 Current activity may increase spin confidence by supporting the conclusion that a motor is operating during a vibration window.
 
-Current activity must not independently confirm final spin. The detector must still require the configured vibration evidence unless a future detector explicitly defines another compatible algorithm.
+Current activity must not independently confirm final spin. The implemented runtime retains the full vibration-only path and additionally provides an experimental, opt-in **hybrid spin confirmation path** that combines reduced vibration evidence with a sustained electrical spin candidate.
 
-The currently implemented detector is vibration-event based. The architecture shall also permit a future **hybrid spin detector** that combines mechanical evidence with a sustained electrical spin candidate.
-
-The hybrid detector may contain an electrical-corroboration stage:
-
+The electrical-corroboration stage is implemented as a separate detector:
 ```text
 Power history ───────────────┐
                             ├──► Electrical spin candidate ──┐
@@ -175,20 +172,22 @@ Vibration evidence ────────────────────�
 Cycle age / timing gates ────────────────────────────────────┘
 ```
 
-The electrical stage should use windowed or sustained statistics rather than instantaneous samples. Suitable implementations may use rolling medians, minimum sustained durations, or equivalent robust measures.
+The electrical stage uses time-weighted rolling medians and minimum observed coverage rather than instantaneous samples. Piecewise-constant source values are valid only for a bounded maximum source age so an old available-but-not-updating value cannot provide indefinite coverage.
 
 Power remains the primary electrical signal. Current is optional corroboration. When both are measured by the same smart plug or meter, the implementation should treat them as correlated observations of the same electrical load rather than as two independent votes.
 
-A compatible hybrid algorithm may reduce the amount of vibration evidence required for confirmation only when the electrical candidate and all applicable timing gates are simultaneously satisfied. Electrical evidence alone must not produce a final-spin result.
+The hybrid path reduces the amount of vibration evidence required for confirmation only when the electrical candidate and all applicable timing gates are simultaneously satisfied. Electrical evidence alone must not produce a final-spin result.
 
-Thresholds and window lengths for electrical spin corroboration are implementation-specific and configurable. Architecture must not encode machine-specific field values as universal defaults.
+Window, coverage, freshness and electrical thresholds are configurable. Architecture must not encode machine-specific field values as universal power/current defaults.
 
 The detector must not assume that the terminal spin sequence has a fixed duration or contains one uninterrupted spin. A validated terminal spin sequence may contain multiple spin stages and short pauses, and its duration may vary with program and load. Draining may begin while the drum is still rotating and may continue after the drum has fully stopped.
 
 A confirmed terminal-spin-sequence result is a terminal-phase marker. Subsequent meaningful activity is expected during overlapping spin-and-drain operation, drain-only operation after drum stop, drum positioning, additional terminal spinning, electronics activity, or end-of-program signalling and must not automatically invalidate the result.
 
-The detector should expose evidence, the confirmation path used, and a confidence level to the State Machine. When hybrid detection is implemented, diagnostics should distinguish vibration-only confirmation from hybrid vibration-plus-electrical confirmation.
+The runtime exposes evidence, the confirmation path used, and a confidence level. Diagnostics distinguish `vibration_only` from `hybrid` confirmation and include the supporting electrical statistics. Confirmation-path metadata is diagnostic and is not required to survive restart recovery.
 
+Configuration invariants are enforced before runtime evaluation: hybrid confirmation requires a vibration sensor and an explicit electrical power threshold, its vibration requirement must be lower than the full vibration-only requirement, and electrical minimum coverage must not exceed the rolling window. Reconfigure must not remove the vibration source while hybrid confirmation remains enabled.
+ 
 ---
 
 
