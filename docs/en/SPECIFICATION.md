@@ -382,36 +382,42 @@ A possible detector implementation may use:
 Current activity is supporting evidence only. It must not independently produce a final-spin transition.
 
 
-#### Planned hybrid electrical corroboration
+#### Experimental hybrid electrical corroboration
 
-The current event-based detector remains vibration-driven. A future compatible detector may additionally derive an internal **electrical spin candidate** from sustained power behavior and, when available, current behavior.
+The implemented detector retains the vibration-only confirmation path and also provides an experimental, opt-in hybrid path. The hybrid path derives an internal **electrical spin candidate** from sustained power behavior and, when available, current behavior.
 
-The electrical candidate is intended to corroborate mechanical evidence, not replace it. A compatible hybrid detector may therefore support two confirmation paths:
+The electrical candidate corroborates mechanical evidence; it never replaces it. The runtime supports two confirmation paths:
 
 ```text
 vibration-only path:
     configured vibration evidence
+    + activity-recency gate
     + minimum cycle age
     -> final_spin
 
 hybrid path:
     reduced but still meaningful vibration evidence
-    + sustained electrical spin signature
+    + fresh sustained electrical spin candidate
+    + activity-recency gate
     + minimum cycle age
     -> final_spin
 ```
 
-For example, a future hybrid detector may accept two vibration events instead of the current default requirement of three only when a sustained electrical spin signature is simultaneously confirmed. This is a design direction, not a current default.
+The current defaults require three vibration events for the vibration-only path. The experimental hybrid path is disabled by default; when enabled, its default vibration requirement is two events and must remain lower than the configured vibration-only requirement.
 
-Electrical spin evidence must be based on behavior over time, such as a rolling median, sustained-duration gate, or equivalent windowed statistic. A single power or current spike must not be sufficient.
+Electrical spin evidence is based on time-weighted rolling medians over piecewise-constant source observations. Candidate evaluation also requires minimum observed coverage. A single power or current spike is insufficient.
 
+The final observed power/current value is not extrapolated indefinitely. Each source observation is valid only up to the configured electrical source maximum age. Once the last real source update becomes stale, it stops contributing coverage and cannot keep the electrical candidate active.
+ 
 Power is the primary electrical input. Current, when configured, may corroborate the electrical candidate but should not be treated as a fully independent vote when power and current originate from the same smart plug or measurement device.
 
-No universal high-speed-spin power or current threshold is defined by this specification. Motor design, program, load, supply voltage, and measurement hardware can substantially change the observed values. Any thresholds and observation windows introduced by a hybrid detector must therefore be configurable and field-validated before becoming recommended defaults.
+No universal high-speed-spin power or current threshold is defined by this specification. Motor design, program, load, supply voltage, and measurement hardware can substantially change the observed values. Power and current thresholds are therefore unset by default and must be configured explicitly for field testing.
 
 Electrical evidence alone must never confirm `final_spin`. If vibration evidence is unavailable or insufficient and no compatible hybrid rule is satisfied, the integration must remain in `running` and retain the conservative running-state finish fallback.
 
-Experimental diagnostics for this work may include internal values such as `spin_electrical_candidate`, `spin_power_rolling_median`, `spin_current_rolling_median`, and `spin_electrical_candidate_since`. These names are diagnostic implementation details and are not part of the stable public API until explicitly promoted.
+Experimental diagnostics include `spin_electrical_candidate`, `spin_power_rolling_median`, `spin_current_rolling_median`, `spin_electrical_candidate_since`, source freshness/coverage information, and the final-spin confirmation path. These remain diagnostic implementation details rather than stable public state identifiers.
+
+When `final_spin` is confirmed, diagnostics identify whether the runtime used `vibration_only` or `hybrid`. The confirmation-path value is diagnostic runtime metadata and is not authoritative persisted cycle state; it may be unavailable after restart recovery.
 
 After `final_spin` has been confirmed, ordinary meaningful electrical activity or further vibration does not by itself invalidate that state. Such observations are expected during the terminal sequence and must keep the state at `final_spin` while refreshing activity timestamps and resetting or cancelling finish confirmation.
 
@@ -425,8 +431,14 @@ Example defaults:
 | Spin window | 180 s | Rolling time window used to accumulate vibration evidence |
 | Spin minimum cycle time | 600 s | Minimum confirmed cycle age before terminal-spin detection is allowed |
 | Spin activity max age | 120 s | Maximum age of meaningful electrical activity that may support spin evidence |
-
-These values describe the current event-based detector model. Confidence is diagnostic and implementation-specific; it is not a replacement for the configured evidence gates above.
+| Electrical spin window | 30 s | Window for time-weighted electrical rolling statistics |
+| Electrical spin minimum coverage | 20 s | Minimum observed coverage before a power candidate may become valid |
+| Electrical spin maximum source age | 30 s | Maximum age of a real source update before it becomes stale |
+| Electrical spin power threshold | unset | Machine-specific power threshold for the electrical candidate |
+| Electrical spin current threshold | unset | Optional machine-specific current corroboration threshold |
+| Hybrid spin enabled | false | Experimental hybrid confirmation is opt-in |
+| Hybrid spin required events | 2 | Reduced vibration requirement used only by the hybrid path |
+Confidence is diagnostic and implementation-specific; it is not a replacement for the configured evidence gates above.
 
 The detector must not assume a fixed mechanical spin duration. A terminal spin sequence may be much shorter or longer depending on program, load size, load distribution, and machine behavior.
 
@@ -569,13 +581,26 @@ User-configurable options:
 - start threshold;
 - power activity threshold;
 - current activity threshold, when a current sensor is configured;
-- finish timeout;
-- spin minimum duration
-- running → finished fallback 
-- arming timeout
-- finished state retention
-- power_unavailable grace period
+- start confirmation;
+- spin required events;
+- spin rolling window;
+- spin minimum cycle time;
+- spin activity maximum age;
+- electrical spin rolling window;
+- electrical spin minimum coverage;
+- electrical spin maximum source age;
+- machine-specific electrical spin power threshold;
+- optional machine-specific electrical spin current threshold;
+- experimental hybrid-spin enable/disable;
+- hybrid vibration-event requirement;
+- final-spin finish confirmation;
+- running → finished fallback;
+- arming timeout;
+- finished state retention;
+- power-unavailable grace period;
 - snapshot maximum age.
+
+Hybrid confirmation requires a configured vibration sensor and an explicit electrical power threshold. Its vibration-event requirement must be lower than the vibration-only requirement. Electrical minimum coverage must not exceed the electrical rolling window. Reconfigure must preserve the same hybrid/vibration invariant: an enabled hybrid configuration may not remove its vibration source.
 
 ## 12. Recovery policy
 
@@ -643,7 +668,10 @@ Diagnostics should include:
 * current confidence and evidence counters;
 * current source entity states and availability;
 * raw current, power, door, vibration, leak, and energy values when configured;
-* activity, spin, and finish detector state;
+* activity, vibration-spin, electrical-spin, and finish detector state;
+* electrical rolling medians, observed coverage, and source freshness;
+* electrical candidate state and timestamp;
+* final-spin confirmation path and supporting evidence when available;
 * configured algorithm parameters;
 * laundry tracking state and `last_unloaded_at`;
 * cycle statistics;
