@@ -30,7 +30,13 @@ class FinishDetector:
             self._quiet_since = None
             return FinishEvaluation(False, False, None, None, None)
         if self._quiet_since is None:
-            self._quiet_since = last_activity if last_activity is not None and last_activity <= now else now
+            self._quiet_since = (
+                last_activity
+                if last_activity is not None and last_activity <= now
+                else now
+            )
         deadline = self._quiet_since + timedelta(seconds=self.confirmation_seconds)
         remaining = max((deadline-now).total_seconds(),0.0)
-        return FinishEvaluation(now >= deadline, True, self._quiet_since, deadline, remaining)
+        return FinishEvaluation(
+            now >= deadline, True, self._quiet_since, deadline, remaining
+        )
