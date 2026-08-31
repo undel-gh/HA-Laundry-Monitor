@@ -262,6 +262,9 @@ async def _async_build_diagnostics(
                     "min_coverage_seconds": (
                         runtime.electrical_spin_detector.min_coverage_seconds
                     ),
+                    "max_source_age_seconds": (
+                        runtime.electrical_spin_detector.max_source_age_seconds
+                    ),
                     "power_threshold_w": (
                         runtime.electrical_spin_detector.power_threshold_w
                     ),
@@ -276,6 +279,12 @@ async def _async_build_diagnostics(
                     ),
                     "current_corroborated": (
                         runtime.electrical_spin_detector.current_corroborated
+                    ),
+                    "power_source_fresh": (
+                        runtime.electrical_spin_detector.power_source_fresh
+                    ),
+                    "current_source_fresh": (
+                        runtime.electrical_spin_detector.current_source_fresh
                     ),
                     "power_coverage_seconds": (
                         runtime.electrical_spin_detector.power_coverage_seconds
