@@ -300,7 +300,7 @@ class ElectricalSpinCandidateDetector:
             )
             if first_valid_until > cutoff:
                 break
-             samples.popleft()
+            samples.popleft()
         if (
             len(samples) == 1
             and samples[0][0] + max_age <= cutoff
