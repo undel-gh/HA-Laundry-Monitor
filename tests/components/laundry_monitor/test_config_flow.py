@@ -13,6 +13,8 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.laundry_monitor.const import (
     CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
+    CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
+    CONF_HYBRID_SPIN_ENABLED,
     CONF_POWER_SENSOR,
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
@@ -125,3 +127,51 @@ async def test_only_power_sensor_is_required_in_schema(
     assert isinstance(markers[CONF_CURRENT_SENSOR], vol.Optional)
     assert isinstance(markers[CONF_DOOR_SENSOR], vol.Optional)
     assert isinstance(markers[CONF_VIBRATION_SENSOR], vol.Optional)
+
+
+async def test_reconfigure_cannot_remove_vibration_when_hybrid_enabled(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test reconfigure preserves the vibration source required by hybrid."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Washing Machine",
+        data={
+            CONF_NAME: "Washing Machine",
+            CONF_POWER_SENSOR: "sensor.washing_machine_power",
+            CONF_VIBRATION_SENSOR: "binary_sensor.washing_machine_vibration",
+            CONF_TRACK_LAUNDRY: False,
+        },
+        options={
+            CONF_HYBRID_SPIN_ENABLED: True,
+            CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: 100.0,
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_NAME: "Washing Machine",
+            CONF_POWER_SENSOR: "sensor.washing_machine_power",
+            CONF_TRACK_LAUNDRY: False,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {
+        CONF_VIBRATION_SENSOR: "hybrid_spin_requires_vibration_sensor"
+    }
+    assert entry.data[CONF_VIBRATION_SENSOR] == (
+        "binary_sensor.washing_machine_vibration"
+    )
