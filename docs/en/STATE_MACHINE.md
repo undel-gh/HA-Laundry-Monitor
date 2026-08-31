@@ -326,7 +326,7 @@ Ordinary meaningful activity after `final_spin` does not cause re-entry to `runn
 
 #### Meaning
 
-The Spin Detector has identified evidence that probably represents the terminal spin sequence, which marks entry into the broader **terminal phase**. The active detector algorithm may be vibration-only or, in a future compatible implementation, hybrid vibration-plus-electrical. Electrical evidence may strengthen the conclusion but cannot replace meaningful mechanical spin evidence.
+The Spin Detector has identified evidence that probably represents the terminal spin sequence, which marks entry into the broader **terminal phase**. The implemented confirmation path may be vibration-only or, when explicitly enabled, experimental hybrid vibration-plus-electrical. Electrical evidence can corroborate mechanical evidence but cannot replace meaningful vibration evidence.
 
 The terminal spin sequence is not assumed to be one uninterrupted mechanical spin. Depending on program, load size, load distribution, and machine behavior, it may contain several spin stages separated by short pauses and may vary substantially in duration. The drain pump may start before the drum has fully stopped, so spinning and draining may overlap. Draining may then continue after drum rotation has ended.
 
@@ -336,21 +336,20 @@ The public state is therefore a **terminal spin sequence / terminal phase** mark
 
 The State Machine does not depend on the internal implementation of the Spin Detector. It consumes a confirmed terminal-spin result together with its evidence and diagnostic confidence.
 
-The current vibration-only path requires the configured vibration evidence and cycle-age gates.
+The vibration-only path requires the configured full vibration evidence plus the applicable activity-recency and cycle-age gates.
 
-A future compatible hybrid path may combine:
+The experimental hybrid path combines:
 
 * reduced but still meaningful vibration evidence;
-* a sustained electrical spin candidate derived primarily from power;
+* a fresh sustained electrical spin candidate derived primarily from power;
 * optional current corroboration;
-* minimum cycle age and other timing gates.
+* the same applicable activity-recency, minimum-cycle-age and timing gates.
 
-The hybrid path must not treat a single power/current spike as sufficient evidence and must not confirm `final_spin` from electrical measurements alone.
+The electrical candidate is based on time-weighted rolling statistics, minimum observed coverage and bounded source freshness. The hybrid path must not treat a single power/current spike or stale source value as sufficient evidence and must not confirm `final_spin` from electrical measurements alone.
 
 If power and current are supplied by the same smart plug or measurement device, they are correlated measurements of one electrical load and must not be interpreted as two independent votes.
 
-The confirmation path and supporting evidence should be retained for diagnostics. Introducing a hybrid detector must not add or rename any public cycle state.
-
+The runtime records `confirmation_path` as `vibration_only` or `hybrid` and exposes supporting evidence for diagnostics/event payloads. This value is diagnostic metadata rather than authoritative persisted cycle state and may be reset during restart recovery. Hybrid confirmation does not add or rename any public cycle state.
  
 #### Entry actions
 
@@ -777,6 +776,8 @@ The state machine may emit the following events:
 | Explicit unload confirmed  | `laundry_monitor.machine_unloaded`         |
 | Any public state change    | `laundry_monitor.state_changed`            |
 
+For `laundry_monitor.final_spin_detected`, event-specific evidence should identify the confirmation path and include the relevant vibration/electrical support available at the time of confirmation.
+
 State restoration after restart must not emit lifecycle events unless a genuinely new transition is detected.
 
 ## 17. State Invariants
@@ -797,8 +798,11 @@ The implementation must preserve the following invariants:
 12. Returning from `final_spin` to `running` on `cycle_continuation_confirmed` must not create a new cycle.
 13. Restoring state after restart must not create duplicate lifecycle events.
 14. The `finished` state must not assert that laundry has been removed.
-15. Public state values must not be localized.
-16. Electrical evidence alone must not confirm `final_spin`.
+15. Electrical evidence alone must never confirm `final_spin`.
+16. Stale electrical source values must not provide indefinite candidate coverage.
+17. An enabled hybrid configuration must retain the vibration source required by its mechanical evidence path.
+18. Public state values must not be localized.
+19. Electrical evidence alone must not confirm `final_spin`.
 
 ## 18. Edge Cases
 
@@ -1043,6 +1047,13 @@ At minimum, automated tests should cover:
 * invalid current data not being interpreted as inactivity;
 * current activity not independently confirming cycle start;
 * current activity not independently confirming final spin or finish;
+* electrical candidate requiring sustained, sufficiently covered power evidence;
+* stale electrical data invalidating the candidate after the configured source-age limit;
+* same-value source updates refreshing electrical-source freshness without publication-frequency bias;
+* hybrid confirmation requiring reduced vibration evidence plus an active electrical candidate;
+* optional current corroboration not becoming an independent hybrid confirmation vote;
+* options-flow validation of hybrid/electrical invariants;
+* reconfigure rejection when an enabled hybrid configuration would lose its vibration sensor;
 * finish detection without final spin;
 * final spin followed by normal terminal activity without returning to `running`;
 * final spin followed by a dedicated `cycle_continuation_confirmed` return to `running`;
@@ -1055,6 +1066,8 @@ At minimum, automated tests should cover:
 * optional sensor unavailability;
 * required power sensor unavailability;
 * Home Assistant restart in every public state;
+* electrical candidate reset across lifecycle/recovery boundaries;
+* diagnostic confirmation-path loss/reset across restart recovery when it is not persisted;
 * duplicate event prevention;
 * leak detection without cycle-state changes;
 * configuration changes during an active cycle.
