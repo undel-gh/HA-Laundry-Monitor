@@ -39,6 +39,7 @@ from .const import (
     CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD,
+    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
     CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
     CONF_ELECTRICAL_SPIN_WINDOW,
@@ -63,6 +64,7 @@ from .const import (
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
     DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+    DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
     DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
@@ -261,6 +263,12 @@ class LaundryMonitorRuntime:
                 self.entry.options.get(
                     CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
                     DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+                )
+            ),
+            max_source_age_seconds=int(
+                self.entry.options.get(
+                    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+                    DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
                 )
             ),
             power_threshold_w=(
@@ -628,13 +636,14 @@ class LaundryMonitorRuntime:
         )
 
         self.spin_detector.reset(vibration_active=self.vibration_active)
-        self.electrical_spin_detector.reset(
-            now=dt_util.utcnow(),
-            power=self.power,
-            current=self.current,
-        )
+        # Cached source states are not proof of freshness after a restart.
+        # Wait for real source updates before electrical evidence may be used.
+        self.electrical_spin_detector.reset()
         self.final_spin_confidence = 0.0
         self.final_spin_evidence_count = 0
+        # The confirmation path is intentionally diagnostic-only and is not
+        # persisted in RuntimeSnapshot.
+        self.final_spin_confirmation_path = None
         self._reset_finish_detection()
 
         if recovered_state is not snapshot.cycle_state:
@@ -693,11 +702,9 @@ class LaundryMonitorRuntime:
             ),
         )
         self.spin_detector.reset(vibration_active=self.vibration_active)
-        self.electrical_spin_detector.reset(
-            now=dt_util.utcnow(),
-            power=self.power,
-            current=self.current,
-        )
+        # Startup state reads can be arbitrarily old. Do not mark them fresh;
+        # subsequent state-change events establish electrical freshness.
+        self.electrical_spin_detector.reset()
 
     @callback
     def _async_source_state_changed(
@@ -744,8 +751,9 @@ class LaundryMonitorRuntime:
                 power_updated=entity_id == power_entity,
                 current_updated=entity_id == current_entity,
             )
-            self._evaluate_spin()
-            self._evaluate_finish()
+            spin_transitioned = self._evaluate_spin()
+            if not spin_transitioned:
+                self._evaluate_finish()
 
         if not old_leak and self.leak_detected:
             self.hass.bus.async_fire(
@@ -1511,6 +1519,7 @@ class LaundryMonitorRuntime:
             "Electrical spin evidence for entry %s (%s): "
             "candidate=%s, candidate_since=%s, power_median=%s W, "
             "current_median=%s A, current_corroborated=%s, "
+            "power_fresh=%s, current_fresh=%s, "
             "power_coverage=%.1fs, current_coverage=%.1fs",
             self.entry.entry_id,
             self.name,
@@ -1519,21 +1528,23 @@ class LaundryMonitorRuntime:
             evaluation.power_rolling_median,
             evaluation.current_rolling_median,
             evaluation.current_corroborated,
+            evaluation.power_source_fresh,
+            evaluation.current_source_fresh,
             evaluation.power_coverage_seconds,
             evaluation.current_coverage_seconds,
         )
 
     @callback
-    def _evaluate_spin(self) -> None:
+    def _evaluate_spin(self) -> bool:
         """Evaluate final-spin evidence when vibration is configured."""
         if self.cycle_state is not LaundryCycleState.RUNNING:
-            return
+            return False
         if not self.entry.data.get(CONF_VIBRATION_SENSOR):
-            return
+            return False
         # Current is supporting evidence only. The required power source must
         # remain available before vibration can advance final-spin detection.
         if self.power is None:
-            return
+            return False
 
         evaluation = self.spin_detector.evaluate(
             vibration_active=self.vibration_active,
@@ -1587,7 +1598,7 @@ class LaundryMonitorRuntime:
                 REASON_FINAL_SPIN_CONFIRMED,
             ):
                 self.final_spin_confirmation_path = None
-                return
+                return False
             self.hass.bus.async_fire(
                 EVENT_FINAL_SPIN_DETECTED,
                 {
@@ -1603,10 +1614,11 @@ class LaundryMonitorRuntime:
                     "timestamp": dt_util.utcnow().isoformat(),
                 },
             )
-            return
+            return True
 
         if changed:
             self._notify_entities()
+        return False
 
     def _active_finish_detector(self) -> FinishDetector | None:
         """Return the detector belonging to the current public state."""
