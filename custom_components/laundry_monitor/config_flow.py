@@ -43,6 +43,7 @@ from .const import (
     CONF_CURRENT_SENSOR,
     CONF_DOOR_SENSOR,
     CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD,
+    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
     CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
     CONF_ELECTRICAL_SPIN_WINDOW,
@@ -68,6 +69,7 @@ from .const import (
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
     DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+    DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
     DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
@@ -96,6 +98,7 @@ _INTEGER_OPTION_KEYS = (
     CONF_SPIN_ACTIVITY_MAX_AGE,
     CONF_ELECTRICAL_SPIN_WINDOW,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_FINISH_CONFIRMATION,
     CONF_RUNNING_FINISH_CONFIRMATION,
@@ -110,6 +113,16 @@ def _suggested_value(value: Any) -> dict[str, Any]:
     """Return a schema description containing a suggested value."""
     return {"suggested_value": value}
 
+def _hybrid_requires_vibration_sensor(
+    options: Mapping[str, Any],
+    *,
+    vibration_sensor_configured: bool,
+) -> bool:
+    """Return whether hybrid confirmation lacks its vibration source."""
+    return bool(
+        options.get(CONF_HYBRID_SPIN_ENABLED, DEFAULT_HYBRID_SPIN_ENABLED)
+        and not vibration_sensor_configured
+    )
 
 def _entity_selector(
     *,
@@ -371,6 +384,18 @@ def _options_schema(
                 step=1,
                 unit=UnitOfTime.SECONDS,
             ),
+            vol.Required(
+                CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+                default=defaults.get(
+                    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+                    DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
             vol.Optional(
                 CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
                 description=_suggested_value(
@@ -599,6 +624,15 @@ class LaundryMonitorConfigFlow(ConfigFlow, domain=DOMAIN):
                 exclude_entry_id=entry.entry_id,
             ):
                 errors["base"] = "already_configured"
+            elif _hybrid_requires_vibration_sensor(
+                entry.options,
+                vibration_sensor_configured=bool(
+                    user_input.get(CONF_VIBRATION_SENSOR)
+                ),
+            ):
+                errors[CONF_VIBRATION_SENSOR] = (
+                    "hybrid_spin_requires_vibration_sensor"
+                )
             else:
                 return self.async_update_reload_and_abort(
                     entry,
@@ -643,9 +677,11 @@ class LaundryMonitorOptionsFlow(OptionsFlowWithReload):
                 errors[
                     CONF_ELECTRICAL_SPIN_MIN_COVERAGE
                 ] = "electrical_spin_coverage_above_window"
-            elif (
-                normalized[CONF_HYBRID_SPIN_ENABLED]
-                and not self.config_entry.data.get(CONF_VIBRATION_SENSOR)
+            elif _hybrid_requires_vibration_sensor(
+                normalized,
+                vibration_sensor_configured=bool(
+                    self.config_entry.data.get(CONF_VIBRATION_SENSOR)
+                ),
             ):
                 errors[CONF_HYBRID_SPIN_ENABLED] = (
                     "hybrid_spin_requires_vibration_sensor"
