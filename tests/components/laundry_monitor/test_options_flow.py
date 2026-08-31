@@ -13,7 +13,9 @@ from custom_components.laundry_monitor.const import (
     CONF_ARMING_TIMEOUT,
     CONF_CURRENT_ACTIVITY_THRESHOLD,
     CONF_CURRENT_SENSOR,
+    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_ELECTRICAL_SPIN_POWER_THRESHOLD,
     CONF_ELECTRICAL_SPIN_WINDOW,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
@@ -30,9 +32,11 @@ from custom_components.laundry_monitor.const import (
     CONF_START_CONFIRMATION,
     CONF_START_THRESHOLD,
     CONF_TRACK_LAUNDRY,
+    CONF_VIBRATION_SENSOR,
     DEFAULT_ACTIVITY_THRESHOLD,
     DEFAULT_ARMING_TIMEOUT,
     DEFAULT_CURRENT_ACTIVITY_THRESHOLD,
+    DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
     DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
@@ -61,6 +65,7 @@ DEFAULT_OPTIONS = {
     CONF_SPIN_ACTIVITY_MAX_AGE: DEFAULT_SPIN_ACTIVITY_MAX_AGE,
     CONF_ELECTRICAL_SPIN_WINDOW: DEFAULT_ELECTRICAL_SPIN_WINDOW,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE: DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
+    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE: DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
     CONF_HYBRID_SPIN_ENABLED: DEFAULT_HYBRID_SPIN_ENABLED,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS: DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_FINISH_CONFIRMATION: DEFAULT_FINISH_CONFIRMATION,
@@ -83,6 +88,7 @@ CUSTOM_OPTIONS = {
     CONF_SPIN_ACTIVITY_MAX_AGE: 150,
     CONF_ELECTRICAL_SPIN_WINDOW: 30,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE: 20,
+    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE: 30,
     CONF_HYBRID_SPIN_ENABLED: False,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS: 2,
     CONF_FINISH_CONFIRMATION: 240,
@@ -98,6 +104,7 @@ def _create_entry(
     *,
     options: dict[str, bool | int | float] | None = None,
     with_current: bool = False,
+    with_vibration: bool = False,
 ) -> MockConfigEntry:
     """Create a Laundry Monitor test entry."""
     data = {
@@ -107,7 +114,8 @@ def _create_entry(
     }
     if with_current:
         data[CONF_CURRENT_SENSOR] = "sensor.washing_machine_current"
-
+    if with_vibration:
+        data[CONF_VIBRATION_SENSOR] = "binary_sensor.washing_machine_vibration"
     return MockConfigEntry(
         domain=DOMAIN,
         title="Washing Machine",
@@ -170,6 +178,95 @@ async def test_activity_threshold_cannot_exceed_start_threshold(
     }
     assert entry.options == {}
 
+async def test_electrical_coverage_cannot_exceed_window(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test electrical coverage cannot exceed its rolling window."""
+    entry = _create_entry()
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **DEFAULT_OPTIONS,
+            CONF_ELECTRICAL_SPIN_WINDOW: 20,
+            CONF_ELECTRICAL_SPIN_MIN_COVERAGE: 21,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_ELECTRICAL_SPIN_MIN_COVERAGE:
+            "electrical_spin_coverage_above_window"
+    }
+
+
+async def test_hybrid_requires_vibration_sensor(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test hybrid confirmation cannot be enabled without vibration."""
+    entry = _create_entry()
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **DEFAULT_OPTIONS,
+            CONF_HYBRID_SPIN_ENABLED: True,
+            CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: 100.0,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_HYBRID_SPIN_ENABLED: "hybrid_spin_requires_vibration_sensor"
+    }
+
+
+async def test_hybrid_requires_power_threshold(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test hybrid confirmation requires a machine-specific power threshold."""
+    entry = _create_entry(with_vibration=True)
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {**DEFAULT_OPTIONS, CONF_HYBRID_SPIN_ENABLED: True},
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_HYBRID_SPIN_ENABLED: "hybrid_spin_requires_power_threshold"
+    }
+
+
+async def test_hybrid_events_must_be_reduced(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test hybrid vibration requirement must be below vibration-only."""
+    entry = _create_entry(with_vibration=True)
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **DEFAULT_OPTIONS,
+            CONF_HYBRID_SPIN_ENABLED: True,
+            CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: 100.0,
+            CONF_HYBRID_SPIN_REQUIRED_EVENTS: DEFAULT_SPIN_REQUIRED_EVENTS,
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_HYBRID_SPIN_REQUIRED_EVENTS: "hybrid_spin_events_not_reduced"
+    }
+
 
 async def test_options_are_saved_and_entry_is_reloaded(
     hass: HomeAssistant,
@@ -208,6 +305,7 @@ async def test_options_are_saved_and_entry_is_reloaded(
     assert runtime.spin_detector.activity_max_age_seconds == 150
     assert runtime.electrical_spin_detector.window_seconds == 30
     assert runtime.electrical_spin_detector.min_coverage_seconds == 20
+    assert runtime.electrical_spin_detector.max_source_age_seconds == 30
     assert runtime.electrical_spin_detector.power_threshold_w is None
     assert runtime.electrical_spin_detector.current_threshold_a is None
     assert runtime.hybrid_spin_enabled is False
