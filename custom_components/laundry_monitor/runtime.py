@@ -88,7 +88,7 @@ from .const import (
     EVENT_MACHINE_UNLOADED,
     EVENT_STATE_CHANGED,
     EVENT_TRANSITION_REJECTED,
-    LaundryCycleState,    
+    LaundryCycleState,
     REASON_ARMING_TIMEOUT,
     REASON_DOOR_CLOSED,
     REASON_DOOR_OPENED_BEFORE_START,
@@ -290,7 +290,7 @@ class LaundryMonitorRuntime:
                     DEFAULT_FINISH_CONFIRMATION,
                 )
             )
-        )        
+        )
         self.running_finish_detector = FinishDetector(
             confirmation_seconds=int(
                 self.entry.options.get(
@@ -819,7 +819,7 @@ class LaundryMonitorRuntime:
             self.current,
             power_updated=False,
             current_updated=True,
-        )       
+        )
         if (
             evaluation.current_activity_detected is True
             and self.cycle_state in _FINISH_EVALUATION_STATES
