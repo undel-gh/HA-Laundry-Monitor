@@ -48,8 +48,7 @@ async def async_setup_entry(
 
     repairs = LaundryMonitorRepairs(hass, entry)
     repairs.async_start()
-    entry.async_on_unload(repairs.async_stop)
-    
+    entry.async_on_unload(repairs.async_stop)    
     return True
 
 
