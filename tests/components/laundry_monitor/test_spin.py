@@ -271,3 +271,67 @@ def test_current_is_corroborating_only() -> None:
 
     assert result.candidate is False
     assert result.current_corroborated is True
+
+
+def test_electrical_candidate_expires_when_power_source_is_stale() -> None:
+    """A stale high-power anchor cannot keep the candidate active."""
+    detector = ElectricalSpinCandidateDetector(
+        window_seconds=30,
+        min_coverage_seconds=20,
+        max_source_age_seconds=30,
+        power_threshold_w=100.0,
+    )
+    start = datetime(2026, 8, 19, 10, 0, tzinfo=timezone.utc)
+    detector.reset(now=start, power=150.0)
+
+    fresh = detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=start + timedelta(seconds=20),
+    )
+    stale = detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=start + timedelta(seconds=31),
+    )
+
+    assert fresh.candidate is True
+    assert fresh.power_source_fresh is True
+    assert stale.candidate is False
+    assert stale.candidate_since is None
+    assert stale.power_source_fresh is False
+
+
+def test_same_value_update_refreshes_electrical_source() -> None:
+    """A real same-value update refreshes source age without median bias."""
+    detector = ElectricalSpinCandidateDetector(
+        window_seconds=30,
+        min_coverage_seconds=20,
+        max_source_age_seconds=30,
+        power_threshold_w=100.0,
+    )
+    start = datetime(2026, 8, 19, 10, 0, tzinfo=timezone.utc)
+    detector.reset(now=start, power=150.0)
+    detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=True,
+        current_updated=False,
+        now=start + timedelta(seconds=25),
+    )
+    result = detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=start + timedelta(seconds=50),
+    )
+
+    assert result.power_source_fresh is True
+    assert result.power_rolling_median == 150.0
+    assert result.power_coverage_seconds == 30.0
+    assert result.candidate is True
