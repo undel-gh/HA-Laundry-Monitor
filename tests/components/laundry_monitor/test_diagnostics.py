@@ -137,6 +137,10 @@ async def test_config_entry_diagnostics(
     assert diagnostics["detectors"]["activity"]["active_sources"] == [
         "current"
     ]
+    electrical = diagnostics["detectors"]["spin"]["electrical_candidate"]
+    assert electrical["max_source_age_seconds"] == 30
+    assert electrical["power_source_fresh"] is True
+    assert electrical["current_source_fresh"] is True
     assert (
         diagnostics["detectors"]["finish"][
             "running_fallback_confirmation_seconds"
