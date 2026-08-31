@@ -274,6 +274,18 @@ When hybrid spin detection is implemented, diagnostics shall identify whether fi
 
 ---
 
+## FR-045
+
+Electrical spin observations shall have a bounded freshness lifetime. An available source that stops publishing updates shall not be extrapolated indefinitely, shall stop contributing observed coverage after the configured maximum source age, and shall not keep an electrical spin candidate active from stale data.
+
+---
+
+## FR-046
+
+Hybrid-spin configuration shall preserve its required evidence invariants. Enabling hybrid confirmation shall require a configured vibration sensor and an explicit electrical power threshold; the hybrid vibration requirement shall be lower than the vibration-only requirement; electrical minimum coverage shall not exceed the electrical rolling window; and reconfiguration shall not remove the vibration source while hybrid confirmation remains enabled.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
