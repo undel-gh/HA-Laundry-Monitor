@@ -1577,8 +1577,7 @@ class LaundryMonitorRuntime:
                 self.power_activity_detected,
                 self.current_activity_detected,
                 self.vibration_active,
-            )
-            
+            )            
         confirmation_path: str | None = None
         if evaluation.detected:
             confirmation_path = "vibration_only"
