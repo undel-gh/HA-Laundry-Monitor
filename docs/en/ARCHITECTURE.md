@@ -96,6 +96,7 @@ Responsibilities:
 * validate the optional current value when configured;
 * reject unavailable, unknown, and non-numeric source states;
 * preserve source timestamps and availability;
+* preserve valid numeric zero values as observations and keep them distinct from missing or unavailable source data;
 * prevent missing data from being interpreted as zero;
 * expose normalized observations to detector components.
 
@@ -108,6 +109,8 @@ power_available
 current_available
 observed_at
 ```
+
+Normalization must preserve the distinction between value and availability. A valid `0 W` or `0 A` observation remains available data with a numeric value of zero. Only unavailable, unknown, invalid, or absent observations are treated as missing telemetry; they must never be replaced with a synthetic zero.
 
 Loss of the optional current source must degrade to power-only operation.
 
