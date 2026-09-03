@@ -17,7 +17,7 @@ Laundry Monitor is intended to answer questions such as:
 - Is laundry still considered present?
 - Why did the integration make a particular state transition?
 
-> **Status:** early development (`v0.1.0`). The state machine, activity/spin/finish detectors, persistence, statistics, diagnostics, and Home Assistant entities are implemented and covered by tests. The integration is currently being field-tested on real hardware, and detector behavior may still evolve before a stable release.
+> **Status:** development (`v0.1.4 rc1`). The state machine, activity/spin/finish detectors, persistence, statistics, diagnostics, and Home Assistant entities are implemented and covered by tests. The integration is currently being field-tested on real hardware, and detector behavior may still evolve before a stable release.
 
 ## Features
 
