@@ -585,6 +585,15 @@ The integration must not automatically:
 Those actions belong to user-configured Home Assistant automations.
 
 ## 12. Sensor Availability
+### 12.0 Value versus availability
+
+Availability is independent from the numeric value reported by a source.
+
+* A valid `0 W` power observation means that zero power was measured; it is not a source failure.
+* A valid `0 A` current observation means that zero current was measured; it is not a source failure.
+* `unavailable`, `unknown`, invalid, or absent source data means that no reliable numeric observation is available and must not be interpreted as zero.
+
+State-machine and detector logic must preserve this distinction. A reachable smart plug reporting `0 W`, including when its output is physically switched off, supplies valid electrical evidence. An unavailable power source does not.
 
 ### 12.1 Required power sensor unavailable
 
@@ -789,7 +798,7 @@ The implementation must preserve the following invariants:
 3. Leak detection must not determine the cycle state.
 4. Door opening must not imply laundry removal.
 5. Missing optional sensors must not stop basic cycle detection.
-6. Missing sensor data must not be interpreted as zero power, zero current or inactivity.
+6. Missing sensor data must not be interpreted as zero power, zero current or inactivity, and valid numeric zero values must not be interpreted as missing or unavailable data.
 7. Power remains required for cycle-start confirmation.
 8. Current activity alone must not confirm final spin or cycle completion.
 9. A cycle-start event must be emitted no more than once per cycle.
@@ -1063,6 +1072,7 @@ At minimum, automated tests should cover:
 * explicit unload behavior;
 * Laundry Tracking disabled behavior;
 * new cycle beginning from `finished`;
+* valid `0 W` / `0 A` observations remaining distinct from unavailable or invalid source states;
 * optional sensor unavailability;
 * required power sensor unavailability;
 * Home Assistant restart in every public state;
