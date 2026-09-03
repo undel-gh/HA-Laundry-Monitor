@@ -192,6 +192,17 @@ An unavailable current sensor must:
 - not be interpreted as zero current or inactivity;
 - be reported in diagnostics.
 
+### 4.4 Zero-value and availability semantics
+
+Source availability and source value are distinct concepts.
+
+- A valid numeric `0 W` power reading is an observed zero-power measurement.
+- A valid numeric `0 A` current reading is an observed zero-current measurement.
+- A valid zero value must not be interpreted as source loss merely because it represents no electrical consumption.
+- `unavailable`, `unknown`, invalid, or absent source data represents a loss of reliable telemetry and must not be converted to numeric zero.
+
+This distinction is intentional. For example, a smart plug that is reachable and reports `0 W` after its output has been switched off is providing valid information: no power is being delivered to the washing machine. A source that is `unavailable` provides no equivalent evidence about the machine's actual electrical state.
+
 ## 5. State Model
 ### 5.1 Public states
 
