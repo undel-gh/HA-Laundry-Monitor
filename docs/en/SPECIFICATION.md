@@ -1,7 +1,7 @@
 # Laundry Monitor Specification
 
 Status: Draft  
-Version: 0.1  
+Version: 0.1.4-rc1
 Language: English  
 Project: HA-Laundry-Monitor
 
