@@ -48,6 +48,9 @@ Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed 
 ### `docs/en/STATE_MACHINE.md`
 Most detailed behavioral document. Defines public/internal states, allowed transitions, detector inputs, state entry/exit semantics, timers, source failures, restart recovery, invariants, edge cases, examples, and test expectations. Start here for any state-transition question.
 
+### `docs/en/USER_MANUAL.md`
+User-facing manual: detailed setup, availiable settings and defaults described here with some use cases. Start here when deciding **how to setup integration properly**.
+
 ### `docs/ru/`
 Russian translations of project documentation. English `docs/en/` remains canonical; Russian docs must not define different behavior.
 
