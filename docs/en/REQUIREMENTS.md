@@ -286,6 +286,12 @@ Hybrid-spin configuration shall preserve its required evidence invariants. Enabl
 
 ---
 
+## FR-047
+
+A valid numeric source value of zero shall be treated as an observed measurement, not as missing or unavailable data. In particular, valid `0 W` power or `0 A` current readings shall not be converted into source-unavailable conditions. Conversely, `unavailable`, `unknown`, invalid, or absent source data shall not be synthesized as zero.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
