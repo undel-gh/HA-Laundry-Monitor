@@ -4,7 +4,7 @@
 [![HACS: Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Laundry Monitor** is a Home Assistant custom integration that monitors and analyzes washing-machine cycles using external sensors. It does not communicate with or control the washing machine directly.
+**Laundry Monitor** is a Home Assistant custom integration that creates a logical monitoring device for a washing machine using existing Home Assistant sensor entities. It monitors and analyzes washing-machine cycles using external sensors. It does not communicate with or control the washing machine directly.
 
 The only required source is a **power sensor**. Optional current, door, vibration, leak, energy, and plug-switch entities can provide additional evidence, diagnostics, and statistics.
 
