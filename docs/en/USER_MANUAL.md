@@ -6,7 +6,7 @@
 
 ## 1. What Laundry Monitor does
 
-Laundry Monitor is a Home Assistant custom integration for monitoring washing-machine cycles with external Home Assistant entities.
+Laundry Monitor is a Home Assistant custom integration that creates a logical monitoring device for a washing machine using existing Home Assistant sensor entities.
 
 It does **not** communicate with or control the washing machine directly. Instead, it observes electrical and optional physical signals and infers the current cycle state.
 
