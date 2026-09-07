@@ -727,24 +727,24 @@ Laundry Monitor is not:
 - a replacement for Home Assistant automations.
 
 ## 16. Roadmap
-### v0.1
+### v0.1.0
 - project skeleton;
 - config flow;
 - basic power-based state machine;
 - diagnostic entities;
 - localization foundation.
 
-### v0.2
+### v0.1.2
 - door sensor support;
 - Laundry Tracking module;
 - Home Assistant events.
 
-### v0.3
+### v0.1.3
 - vibration-based final spin detection;
 - confidence calculation;
 - debug diagnostics.
 
-### v0.4
+### v0.1.4
 - leak sensor support;
 - leak state;
 - optional current sensor support;
