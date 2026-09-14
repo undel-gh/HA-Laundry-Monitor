@@ -292,6 +292,60 @@ A valid numeric source value of zero shall be treated as an observed measurement
 
 ---
 
+## FR-048
+
+When active hybrid spin confirmation is enabled, the integration shall support a machine-specific sustained-power threshold for detecting heater operation. A single instantaneous power spike shall not be sufficient to mark heating as detected.
+
+---
+
+## FR-049
+
+Heating context shall use at least the diagnostic states `unknown`, `not_seen`, and `detected`. It shall start each new cycle as `unknown`. Once heating is confirmed, `detected` shall be latched for the remainder of that cycle.
+
+---
+
+## FR-050
+
+The integration shall classify heating as `not_seen` only after sufficient **valid power-observation coverage** has accumulated without confirmed heating. Wall-clock passage alone shall not establish `not_seen`. Missing, unavailable, unknown, invalid, absent, or stale power data shall not count as evidence that heating did not occur.
+
+---
+
+## FR-051
+
+While sustained heater-level power is actively confirmed, terminal-spin confirmation shall be blocked regardless of whether vibration-only or hybrid spin evidence would otherwise satisfy its gates.
+
+---
+
+## FR-052
+
+After heating has been detected, reduced-evidence hybrid confirmation shall not be permitted before a configurable heated-cycle minimum age. That minimum age shall not be lower than the normal configured spin minimum cycle age.
+
+---
+
+## FR-053
+
+A fast non-heated hybrid path may confirm `final_spin` before the normal spin minimum cycle age only when heating has been classified as `not_seen`, full vibration evidence is satisfied, a fresh sustained electrical spin candidate is present, and the normal activity-recency requirements are satisfied. The fast path shall not use the reduced hybrid vibration requirement.
+
+---
+
+## FR-054
+
+An enabled reduced-evidence hybrid configuration shall require an explicit heating power threshold in addition to the existing vibration source and electrical spin power threshold. The heating threshold shall be greater than the electrical spin power threshold. A configuration that cannot satisfy the heating-aware safety invariants shall fail closed to non-reduced detection rather than silently use unsafe reduced-evidence hybrid confirmation.
+
+---
+
+## FR-055
+
++Heating context that changes future spin-gating decisions shall be included in restart recovery. At minimum, a reliably known `heating_detected` fact shall survive safe recovery. When sufficient heating history cannot be restored, the runtime shall recover heating context conservatively as `unknown`; it shall not infer `not_seen` from missing pre-restart history.
+
+---
+
+## FR-056
+
+Diagnostics shall expose enough heating context to explain a blocked or accepted terminal-spin decision, including the heating state, whether heater-level power is currently active, observation coverage, the configured heating threshold/timers, and the effective heating-aware cycle-age gate.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
