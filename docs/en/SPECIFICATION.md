@@ -388,10 +388,55 @@ A possible detector implementation may use:
 - recent meaningful electrical activity;
 - sustained power characteristics that are consistent with high-speed motor operation;
 - optional current characteristics as corroborating electrical evidence;
+- observed heater-level power as early-cycle context;
 - other implementation-specific evidence that improves discrimination between ordinary intermediate spins and the terminal sequence.
 
 Current activity is supporting evidence only. It must not independently produce a final-spin transition.
 
+#### Heating-aware cycle context
+
+When experimental hybrid confirmation is enabled, the detector shall maintain an internal heating context derived from the required power source. Heating context is not a new public washing-machine state and must not be exposed as part of the public cycle-state API.
+
+The initial heating context has three diagnostic states:
+
+```text
+unknown
+not_seen
+detected
+```
+
+At cycle start the context is `unknown`.
+
+A cycle becomes `detected` for heating only after power at or above a machine-specific **heating power threshold** has been supported for the configured **heating confirmation** duration. Heating detection is latched for the remainder of the cycle. Brief power spikes must not be sufficient.
+
+A cycle may become `not_seen` only after the configured **heating observation** amount of valid power-observation coverage has accumulated without confirmed heating. This is observed coverage, not merely wall-clock age. `unavailable`, `unknown`, invalid, stale, or absent power data must not count as evidence that heating did not occur.
+
+Heating observation continues after `not_seen`; if a heater signature is later confirmed, the context shall upgrade to `detected`.
+
+The detector shall also maintain a transient `heating_active` condition while sustained heater-level power is currently confirmed. `heating_active` is a hard negative gate for `final_spin`: terminal-spin confirmation must not occur while confirmed heater operation is active.
+
+Heating-aware timing rules are:
+
+```text
+heating = detected:
+    effective reduced-hybrid minimum age =
+        max(spin_min_cycle_time, heated_cycle_min_seconds)
+
+heating = not_seen:
+    normal reduced-hybrid path keeps the normal spin_min_cycle_time
+
+heating = unknown:
+    reduced-evidence hybrid confirmation is blocked
+
+fast non-heated path:
+    heating = not_seen
+    + full vibration requirement
+    + fresh sustained electrical spin candidate
+    + recent meaningful activity
+    -> may confirm final_spin before spin_min_cycle_time
+```
+
+The fast non-heated path is intended for programs such as spin-only or rinse-and-spin that may legitimately approach their terminal sequence early. It deliberately requires the **full** vibration requirement rather than the reduced hybrid requirement, because absence of observed heating does not prove that the program is spin-only; cold washes and programs with delayed heating remain possible.
 
 #### Experimental hybrid electrical corroboration
 
@@ -406,15 +451,25 @@ vibration-only path:
     + minimum cycle age
     -> final_spin
 
-hybrid path:
+normal hybrid path:
     reduced but still meaningful vibration evidence
     + fresh sustained electrical spin candidate
     + activity-recency gate
-    + minimum cycle age
+    + heating context is known
+    + no active heating
+    + heating-aware minimum cycle age
     -> final_spin
+
+fast non-heated hybrid path:
+    full vibration evidence
+    + fresh sustained electrical spin candidate
+    + activity-recency gate
+    + heating context = not_seen
+    + no active heating
+    -> final_spin before the normal minimum cycle age
 ```
 
-The current defaults require three vibration events for the vibration-only path. The experimental hybrid path is disabled by default; when enabled, its default vibration requirement is two events and must remain lower than the configured vibration-only requirement.
+The current defaults require three vibration events for the vibration-only path. The experimental hybrid path is disabled by default; when enabled, its normal reduced-evidence requirement is two events and must remain lower than the configured vibration-only requirement. The fast non-heated path does not use the reduced requirement.
 
 Electrical spin evidence is based on time-weighted rolling medians over piecewise-constant source observations. Candidate evaluation also requires minimum observed coverage. A single power or current spike is insufficient.
 
@@ -447,9 +502,15 @@ Example defaults:
 | Electrical spin maximum source age | 30 s | Maximum age of a real source update before it becomes stale |
 | Electrical spin power threshold | unset | Machine-specific power threshold for the electrical candidate |
 | Electrical spin current threshold | unset | Optional machine-specific current corroboration threshold |
-| Hybrid spin enabled | false | Experimental hybrid confirmation is opt-in |
-| Hybrid spin required events | 2 | Reduced vibration requirement used only by the hybrid path |
+| Heating power threshold | unset | Machine-specific sustained-power threshold used to identify heater operation |
+| Heating confirmation | 30 s | Required observed duration of heater-level power before heating is latched |
+| Heating observation | 300 s | Valid early-cycle power-observation coverage required before heating may be classified as `not_seen` |
+| Heated-cycle minimum spin time | 900 s | Minimum cycle age for reduced-evidence hybrid confirmation once heating has been detected |
+| Hybrid spin enabled | false | Experimental heating-aware hybrid confirmation is opt-in |
+| Hybrid spin required events | 2 | Reduced vibration requirement used by the normal hybrid path; the fast non-heated path uses the full vibration requirement |
 Confidence is diagnostic and implementation-specific; it is not a replacement for the configured evidence gates above.
+
+The heating threshold is machine-specific and has no universal project default. For active hybrid confirmation it must be configured explicitly and must be higher than the configured electrical spin power threshold so that ordinary spin-level motor power does not classify itself as heater activity.
 
 The detector must not assume a fixed mechanical spin duration. A terminal spin sequence may be much shorter or longer depending on program, load size, load distribution, and machine behavior.
 
@@ -602,6 +663,10 @@ User-configurable options:
 - electrical spin maximum source age;
 - machine-specific electrical spin power threshold;
 - optional machine-specific electrical spin current threshold;
+- machine-specific heating power threshold;
+- heating confirmation duration;
+- heating observation coverage;
+- heated-cycle minimum spin time;
 - experimental hybrid-spin enable/disable;
 - hybrid vibration-event requirement;
 - final-spin finish confirmation;
@@ -611,7 +676,9 @@ User-configurable options:
 - power-unavailable grace period;
 - snapshot maximum age.
 
-Hybrid confirmation requires a configured vibration sensor and an explicit electrical power threshold. Its vibration-event requirement must be lower than the vibration-only requirement. Electrical minimum coverage must not exceed the electrical rolling window. Reconfigure must preserve the same hybrid/vibration invariant: an enabled hybrid configuration may not remove its vibration source.
+Active hybrid confirmation requires a configured vibration sensor, an explicit electrical spin power threshold, and an explicit heating power threshold. The heating threshold must be higher than the electrical spin threshold. The reduced hybrid vibration-event requirement must be lower than the vibration-only requirement. Electrical minimum coverage must not exceed the electrical rolling window. The heated-cycle minimum spin time must not be lower than the normal spin minimum cycle time, and heating confirmation must not exceed the heating observation coverage. Reconfigure must preserve the same hybrid/vibration invariant: an enabled hybrid configuration may not remove its vibration source.
+
+For backward compatibility with experimental configurations created before heating-aware gating exists, an enabled hybrid configuration that lacks a valid heating threshold must fail closed: the runtime may continue vibration-only detection, but it must not use reduced-evidence hybrid confirmation until the heating configuration is completed.
 
 ## 12. Recovery policy
 
@@ -682,6 +749,8 @@ Diagnostics should include:
 * activity, vibration-spin, electrical-spin, and finish detector state;
 * electrical rolling medians, observed coverage, and source freshness;
 * electrical candidate state and timestamp;
+* heating context (`unknown`, `not_seen`, or `detected`), heating-active state, heating observation coverage, and detection timestamp when available;
+* the effective heating-aware spin timing gate and any reason that spin confirmation is currently blocked;
 * final-spin confirmation path and supporting evidence when available;
 * configured algorithm parameters;
 * laundry tracking state and `last_unloaded_at`;
