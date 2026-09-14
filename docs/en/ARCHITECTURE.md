@@ -165,34 +165,48 @@ Current activity may increase spin confidence by supporting the conclusion that 
 
 Current activity must not independently confirm final spin. The implemented runtime retains the full vibration-only path and additionally provides an experimental, opt-in **hybrid spin confirmation path** that combines reduced vibration evidence with a sustained electrical spin candidate.
 
-The electrical-corroboration stage is implemented as a separate detector:
+The electrical-corroboration stage and heating context are implemented as separate internal detector concerns:
 ```text
-Power history ───────────────┐
-                            ├──► Electrical spin candidate ──┐
-Optional current history ───┘                                │
-                                                             ├──► Spin Detector
-Vibration evidence ──────────────────────────────────────────┤
-Cycle age / timing gates ────────────────────────────────────┘
+Power history ───────────────┬──► Electrical spin candidate ──┐
+                             │                                │
+                             └──► Heating context ─────────────┤
+Optional current history ───────► corroboration               │
+                                                              ├──► Spin Detector
+Vibration evidence ───────────────────────────────────────────┤
+Cycle age / timing gates ─────────────────────────────────────┘
 ```
 
 The electrical stage uses time-weighted rolling medians and minimum observed coverage rather than instantaneous samples. Piecewise-constant source values are valid only for a bounded maximum source age so an old available-but-not-updating value cannot provide indefinite coverage.
 
 Power remains the primary electrical signal. Current is optional corroboration. When both are measured by the same smart plug or meter, the implementation should treat them as correlated observations of the same electrical load rather than as two independent votes.
 
-The hybrid path reduces the amount of vibration evidence required for confirmation only when the electrical candidate and all applicable timing gates are simultaneously satisfied. Electrical evidence alone must not produce a final-spin result.
+The hybrid path reduces the amount of vibration evidence required for confirmation only when the electrical candidate, heating context, and all applicable timing gates are simultaneously satisfied. Electrical evidence alone must not produce a final-spin result.
 
-Window, coverage, freshness and electrical thresholds are configurable. Architecture must not encode machine-specific field values as universal power/current defaults.
+Heating context is deliberately small and cycle-local:
+
+* `unknown` — insufficient reliable early-cycle power observation exists to classify heating;
+* `not_seen` — sufficient reliable observation coverage has accumulated without a heater signature;
+* `detected` — sustained heater-level power has been confirmed and the fact is latched for the cycle.
+
+The Heating Context Detector consumes the same normalized required power source but answers a different question from the Electrical Spin Candidate Detector. It must distinguish **heater-level sustained load** from **spin-level motor load** by using a separate machine-specific heating threshold and confirmation duration.
+
+`not_seen` is an evidence statement, not a default. It may be reached only after sufficient valid source coverage. Missing, unavailable, invalid, or stale power cannot advance the no-heating observation coverage.
+
+While heater-level operation is actively confirmed, the Spin Detector must reject every terminal-spin confirmation path. Once heating has been detected, reduced-evidence hybrid confirmation uses a stricter minimum cycle age. If heating is confidently `not_seen`, a fast non-heated hybrid path may bypass the normal minimum age, but only with the full vibration requirement plus the sustained electrical spin candidate.
+
+Window, coverage, freshness, electrical thresholds, heating threshold, and heating timing values are configurable. Architecture must not encode machine-specific field values as universal power/current/heating defaults.
 
 The detector must not assume that the terminal spin sequence has a fixed duration or contains one uninterrupted spin. A validated terminal spin sequence may contain multiple spin stages and short pauses, and its duration may vary with program and load. Draining may begin while the drum is still rotating and may continue after the drum has fully stopped.
 
 A confirmed terminal-spin-sequence result is a terminal-phase marker. Subsequent meaningful activity is expected during overlapping spin-and-drain operation, drain-only operation after drum stop, drum positioning, additional terminal spinning, electronics activity, or end-of-program signalling and must not automatically invalidate the result.
 
-The runtime exposes evidence, the confirmation path used, and a confidence level. Diagnostics distinguish `vibration_only` from `hybrid` confirmation and include the supporting electrical statistics. Confirmation-path metadata is diagnostic and is not required to survive restart recovery.
+The runtime exposes evidence, the confirmation path used, and a confidence level. Diagnostics distinguish `vibration_only` from `hybrid` confirmation and include supporting electrical and heating-context statistics. The fast non-heated path remains diagnostically a hybrid confirmation; additional evidence should indicate that the non-heated fast timing gate was used. Confirmation-path metadata is diagnostic and is not required to survive restart recovery.
 
-Configuration invariants are enforced before runtime evaluation: hybrid confirmation requires a vibration sensor and an explicit electrical power threshold, its vibration requirement must be lower than the full vibration-only requirement, and electrical minimum coverage must not exceed the rolling window. Reconfigure must not remove the vibration source while hybrid confirmation remains enabled.
+Heating context that affects future safety decisions is different from confirmation-path metadata. At minimum, a latched `heating_detected` fact and the cycle timing needed to preserve the stricter heated-cycle gate must survive safe restart recovery. If reliable heating history cannot be restored, recovery must be conservative: the context returns to `unknown`, and fast/non-reduced hybrid timing privileges remain disabled until sufficient new evidence exists.
+
+Configuration invariants are enforced before runtime evaluation: hybrid confirmation requires a vibration sensor, an explicit electrical spin power threshold, and an explicit heating power threshold. The heating threshold must exceed the spin threshold, the reduced hybrid vibration requirement must be lower than the full vibration-only requirement, electrical minimum coverage must not exceed the rolling window, and heated-cycle minimum age must not be lower than the normal spin minimum age. Reconfigure must not remove the vibration source while hybrid confirmation remains enabled.
  
 ---
-
 
 ## 3.4 Finish Detector
 
@@ -300,13 +314,13 @@ Source update
 Validation and normalization
     ↓
 Source-specific evidence
-    ↓
-Meaningful activity
-    ├──► Spin evaluation
-    └──► Finish evaluation
-              ↓
-         State Machine
-              ↓
+    ├──► Heating context ───────┐
+    └──► Meaningful activity   │
+             ├──► Spin evaluation ◄──┘
+             └──► Finish evaluation
+                       ↓
+                  State Machine
+                       ↓
       Entities + Events + Diagnostics
 ```
 
