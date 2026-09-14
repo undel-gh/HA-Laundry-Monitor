@@ -145,6 +145,10 @@ The basic defaults are intended to provide conservative behavior:
 | Electrical spin window | 30 s |
 | Minimum electrical coverage | 20 s |
 | Maximum electrical source age | 30 s |
+| Heating power threshold | unset |
+| Heating confirmation | 30 s |
+| Heating observation | 300 s |
+| Heated-cycle minimum spin time | 900 s |
 | Hybrid spin enabled | Off |
 | Hybrid required vibration events | 2 |
 | Final-spin finish confirmation | 180 s |
@@ -291,15 +295,45 @@ A hybrid confirmation requires:
 - hybrid mode enabled;
 - a configured vibration sensor;
 - a configured electrical spin power threshold;
+- a configured heating power threshold;
 - a reduced but still meaningful number of vibration events;
 - a sustained electrical spin candidate;
-- the minimum cycle age;
-- recent meaningful activity;
+- known heating context;
+- no active heater signature;
+- the applicable heating-aware minimum cycle age;- recent meaningful activity;
 - fresh electrical source data.
 
 Electrical evidence **alone can never confirm final spin**.
 
-### 10.3 Electrical spin candidate
+### 10.3 Heating-aware cycle context
+
+Hybrid detection also watches for sustained heater-level power. This prevents a wash-program heating phase from being mistaken for high-speed motor activity.
+
+Heating context has three diagnostic states:
+
+```text
+unknown
+not_seen
+detected
+```
+
+At cycle start it is `unknown`.
+
+- **detected** — power remained at or above the configured **Heating power threshold** for the **Heating confirmation** duration. Once detected, this fact remains latched for the rest of the cycle.
+- **not_seen** — Laundry Monitor accumulated the configured **Heating observation** amount of valid power data without seeing a confirmed heater signature.
+- **unknown** — there is not enough reliable history to make either conclusion.
+
+`Heating observation` is based on valid observed power coverage, not just elapsed wall-clock time. A Matter/Zigbee/network outage therefore does not count as evidence that heating was absent.
+
+While heater-level operation is actively confirmed, Laundry Monitor blocks `final_spin`.
+
+If heating has been detected, the reduced-evidence hybrid path is delayed until **Heated-cycle minimum spin time** has elapsed from cycle start.
+
+If heating is confidently `not_seen`, Laundry Monitor may use a **fast non-heated path** before the normal spin minimum cycle time. That fast path is intentionally stricter mechanically: it requires the full vibration-event requirement plus the electrical spin candidate. This supports short spin-only or rinse-and-spin programs without assuming that every no-heating program is a spin-only program.
+
+A cold wash can also have `not_seen` heating. Therefore no-heating context by itself is never enough to confirm `final_spin`.
+
+### 10.4 Electrical spin candidate
 
 The electrical detector uses a time-weighted rolling median rather than a single instantaneous sample.
 
@@ -313,13 +347,13 @@ The relevant settings are:
 
 The freshness limit prevents an old high-power sample from supporting a hybrid decision indefinitely if the sensor stops updating while still appearing available.
 
-### 10.4 Current corroboration
+### 10.5 Current corroboration
 
 Current is corroborating evidence only.
 
 A hybrid decision is power-authoritative. The optional current threshold helps diagnostics show whether the current profile supports the same conclusion, but failure to cross the current threshold does not by itself block hybrid confirmation.
 
-### 10.5 Choosing hybrid thresholds
+### 10.6 Choosing hybrid thresholds
 
 Do **not** copy power/current thresholds from another washing machine unless its electrical profile has been measured and shown to be comparable.
 
@@ -328,15 +362,17 @@ A practical calibration workflow is:
 1. Leave hybrid mode disabled.
 2. Observe several complete cycles.
 3. Compare vibration events with power/current history around the physical terminal spin.
-4. Choose a power threshold that is sustained during the relevant spin signature but does not commonly occur in unrelated late-cycle activity.
-5. Configure the optional current threshold as corroborating diagnostic evidence.
-6. Enable the disabled electrical/hybrid diagnostic entities.
-7. Observe several additional cycles in shadow mode.
-8. Enable hybrid confirmation only after the combination does not show false terminal-spin candidates.
+4. Identify sustained heater operation separately from motor/spin power.
+5. Choose an electrical spin power threshold that is sustained during the relevant spin signature.
+6. Choose a **higher** heating power threshold that reliably identifies the machine's heater without being reached by normal motor/spin operation.
+7. Configure the optional current threshold as corroborating diagnostic evidence.
+8. Enable the disabled electrical/hybrid diagnostic entities.
+9. Observe several additional cycles in shadow mode, including at least one heated wash and, if available, a spin-only or rinse-and-spin program.
+10. Enable hybrid confirmation only after the combination does not show false terminal-spin candidates.
 
-Example values such as `100 W` and `0.7 A` may be appropriate for a particular measured machine, but they are **not universal recommendations**.
+Example spin values such as `100 W` and `0.7 A`, or heater values observed on one particular machine, are **not universal recommendations**.
 
-### 10.6 Hybrid configuration rules
+### 10.7 Hybrid configuration rules
 
 Laundry Monitor rejects contradictory hybrid settings.
 
@@ -344,9 +380,15 @@ In particular:
 
 - hybrid mode requires a vibration sensor;
 - hybrid mode requires an electrical spin power threshold;
+- hybrid mode requires a heating power threshold;
+- the heating power threshold must be higher than the electrical spin power threshold;
 - the hybrid vibration-event requirement must be lower than the normal vibration-only requirement;
 - minimum electrical coverage must not exceed the electrical window;
+- heated-cycle minimum spin time must not be lower than the normal spin minimum cycle time;
+- heating confirmation must not exceed the heating observation coverage;
 - reconfiguration must not remove the vibration source while hybrid mode remains enabled.
+
+If an upgraded experimental configuration has hybrid enabled but no valid heating threshold, reduced-evidence hybrid confirmation must remain disabled until the missing heating configuration is supplied.
 
 ---
 
@@ -600,13 +642,16 @@ Disable hybrid mode first, then inspect:
 
 - vibration evidence timing;
 - power rolling median;
-- electrical threshold;
-- minimum cycle time;
+- electrical spin threshold;
+- heating state and heating-active diagnostics;
+- heating power threshold and confirmation duration;
+- heating observation coverage;
+- the effective heating-aware minimum cycle age;
 - electrical coverage;
 - source freshness;
 - whether the same electrical profile occurs during heating or ordinary wash activity.
 
-Raise or redesign the machine-specific threshold only after reviewing complete-cycle history.
+If heater-level power can satisfy the electrical spin threshold, configure a separate higher heating threshold rather than simply raising the spin threshold. Verify at least one heated cycle and one non-heated/short program when possible.
 
 ### Hybrid never confirms
 
