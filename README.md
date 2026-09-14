@@ -27,8 +27,9 @@ Laundry Monitor is intended to answer questions such as:
 - Power-based cycle-start detection with a configurable confirmation period.
 - Optional current-assisted meaningful-activity detection.
 - Optional vibration-based detection of a probable **terminal spin sequence / terminal phase**.
-- Experimental opt-in hybrid confirmation can combine reduced vibration evidence with a fresh, sustained electrical spin candidate.
-- Electrical confirmation uses power as the primary signal; optional current is corroborating diagnostics only.
+- Experimental opt-in hybrid confirmation can combine vibration evidence with a fresh, sustained electrical spin candidate.
+- Heating-aware cycle context can suppress false terminal-spin decisions during sustained heater operation, delay reduced-evidence hybrid confirmation for heated wash programs, and permit a conservative faster path for programs where no heating is observed.
+ - Electrical confirmation uses power as the primary signal; optional current is corroborating diagnostics only.
 - Two finish paths:
   - shorter confirmation after terminal-phase detection;
   - conservative fallback when terminal spin was not detected.
@@ -118,8 +119,12 @@ Current implementation defaults:
 | Electrical spin maximum source age | 30 s | Maximum age for the last real source update to remain valid evidence. |
 | Electrical spin power threshold | unset | Machine-specific power threshold. No universal project default is defined. |
 | Electrical spin current threshold | unset | Optional machine-specific current corroboration threshold. |
-| Hybrid spin enabled | false | Enables the experimental `reduced vibration + electrical candidate` confirmation path. |
-| Hybrid spin required events | 2 | Vibration evidence required by the hybrid path when it is enabled. |
+| Heating power threshold | unset | Machine-specific sustained-power threshold used to recognize heater operation. Required for active hybrid confirmation.
+| Heating confirmation | 30 s | Heater-level power must remain supported for this observed duration before heating is latched for the cycle.
+| Heating observation | 300 s | Required valid power-observation coverage before the cycle may be classified as `not_seen` for heating.
+| Heated-cycle minimum spin time | 900 s | Minimum cycle age for reduced-evidence hybrid confirmation after heating has been detected.
+| Hybrid spin enabled  | false  | Enables the experimental heating-aware hybrid confirmation paths.
+| Hybrid spin required events  | 2  | Reduced vibration evidence used by the normal hybrid path after the applicable heating-aware timing gate.
 | Finish confirmation | 180 s | Quiet period used after `final_spin`. |
 | Running-state finish confirmation | 600 s | Conservative quiet-period fallback when terminal spin was not detected. |
 | Arming timeout | 1800 s | Returns `armed` to `idle` when no cycle starts. |
@@ -256,9 +261,12 @@ Important design rules:
 - Optional current contributes supplemental meaningful-activity evidence.
 - Optional current alone cannot confirm cycle start, terminal spin, or completion.
 - The normal terminal-spin path remains vibration-only and uses the configured full vibration requirement.
-- When explicitly enabled, the experimental hybrid path may confirm the same `final_spin` state from reduced vibration evidence plus a fresh, sustained electrical candidate.
+- When explicitly enabled, the experimental hybrid detector also observes heater-level power as cycle context.
+- Confirmed active heating blocks `final_spin` confirmation while the heater signature is present.
+- Once heating has been detected, reduced-evidence hybrid confirmation is not permitted until the configured heated-cycle minimum age has been reached.
+- If sufficient valid early-cycle power coverage is observed without any heater signature, a fast non-heated hybrid path may bypass the normal minimum cycle age, but only with the full vibration requirement plus a fresh sustained electrical spin candidate.
+- Missing or stale early-cycle power data must not be interpreted as evidence that heating did not occur.
 - Electrical evidence alone can never confirm `final_spin`.
-- Machine-specific electrical thresholds have no universal defaults and must be configured explicitly.
 - Stale electrical samples must not continue supporting an electrical candidate after the configured maximum source age.
 - Finish is inferred from the absence of meaningful electrical activity over time rather than from an exact standby-power value.
 - Optional vibration provides terminal-spin evidence.
