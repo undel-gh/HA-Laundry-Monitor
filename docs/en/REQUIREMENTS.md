@@ -336,7 +336,7 @@ An enabled reduced-evidence hybrid configuration shall require an explicit heati
 
 ## FR-055
 
-+Heating context that changes future spin-gating decisions shall be included in restart recovery. At minimum, a reliably known `heating_detected` fact shall survive safe recovery. When sufficient heating history cannot be restored, the runtime shall recover heating context conservatively as `unknown`; it shall not infer `not_seen` from missing pre-restart history.
+Heating context that changes future spin-gating decisions shall be included in restart recovery. At minimum, a reliably known `heating_detected` fact shall survive safe recovery. When sufficient heating history cannot be restored, the runtime shall recover heating context conservatively as `unknown`; it shall not infer `not_seen` from missing pre-restart history.
 
 ---
 
