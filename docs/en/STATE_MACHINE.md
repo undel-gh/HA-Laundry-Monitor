@@ -307,6 +307,7 @@ When entering `running` because a new cycle has started, the state machine shoul
 * assign a new cycle identifier;
 * record `cycle_started_at`;
 * clear data from incomplete start candidates;
+* initialize heating context as `unknown` and reset heating observation/confirmation state;
 * initialize cycle duration and energy tracking;
 * notify Laundry Tracking that a cycle has started;
 * emit `laundry_monitor.cycle_started`;
@@ -336,16 +337,30 @@ The public state is therefore a **terminal spin sequence / terminal phase** mark
 
 The State Machine does not depend on the internal implementation of the Spin Detector. It consumes a confirmed terminal-spin result together with its evidence and diagnostic confidence.
 
-The vibration-only path requires the configured full vibration evidence plus the applicable activity-recency and cycle-age gates.
+The vibration-only path requires the configured full vibration evidence plus the applicable activity-recency and cycle-age gates. When confirmed heater operation is currently active, even a vibration-only terminal-spin result is blocked until heater-level operation is no longer active.
 
-The experimental hybrid path combines:
+The experimental hybrid detector combines vibration and electrical evidence with heating-aware cycle context.
+
+The normal reduced-evidence hybrid path requires:
 
 * reduced but still meaningful vibration evidence;
 * a fresh sustained electrical spin candidate derived primarily from power;
 * optional current corroboration;
-* the same applicable activity-recency, minimum-cycle-age and timing gates.
+* recent meaningful activity;
+* known heating context;
+* no currently active heater signature;
+* the effective heating-aware minimum cycle age.
 
-The electrical candidate is based on time-weighted rolling statistics, minimum observed coverage and bounded source freshness. The hybrid path must not treat a single power/current spike or stale source value as sufficient evidence and must not confirm `final_spin` from electrical measurements alone.
+If heating has been detected, the effective minimum age is at least the configured heated-cycle minimum and never less than the normal spin minimum age. If heating remains `unknown`, reduced-evidence hybrid confirmation is blocked.
+
+The fast non-heated hybrid path is different. It may bypass the normal spin minimum age only when:
+* heating has been classified as `not_seen` from sufficient valid power-observation coverage;
+* the **full** vibration-only evidence requirement is satisfied;
+* a fresh sustained electrical spin candidate is present;
+* meaningful activity is recent;
+* heater-level operation is not active.
+
+The electrical candidate is based on time-weighted rolling statistics, minimum observed coverage and bounded source freshness. Heating classification has its own sustained high-power threshold and observed-coverage rule. Neither detector may treat a single spike, stale source value, or missing observation as sufficient evidence.
 
 If power and current are supplied by the same smart plug or measurement device, they are correlated measurements of one electrical load and must not be interpreted as two independent votes.
 
@@ -694,7 +709,10 @@ When restoring `running`, the integration should preserve:
 * cycle start timestamp;
 * last meaningful activity timestamp;
 * accumulated cycle energy, when available;
+* a reliably known latched `heating_detected` fact and associated timing context;
 * detector context required for safe continuation.
+
+If heating observation history cannot be restored with sufficient confidence, heating context must recover as `unknown`. Recovery must not infer `not_seen` merely because the restored cycle is already older than the heating observation interval.
 
 The integration must not immediately declare the cycle finished solely because the first power reading after restart is low.
 
@@ -741,6 +759,20 @@ The `armed` state should have a configurable timeout to avoid remaining active i
 ### 14.5 Completed-state retention
 
 When Laundry Tracking is disabled, the duration for which `finished` remains visible should be configurable.
+
+### 14.6 Heating-aware terminal-spin timing
+
+When heating-aware hybrid detection is configured, final-spin timing shall use cycle-local heating context.
+
+* Heating starts as `unknown`.
+* A sustained heater-level signature latches heating as `detected`.
+* `not_seen` requires the configured amount of valid power-observation coverage without heating; elapsed wall-clock time alone is insufficient.
+* Active heater-level operation blocks all `final_spin` confirmation.
+* After heating is `detected`, reduced-evidence hybrid confirmation uses the stricter heated-cycle minimum age.
+* While heating remains `unknown`, reduced-evidence hybrid confirmation is blocked.
+* After heating is `not_seen`, the fast non-heated hybrid path may bypass the normal minimum cycle age only with full vibration evidence and the sustained electrical spin candidate.
+
+A later confirmed heater signature upgrades `not_seen` to `detected`. The reverse transition is not allowed within the same cycle.
 
 ## 15. Transition Records
 
@@ -812,7 +844,12 @@ The implementation must preserve the following invariants:
 17. An enabled hybrid configuration must retain the vibration source required by its mechanical evidence path.
 18. Public state values must not be localized.
 19. Electrical evidence alone must not confirm `final_spin`.
-
+20. Missing or stale power data must not advance a no-heating observation into `not_seen`.
+21. Confirmed active heating must block terminal-spin confirmation.
+22. Reduced-evidence hybrid confirmation must not run with `unknown` heating context.
+23. A fast non-heated path must use the full vibration requirement, not the reduced hybrid requirement.
+24. Restart recovery must not infer `not_seen` from heating history that was not observed or safely restored.
+    
 ## 18. Edge Cases
 
 ### 18.1 Long low-power pause during a cycle
@@ -910,6 +947,27 @@ The implementation should:
 * clear incompatible unconfirmed candidates;
 * record the configuration change;
 * avoid retroactively generating transitions.
+
+### 18.12 Heated wash produces spin-like electrical power
+
+If heater operation overlaps vibration or otherwise satisfies the electrical spin threshold, expected behavior is:
+
+* recognize the separate sustained heater-level signature;
+* latch the cycle as heated;
+* block `final_spin` while heater-level operation is active;
+* apply the heated-cycle minimum age to reduced-evidence hybrid confirmation;
+* remain in `running` when the heating-aware timing gate is not satisfied.
+
+### 18.13 Spin-only or rinse-and-spin program
+
+When no heater signature has been observed, expected behavior is:
+
+* keep heating context `unknown` until sufficient valid early-cycle power coverage exists;
+* classify it as `not_seen` only after that coverage requirement is met;
+* permit a fast non-heated hybrid confirmation before the normal minimum cycle age only when full vibration evidence and the electrical spin candidate are both present;
+* preserve the normal conservative path when evidence is insufficient.
+
+A cold wash is also a possible no-heating program. Therefore `not_seen` must never be treated as proof that the selected program is spin-only.
 
 ## 19. Invalid Transitions
 
