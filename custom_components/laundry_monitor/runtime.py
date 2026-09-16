@@ -1675,7 +1675,7 @@ class LaundryMonitorRuntime:
             return False
 
         timestamp = now or dt_util.utcnow()
-        valuation = self.spin_detector.evaluate(
+        evaluation = self.spin_detector.evaluate(
             vibration_active=self.vibration_active,
             activity_detected=self.activity_detected,
             last_activity=self.last_activity,
