@@ -246,9 +246,45 @@ async def _async_build_diagnostics(
                     runtime.final_spin_evidence_count
                 ),
                 "confirmation_path": runtime.final_spin_confirmation_path,
+                "gate_reason": runtime.spin_gate_reason,
                 "hybrid": {
                     "enabled": runtime.hybrid_spin_enabled,
                     "required_events": runtime.hybrid_spin_required_events,
+                    "variant": runtime.final_spin_hybrid_variant,
+                    "effective_min_cycle_seconds": (
+                        runtime.effective_hybrid_min_cycle_seconds
+                    ),
+                },
+                "heating": {
+                    "state": runtime.heating_state.value,
+                    "active": runtime.heating_detector.heating_active,
+                    "detected_at": _serialize_datetime(
+                        runtime.heating_detector.detected_at
+                    ),
+                    "power_threshold_w": (
+                        runtime.heating_detector.power_threshold_w
+                    ),
+                    "confirmation_seconds": (
+                        runtime.heating_detector.confirmation_seconds
+                    ),
+                    "observation_seconds": (
+                        runtime.heating_detector.observation_seconds
+                    ),
+                    "heated_cycle_min_seconds": (
+                        runtime.heated_cycle_min_seconds
+                    ),
+                    "max_source_age_seconds": (
+                        runtime.heating_detector.max_source_age_seconds
+                    ),
+                    "observation_coverage_seconds": (
+                        runtime.heating_detector.observation_coverage_seconds
+                    ),
+                    "confirmation_coverage_seconds": (
+                        runtime.heating_detector.confirmation_coverage_seconds
+                    ),
+                    "power_source_fresh": (
+                        runtime.heating_detector.power_source_fresh
+                    ),
                 },
                 "electrical_candidate": {
                     "experimental": True,
