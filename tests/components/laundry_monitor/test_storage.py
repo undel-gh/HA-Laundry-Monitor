@@ -125,6 +125,47 @@ def test_snapshot_without_last_unloaded_at_is_backward_compatible() -> None:
     assert restored is not None
     assert restored.last_unloaded_at is None
 
+
+def test_snapshot_without_heating_fields_is_backward_compatible() -> None:
+    """Test snapshots written before heating context still load safely."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored.pop("heating_detected")
+    stored.pop("heating_detected_at")
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.heating_detected is False
+    assert restored.heating_detected_at is None
+
+
+def test_invalid_heating_detected_timestamp_is_rejected() -> None:
+    """Test corrupt persisted heating timing cannot affect recovery."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored["heating_detected"] = True
+    stored["heating_detected_at"] = "not-a-timestamp"
+
+    assert RuntimeSnapshot.from_storage_dict(stored) is None
+
+
+def test_heating_detected_round_trip() -> None:
+    """Test the latched heating fact survives serialization."""
+    detected_at = datetime(2026, 7, 14, 11, 10, tzinfo=timezone.utc)
+    snapshot = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="test",
+        last_state_change=datetime(2026, 7, 14, 12, 0, tzinfo=timezone.utc),
+        cycle_started_at=datetime(2026, 7, 14, 11, 0, tzinfo=timezone.utc),
+        laundry_present=True,
+        heating_detected=True,
+        heating_detected_at=detected_at,
+    )
+
+    assert RuntimeSnapshot.from_storage_dict(
+        snapshot.as_storage_dict()
+    ) == snapshot
+
+
 def test_last_unloaded_at_round_trip() -> None:
     """Test a recorded unload timestamp survives serialization."""
     unloaded_at = datetime(2026, 7, 15, 9, 30, tzinfo=timezone.utc)
