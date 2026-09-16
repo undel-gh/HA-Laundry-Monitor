@@ -10,5 +10,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/undel-gh/HA-Laundry-Monitor/issues",
   "requirements": [],
-  "version": "0.1.4-rc1"
+  "version": "0.1.5-rc2"
 }
