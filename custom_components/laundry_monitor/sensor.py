@@ -133,7 +133,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         entity_registry_enabled_default=False,
         value_fn=lambda runtime: runtime.heating_state.value,
     ),
-    LaundryMonitorSensorDescription(     
+    LaundryMonitorSensorDescription(
         key="spin_power_rolling_median",
         translation_key="spin_power_rolling_median",
         native_unit_of_measurement=UnitOfPower.WATT,
