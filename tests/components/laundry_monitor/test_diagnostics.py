@@ -141,6 +141,16 @@ async def test_config_entry_diagnostics(
     assert electrical["max_source_age_seconds"] == 30
     assert electrical["power_source_fresh"] is True
     assert electrical["current_source_fresh"] is True
+
+    heating = diagnostics["detectors"]["spin"]["heating"]
+    assert heating["state"] == "unknown"
+    assert heating["active"] is False
+    assert heating["power_threshold_w"] is None
+    assert heating["confirmation_seconds"] == 30
+    assert heating["observation_seconds"] == 300
+    assert heating["heated_cycle_min_seconds"] == 900
+    assert heating["max_source_age_seconds"] == 30
+
     assert (
         diagnostics["detectors"]["finish"][
             "running_fallback_confirmation_seconds"
