@@ -107,6 +107,14 @@
       "final_spin_confirmation_path": {
         "name": "Final spin confirmation path"
       },
+      "heating_state": {
+        "name": "Heating state",
+        "state": {
+          "unknown": "Unknown",
+          "not_seen": "Heating not seen",
+          "detected": "Heating detected"
+        }
+      },
       "spin_power_rolling_median": {
         "name": "Spin power rolling median"
       },
@@ -165,6 +173,9 @@
       },
       "current_activity_detected": {
         "name": "Current activity detected"
+      },
+      "heating_active": {
+        "name": "Heating active"
       },
       "spin_electrical_candidate": {
         "name": "Electrical spin candidate"
