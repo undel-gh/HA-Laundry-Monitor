@@ -586,19 +586,48 @@ Users may create their own automations based on the leak event.
 
 ### 9.3 Diagnostic entities
 
-Diagnostic entities may include:
+Laundry Monitor exposes diagnostic entities for observing detector inputs,
+timing, evidence, and state-machine decisions.
 
-- power threshold;
-- activity threshold;
-- finish timeout;
-- spin detection status;
-- last vibration event;
-- last power activity;
-- last current activity, when configured;
-- power activity state;
-- current activity state, when configured;
-- current evidence list;
-- raw sensor availability.
+| Entity | Purpose | Availability | Enabled by default |
+|---|---|---|---|
+| `sensor.<device>_last_transition_reason` | Reason for the most recent accepted public-state transition | Always | Yes |
+| `sensor.<device>_last_state_change` | Timestamp of the most recent public-state transition | Always | Yes |
+| `sensor.<device>_current_power` | Normalized value of the required power source | Always | Yes |
+| `sensor.<device>_last_activity` | Timestamp of the most recent meaningful electrical activity | Always | Yes |
+| `sensor.<device>_last_power_activity` | Timestamp of the most recent power-based activity | Always | Yes |
+| `sensor.<device>_final_spin_confidence` | Diagnostic confidence reported by the spin detector | Always | Yes |
+| `sensor.<device>_final_spin_evidence_count` | Current vibration-evidence count inside the spin window | Always | Yes |
+| `sensor.<device>_finish_quiet_since` | Start of the currently observed finish-confirmation quiet period | Always | Yes |
+| `sensor.<device>_finish_deadline` | Current finish-confirmation deadline | Always | Yes |
+| `sensor.<device>_finish_remaining` | Remaining finish-confirmation time | Always | Yes |
+| `sensor.<device>_rejected_transition_count` | Number of rejected state-machine transitions | Always | Yes |
+| `sensor.<device>_last_rejected_transition` | Most recent rejected transition and reason | Always | Yes |
+| `binary_sensor.<device>_activity_detected` | Combined meaningful electrical-activity state | Always | Yes |
+| `binary_sensor.<device>_power_activity_detected` | Power-based activity state | Always | Yes |
+| `sensor.<device>_current` | Normalized value of the optional current source | Current sensor configured | Yes |
+| `sensor.<device>_last_current_activity` | Timestamp of the most recent current-based activity | Current sensor configured | Yes |
+| `binary_sensor.<device>_current_activity_detected` | Current-based activity state | Current sensor configured | Yes |
+| `binary_sensor.<device>_leak` | Mirrored leak-detector state | Leak sensor configured | Yes |
+| `sensor.<device>_final_spin_confirmation_path` | Path that confirmed the latest terminal-spin decision, for example `vibration_only` or `hybrid` | Always | No |
+| `binary_sensor.<device>_spin_electrical_candidate` | Whether the sustained electrical spin candidate is currently active | Always | No |
+| `sensor.<device>_spin_power_rolling_median` | Time-weighted rolling power statistic used by the electrical spin detector | Always | No |
+| `sensor.<device>_spin_current_rolling_median` | Time-weighted rolling current statistic used as corroborating evidence | Current sensor configured | No |
+| `sensor.<device>_spin_electrical_candidate_since` | Timestamp from which the current electrical spin candidate has remained active | Always | No |
+| `sensor.<device>_heating_state` | Cycle-local heating context: `unknown`, `not_seen`, or `detected` | Always | No |
+| `binary_sensor.<device>_heating_active` | Whether fresh power currently satisfies the heater-level signature | Always | No |
+
+The calibration-oriented electrical-spin and heating entities are disabled in
+the Home Assistant Entity Registry by default to avoid exposing experimental
+implementation detail to users who do not need it. They may be enabled
+individually for field testing, graphing, and threshold calibration.
+
+Entity states are live observability aids. Downloadable diagnostics remain the
+authoritative detailed snapshot for source freshness, observed coverage,
+configured detector parameters, effective heating-aware timing gates,
+`spin_gate_reason`, hybrid variant, persistence state, and other internal
+evidence that is intentionally not exposed as a separate Home Assistant
+entity.
 
 ## 10. Events
 
