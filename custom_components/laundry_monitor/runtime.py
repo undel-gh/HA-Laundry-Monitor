@@ -593,10 +593,10 @@ class LaundryMonitorRuntime:
             last_cycle_energy=self.last_cycle_energy,
             last_cycle_energy_unit=self.last_cycle_energy_unit,
             final_spin_detected=self.final_spin_detected,
-           heating_detected=(
+            heating_detected=(
                 self.heating_state is HeatingState.DETECTED
             ),
-            heating_detected_at=self.heating_detector.detected_at,  
+            heating_detected_at=self.heating_detector.detected_at,
         )
 
     @callback
@@ -1711,7 +1711,7 @@ class LaundryMonitorRuntime:
                 self.vibration_active,
                 self.heating_state.value,
                 self.heating_detector.heating_active,
-            )            
+            )
         confirmation_path: str | None = None
         hybrid_variant: str | None = None
 
