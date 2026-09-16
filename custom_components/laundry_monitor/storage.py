@@ -33,6 +33,8 @@ class RuntimeSnapshot:
     last_cycle_energy: float | None = None
     last_cycle_energy_unit: str | None = None
     final_spin_detected: bool = False
+    heating_detected: bool = False
+    heating_detected_at: datetime | None = None
 
     def as_storage_dict(self) -> dict[str, Any]:
         """Serialize the snapshot."""
@@ -57,6 +59,12 @@ class RuntimeSnapshot:
             "last_cycle_energy": self.last_cycle_energy,
             "last_cycle_energy_unit": self.last_cycle_energy_unit,
             "final_spin_detected": self.final_spin_detected,
+            "heating_detected": self.heating_detected,
+            "heating_detected_at": (
+                self.heating_detected_at.isoformat()
+                if self.heating_detected_at is not None
+                else None
+            ),
         }
 
     @classmethod
@@ -100,6 +108,12 @@ class RuntimeSnapshot:
             final_spin_detected = bool(
                 data.get("final_spin_detected", False)
             )
+            heating_detected = bool(data.get("heating_detected", False))
+            heating_detected_at = (
+                dt_util.parse_datetime(data["heating_detected_at"])
+                if data.get("heating_detected_at")
+                else None
+            )
         except (KeyError, TypeError, ValueError):
             return None
 
@@ -107,7 +121,8 @@ class RuntimeSnapshot:
             return None
         if data.get("last_unloaded_at") and last_unloaded_at is None:
             return None
-
+        if data.get("heating_detected_at") and heating_detected_at is None:
+            return None
         return cls(
             cycle_state=cycle_state,
             last_transition_reason=reason,
@@ -121,6 +136,8 @@ class RuntimeSnapshot:
             last_cycle_energy=last_cycle_energy,
             last_cycle_energy_unit=last_cycle_energy_unit,
             final_spin_detected=final_spin_detected,
+            heating_detected=heating_detected,
+            heating_detected_at=heating_detected_at, 
         )
 
 
