@@ -19,6 +19,10 @@ from custom_components.laundry_monitor.const import (
     CONF_ELECTRICAL_SPIN_WINDOW,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
+    CONF_HEATED_CYCLE_MIN_TIME,
+    CONF_HEATING_CONFIRMATION,
+    CONF_HEATING_OBSERVATION,
+    CONF_HEATING_POWER_THRESHOLD,
     CONF_HYBRID_SPIN_ENABLED,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_POWER_SENSOR,
@@ -41,6 +45,9 @@ from custom_components.laundry_monitor.const import (
     DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_HEATED_CYCLE_MIN_TIME,
+    DEFAULT_HEATING_CONFIRMATION,
+    DEFAULT_HEATING_OBSERVATION,
     DEFAULT_HYBRID_SPIN_ENABLED,
     DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
@@ -66,6 +73,9 @@ DEFAULT_OPTIONS = {
     CONF_ELECTRICAL_SPIN_WINDOW: DEFAULT_ELECTRICAL_SPIN_WINDOW,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE: DEFAULT_ELECTRICAL_SPIN_MIN_COVERAGE,
     CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE: DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+    CONF_HEATING_CONFIRMATION: DEFAULT_HEATING_CONFIRMATION,
+    CONF_HEATING_OBSERVATION: DEFAULT_HEATING_OBSERVATION,
+    CONF_HEATED_CYCLE_MIN_TIME: DEFAULT_HEATED_CYCLE_MIN_TIME,
     CONF_HYBRID_SPIN_ENABLED: DEFAULT_HYBRID_SPIN_ENABLED,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS: DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_FINISH_CONFIRMATION: DEFAULT_FINISH_CONFIRMATION,
@@ -89,6 +99,9 @@ CUSTOM_OPTIONS = {
     CONF_ELECTRICAL_SPIN_WINDOW: 30,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE: 20,
     CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE: 30,
+    CONF_HEATING_CONFIRMATION: 40,
+    CONF_HEATING_OBSERVATION: 360,
+    CONF_HEATED_CYCLE_MIN_TIME: 1200,
     CONF_HYBRID_SPIN_ENABLED: False,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS: 2,
     CONF_FINISH_CONFIRMATION: 240,
@@ -243,6 +256,94 @@ async def test_hybrid_requires_power_threshold(
         CONF_HYBRID_SPIN_ENABLED: "hybrid_spin_requires_power_threshold"
     }
 
+async def test_hybrid_requires_heating_threshold(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test hybrid confirmation fails closed without heating calibration."""
+    entry = _create_entry(with_vibration=True)
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **DEFAULT_OPTIONS,
+            CONF_HYBRID_SPIN_ENABLED: True,
+            CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: 100.0,
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_HYBRID_SPIN_ENABLED: "hybrid_spin_requires_heating_threshold"
+    }
+
+
+async def test_heating_threshold_must_exceed_spin_threshold(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test heater threshold must be above the electrical spin threshold."""
+    entry = _create_entry()
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **DEFAULT_OPTIONS,
+            CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: 100.0,
+            CONF_HEATING_POWER_THRESHOLD: 100.0,
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_HEATING_POWER_THRESHOLD: "heating_threshold_not_above_spin"
+    }
+
+
+async def test_heating_confirmation_cannot_exceed_observation(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test heater confirmation fits inside the observation budget."""
+    entry = _create_entry()
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **DEFAULT_OPTIONS,
+            CONF_HEATING_CONFIRMATION: 301,
+            CONF_HEATING_OBSERVATION: 300,
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_HEATING_CONFIRMATION: "heating_confirmation_above_observation"
+    }
+
+
+async def test_heated_cycle_min_cannot_be_below_spin_min(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Test heated-cycle gating cannot weaken the normal hybrid timing gate."""
+    entry = _create_entry(with_vibration=True)
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            **DEFAULT_OPTIONS,
+            CONF_HYBRID_SPIN_ENABLED: True,
+            CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: 100.0,
+            CONF_HEATING_POWER_THRESHOLD: 1000.0,
+            CONF_HEATED_CYCLE_MIN_TIME: DEFAULT_SPIN_MIN_CYCLE_TIME - 1,
+        },
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {
+        CONF_HEATED_CYCLE_MIN_TIME: "heated_cycle_min_below_spin_min"
+    }
 
 async def test_hybrid_events_must_be_reduced(
     hass: HomeAssistant,
@@ -258,6 +359,7 @@ async def test_hybrid_events_must_be_reduced(
             **DEFAULT_OPTIONS,
             CONF_HYBRID_SPIN_ENABLED: True,
             CONF_ELECTRICAL_SPIN_POWER_THRESHOLD: 100.0,
+            CONF_HEATING_POWER_THRESHOLD: 1000.0,
             CONF_HYBRID_SPIN_REQUIRED_EVENTS: DEFAULT_SPIN_REQUIRED_EVENTS,
         },
     )
@@ -308,6 +410,10 @@ async def test_options_are_saved_and_entry_is_reloaded(
     assert runtime.electrical_spin_detector.max_source_age_seconds == 30
     assert runtime.electrical_spin_detector.power_threshold_w is None
     assert runtime.electrical_spin_detector.current_threshold_a is None
+    assert runtime.heating_detector.power_threshold_w is None
+    assert runtime.heating_detector.confirmation_seconds == 40
+    assert runtime.heating_detector.observation_seconds == 360
+    assert runtime.heated_cycle_min_seconds == 1200
     assert runtime.hybrid_spin_enabled is False
     assert runtime.hybrid_spin_required_events == 2
     assert runtime.finish_detector.confirmation_seconds == 240
