@@ -825,37 +825,90 @@ Laundry Monitor is not:
 - a replacement for Home Assistant automations.
 
 ## 16. Roadmap
-### v0.1.0
-- project skeleton;
-- config flow;
-- basic power-based state machine;
-- diagnostic entities;
-- localization foundation.
+The original milestone list reflected the early implementation sequence and is
+now largely historical. The project has moved beyond the initial power-only
+state machine and is in field-validation and release-candidate hardening.
 
-### v0.1.2
-- door sensor support;
-- Laundry Tracking module;
-- Home Assistant events.
+### Completed foundation
+The following capabilities are implemented:
 
-### v0.1.3
-- vibration-based final spin detection;
-- confidence calculation;
-- debug diagnostics.
+- Home Assistant config flow and options flow;
+- one config entry per logical washing-machine monitor device;
+- power-based start and activity detection;
+- optional current-assisted activity detection;
+- door, vibration, leak, and optional energy sources;
+- public cycle states:
+  - `idle`;
+  - `armed`;
+  - `running`;
+  - `final_spin`;
+  - `finished`;
+  - `unloaded`;
+  - `error`;
+- vibration-based terminal-spin detection;
+- experimental electrical spin-candidate diagnostics;
+- opt-in hybrid vibration + electrical terminal-spin confirmation;
+- heating-aware cycle context with `unknown`, `not_seen`, and `detected`
+  states;
+- active-heating hard gate for terminal-spin confirmation;
+- stricter minimum cycle age after detected heating;
+- fast non-heated hybrid path with full vibration evidence;
+- terminal-phase finish confirmation;
+- cycle duration and optional energy statistics;
+- Laundry Tracking and explicit unload handling;
+- Home Assistant events;
+- restart/reload state recovery;
+- downloadable diagnostics;
+- diagnostic entities for electrical-spin and heating calibration;
+- English and Russian localization;
+- HACS packaging and validation infrastructure;
+- English and Russian user documentation.
 
-### v0.1.4
-- leak sensor support;
-- leak state;
-- optional current sensor support;
-- current-assisted activity evidence;
-- current-assisted spin evidence;
-- event payload improvements.
+### Current release-candidate work
+Before the first stable release, the project is focused on field validation
+and regression hardening rather than adding major new detector paths.
 
-### v1.0
-- stable public API;
-- documented state machine;
-- HACS-ready release;
-- English documentation;
-- localization support.
+Current priorities are:
+
+- validate heating-aware detection across normal heated wash programs;
+- validate spin-only and rinse-and-spin programs through the fast non-heated
+  path;
+- verify that telemetry outages do not create false `not_seen`, `final_spin`,
+  or `finished` decisions;
+- verify reload/restart recovery during `running` and `final_spin`;
+- collect additional labelled cycles from machines with different electrical
+  and vibration profiles;
+- keep machine-specific power/current/heating thresholds configurable rather
+  than turning field-test values into universal defaults;
+- complete regression, HACS, translation, and diagnostics review.
+
+The first stable release is expected to include:
+
+- stable public cycle-state API and event semantics;
+- documented state-machine and restart-recovery behaviour;
+- production-tested power, current, door, vibration, leak, and energy source
+  handling;
+- production-tested vibration-only and heating-aware hybrid terminal-spin
+  detection;
+- stable Laundry Tracking behaviour;
+- stable diagnostic and calibration interfaces;
+- HACS-ready packaging;
+- English and Russian documentation and localization;
+- no dependency on a Lovelace card for core integration operation.
+
+### Post-v1.0
+
+Potential follow-up work may include:
+
+- broader field-derived defaults where sufficient cross-machine evidence
+  exists;
+- additional calibration and observability tooling;
+- further hardening of source freshness and degraded-input handling;
+- additional language translations;
+- carefully scoped detector improvements derived from labelled field data.
+
+The Lovelace card remains a separate HACS Dashboard project and is not part of
+the backend integration release scope.
 
 ## 17. Open Questions
 - Should confidence be a percentage or diagnostic enum?
