@@ -50,6 +50,10 @@ from .const import (
     CONF_ENERGY_SENSOR,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
+    CONF_HEATED_CYCLE_MIN_TIME,
+    CONF_HEATING_CONFIRMATION,
+    CONF_HEATING_OBSERVATION,
+    CONF_HEATING_POWER_THRESHOLD,
     CONF_HYBRID_SPIN_ENABLED,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_LEAK_SENSOR,
@@ -74,6 +78,9 @@ from .const import (
     DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_HEATED_CYCLE_MIN_TIME,
+    DEFAULT_HEATING_CONFIRMATION,
+    DEFAULT_HEATING_OBSERVATION,
     DEFAULT_HYBRID_SPIN_ENABLED,
     DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
@@ -99,6 +106,9 @@ _INTEGER_OPTION_KEYS = (
     CONF_ELECTRICAL_SPIN_WINDOW,
     CONF_ELECTRICAL_SPIN_MIN_COVERAGE,
     CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+    CONF_HEATING_CONFIRMATION,
+    CONF_HEATING_OBSERVATION,
+    CONF_HEATED_CYCLE_MIN_TIME,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_FINISH_CONFIRMATION,
     CONF_RUNNING_FINISH_CONFIRMATION,
@@ -426,6 +436,53 @@ def _options_schema(
                 if current_sensor_configured
                 else {}
             ),
+            vol.Optional(
+                CONF_HEATING_POWER_THRESHOLD,
+                description=_suggested_value(
+                    defaults.get(CONF_HEATING_POWER_THRESHOLD)
+                ),
+            ): _number_selector(
+                minimum=0.1,
+                maximum=10000,
+                step=0.1,
+                unit=UnitOfPower.WATT,
+            ),
+            vol.Required(
+                CONF_HEATING_CONFIRMATION,
+                default=defaults.get(
+                    CONF_HEATING_CONFIRMATION,
+                    DEFAULT_HEATING_CONFIRMATION,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_HEATING_OBSERVATION,
+                default=defaults.get(
+                    CONF_HEATING_OBSERVATION,
+                    DEFAULT_HEATING_OBSERVATION,
+                ),
+            ): _number_selector(
+                minimum=1,
+                maximum=3600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
+            vol.Required(
+                CONF_HEATED_CYCLE_MIN_TIME,
+                default=defaults.get(
+                    CONF_HEATED_CYCLE_MIN_TIME,
+                    DEFAULT_HEATED_CYCLE_MIN_TIME,
+                ),
+            ): _number_selector(
+                minimum=0,
+                maximum=21600,
+                step=1,
+                unit=UnitOfTime.SECONDS,
+            ),
             vol.Required(
                 CONF_HYBRID_SPIN_ENABLED,
                 default=defaults.get(
@@ -545,7 +602,10 @@ def _normalize_options(
         normalized[CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD] = float(
             user_input[CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD]
         )
-
+    if CONF_HEATING_POWER_THRESHOLD in user_input:
+        normalized[CONF_HEATING_POWER_THRESHOLD] = float(
+            user_input[CONF_HEATING_POWER_THRESHOLD]
+        )
     normalized[CONF_HYBRID_SPIN_ENABLED] = bool(
         user_input[CONF_HYBRID_SPIN_ENABLED]
     )    
@@ -676,6 +736,13 @@ class LaundryMonitorOptionsFlow(OptionsFlowWithReload):
                 errors[
                     CONF_ELECTRICAL_SPIN_MIN_COVERAGE
                 ] = "electrical_spin_coverage_above_window"
+            elif (
+                normalized[CONF_HEATING_CONFIRMATION]
+                > normalized[CONF_HEATING_OBSERVATION]
+            ):
+                errors[CONF_HEATING_CONFIRMATION] = (
+                    "heating_confirmation_above_observation"
+                )
             elif _hybrid_requires_vibration_sensor(
                 normalized,
                 vibration_sensor_configured=bool(
@@ -692,6 +759,30 @@ class LaundryMonitorOptionsFlow(OptionsFlowWithReload):
             ):
                 errors[CONF_HYBRID_SPIN_ENABLED] = (
                     "hybrid_spin_requires_power_threshold"
+                )
+            elif (
+                normalized[CONF_HYBRID_SPIN_ENABLED]
+                and CONF_HEATING_POWER_THRESHOLD not in normalized
+            ):
+                errors[CONF_HYBRID_SPIN_ENABLED] = (
+                    "hybrid_spin_requires_heating_threshold"
+                )
+            elif (
+                CONF_HEATING_POWER_THRESHOLD in normalized
+                and CONF_ELECTRICAL_SPIN_POWER_THRESHOLD in normalized
+                and normalized[CONF_HEATING_POWER_THRESHOLD]
+                <= normalized[CONF_ELECTRICAL_SPIN_POWER_THRESHOLD]
+            ):
+                errors[CONF_HEATING_POWER_THRESHOLD] = (
+                    "heating_threshold_not_above_spin"
+                )
+            elif (
+                normalized[CONF_HYBRID_SPIN_ENABLED]
+                and normalized[CONF_HEATED_CYCLE_MIN_TIME]
+                < normalized[CONF_SPIN_MIN_CYCLE_TIME]
+            ):
+                errors[CONF_HEATED_CYCLE_MIN_TIME] = (
+                    "heated_cycle_min_below_spin_min"
                 )
             elif (
                 normalized[CONF_HYBRID_SPIN_ENABLED]
