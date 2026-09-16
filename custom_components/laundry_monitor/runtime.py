@@ -113,7 +113,7 @@ from .const import (
     SIGNAL_RUNTIME_UPDATED,
 )
 from .finish import FinishDetector, FinishEvaluation
-+from .heating import HeatingContextDetector, HeatingState
+from .heating import HeatingContextDetector, HeatingState
 from .spin import ElectricalSpinCandidateDetector, SpinDetector
 from .state_machine import LaundryStateMachine, TransitionStatus
 from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
