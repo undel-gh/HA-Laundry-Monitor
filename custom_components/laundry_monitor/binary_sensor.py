@@ -65,6 +65,13 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[
         value_fn=lambda runtime: runtime.power_activity_detected,
     ),
     LaundryMonitorBinarySensorDescription(
+        key="heating_active",
+        translation_key="heating_active",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda runtime: runtime.heating_detector.heating_active,
+    ),
+    LaundryMonitorBinarySensorDescription(
         key="spin_electrical_candidate",
         translation_key="spin_electrical_candidate",
         entity_category=EntityCategory.DIAGNOSTIC,
