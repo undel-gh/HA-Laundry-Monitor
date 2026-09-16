@@ -137,7 +137,7 @@ class RuntimeSnapshot:
             last_cycle_energy_unit=last_cycle_energy_unit,
             final_spin_detected=final_spin_detected,
             heating_detected=heating_detected,
-            heating_detected_at=heating_detected_at, 
+            heating_detected_at=heating_detected_at,
         )
 
 
