@@ -46,6 +46,10 @@ from .const import (
     CONF_ENERGY_SENSOR,
     CONF_FINISHED_RETENTION,
     CONF_FINISH_CONFIRMATION,
+    CONF_HEATED_CYCLE_MIN_TIME,
+    CONF_HEATING_CONFIRMATION,
+    CONF_HEATING_OBSERVATION,
+    CONF_HEATING_POWER_THRESHOLD,
     CONF_HYBRID_SPIN_ENABLED,
     CONF_HYBRID_SPIN_REQUIRED_EVENTS,
     CONF_LEAK_SENSOR,
@@ -69,6 +73,9 @@ from .const import (
     DEFAULT_ELECTRICAL_SPIN_WINDOW,
     DEFAULT_FINISHED_RETENTION,
     DEFAULT_FINISH_CONFIRMATION,
+    DEFAULT_HEATED_CYCLE_MIN_TIME,
+    DEFAULT_HEATING_CONFIRMATION,
+    DEFAULT_HEATING_OBSERVATION,
     DEFAULT_HYBRID_SPIN_ENABLED,
     DEFAULT_HYBRID_SPIN_REQUIRED_EVENTS,
     DEFAULT_POWER_UNAVAILABLE_GRACE,
@@ -106,6 +113,7 @@ from .const import (
     SIGNAL_RUNTIME_UPDATED,
 )
 from .finish import FinishDetector, FinishEvaluation
++from .heating import HeatingContextDetector, HeatingState
 from .spin import ElectricalSpinCandidateDetector, SpinDetector
 from .state_machine import LaundryStateMachine, TransitionStatus
 from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
@@ -152,21 +160,21 @@ class LaundryMonitorRuntime:
     last_cycle_energy: float | None = None
     last_cycle_energy_unit: str | None = None
     final_spin_detected: bool = False
-
     final_spin_confidence: float = 0.0
     final_spin_evidence_count: int = 0
     final_spin_confirmation_path: str | None = None
+    final_spin_hybrid_variant: str | None = None
+    spin_gate_reason: str | None = None
     finish_quiet_since: datetime | None = None
     finish_deadline: datetime | None = None
     finish_remaining_seconds: float | None = None
-
     state_machine: LaundryStateMachine = field(init=False)
     rejected_transition_count: int = 0
     last_rejected_transition: str | None = None
-
     activity_detector: ActivityDetector = field(init=False)
     spin_detector: SpinDetector = field(init=False)
     electrical_spin_detector: ElectricalSpinCandidateDetector = field(init=False)
+    heating_detector: HeatingContextDetector = field(init=False)
     finish_detector: FinishDetector = field(init=False)
     running_finish_detector: FinishDetector = field(init=False)
 
@@ -281,6 +289,31 @@ class LaundryMonitorRuntime:
                 if self.entry.data.get(CONF_CURRENT_SENSOR)
                 and CONF_ELECTRICAL_SPIN_CURRENT_THRESHOLD in self.entry.options
                 else None
+            ),
+        )
+        self.heating_detector = HeatingContextDetector(
+            power_threshold_w=(
+                float(self.entry.options[CONF_HEATING_POWER_THRESHOLD])
+                if CONF_HEATING_POWER_THRESHOLD in self.entry.options
+                else None
+            ),
+            confirmation_seconds=int(
+                self.entry.options.get(
+                    CONF_HEATING_CONFIRMATION,
+                    DEFAULT_HEATING_CONFIRMATION,
+                )
+            ),
+            observation_seconds=int(
+                self.entry.options.get(
+                    CONF_HEATING_OBSERVATION,
+                    DEFAULT_HEATING_OBSERVATION,
+                )
+            ),
+            max_source_age_seconds=int(
+                self.entry.options.get(
+                    CONF_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+                    DEFAULT_ELECTRICAL_SPIN_MAX_SOURCE_AGE,
+                )
             ),
         )
         self.finish_detector = FinishDetector(
@@ -411,6 +444,33 @@ class LaundryMonitorRuntime:
         )
 
     @property
+    def heated_cycle_min_seconds(self) -> int:
+        """Return the reduced-hybrid minimum age after heating."""
+        return int(
+            self.entry.options.get(
+                CONF_HEATED_CYCLE_MIN_TIME,
+                DEFAULT_HEATED_CYCLE_MIN_TIME,
+            )
+        )
+
+    @property
+    def heating_state(self) -> HeatingState:
+        """Return the current cycle-local heating context."""
+        return self.heating_detector.state
+
+    @property
+    def effective_hybrid_min_cycle_seconds(self) -> int | None:
+        """Return the minimum age currently applicable to reduced hybrid."""
+        if self.heating_state is HeatingState.UNKNOWN:
+            return None
+        if self.heating_state is HeatingState.DETECTED:
+            return max(
+                self.spin_detector.min_cycle_seconds,
+                self.heated_cycle_min_seconds,
+            )
+        return self.spin_detector.min_cycle_seconds
+
+    @property
     def spin_electrical_candidate(self) -> bool:
         """Return the experimental electrical-spin candidate state."""
         return self.electrical_spin_detector.candidate
@@ -533,6 +593,10 @@ class LaundryMonitorRuntime:
             last_cycle_energy=self.last_cycle_energy,
             last_cycle_energy_unit=self.last_cycle_energy_unit,
             final_spin_detected=self.final_spin_detected,
+           heating_detected=(
+                self.heating_state is HeatingState.DETECTED
+            ),
+            heating_detected_at=self.heating_detector.detected_at,  
         )
 
     @callback
@@ -637,13 +701,20 @@ class LaundryMonitorRuntime:
 
         self.spin_detector.reset(vibration_active=self.vibration_active)
         # Cached source states are not proof of freshness after a restart.
-        # Wait for real source updates before electrical evidence may be used.
+        # Wait for real source updates before electrical/heating evidence may
+        # be used. Only a safely persisted latched heating fact is restored.
         self.electrical_spin_detector.reset()
+        self.heating_detector.reset()
+        if active_cycle_restored and snapshot.heating_detected:
+            self.heating_detector.restore_detected(
+                snapshot.heating_detected_at
+            )
         self.final_spin_confidence = 0.0
         self.final_spin_evidence_count = 0
-        # The confirmation path is intentionally diagnostic-only and is not
-        # persisted in RuntimeSnapshot.
+        # Confirmation-path metadata is diagnostic-only and is not persisted.
         self.final_spin_confirmation_path = None
+        self.final_spin_hybrid_variant = None
+        self.spin_gate_reason = None
         self._reset_finish_detection()
 
         if recovered_state is not snapshot.cycle_state:
@@ -684,6 +755,7 @@ class LaundryMonitorRuntime:
 
         if self.cycle_state in _FINISH_EVALUATION_STATES:
             self._start_cycle_statistics_updates()
+            self._evaluate_heating_context()
             self._evaluate_electrical_spin_candidate()
             self._evaluate_finish()
 
@@ -703,8 +775,9 @@ class LaundryMonitorRuntime:
         )
         self.spin_detector.reset(vibration_active=self.vibration_active)
         # Startup state reads can be arbitrarily old. Do not mark them fresh;
-        # subsequent state-change events establish electrical freshness.
+        # subsequent state-change events establish electrical/heating freshness.
         self.electrical_spin_detector.reset()
+        self.heating_detector.reset()
 
     @callback
     def _async_source_state_changed(
@@ -747,11 +820,17 @@ class LaundryMonitorRuntime:
             self._handle_door_update(old_door_open)
 
         if entity_id in (power_entity, current_entity, vibration_entity):
+            now = dt_util.utcnow()
+            self._evaluate_heating_context(
+                power_updated=entity_id == power_entity,
+                now=now,
+            )
             self._evaluate_electrical_spin_candidate(
                 power_updated=entity_id == power_entity,
                 current_updated=entity_id == current_entity,
+                now=now,
             )
-            spin_transitioned = self._evaluate_spin()
+            spin_transitioned = self._evaluate_spin(now=now)
             if not spin_transitioned:
                 self._evaluate_finish()
 
@@ -1311,6 +1390,8 @@ class LaundryMonitorRuntime:
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
             self.final_spin_confirmation_path = None
+            self.final_spin_hybrid_variant = None
+            self.spin_gate_reason = None
             self.spin_detector.reset(vibration_active=self.vibration_active)
             self.electrical_spin_detector.reset(
                 now=dt_util.utcnow(),
@@ -1339,8 +1420,11 @@ class LaundryMonitorRuntime:
             self.final_spin_confidence = 0.0
             self.final_spin_evidence_count = 0
             self.final_spin_confirmation_path = None
+            self.final_spin_hybrid_variant = None
+            self.spin_gate_reason = None
             self.spin_detector.reset(vibration_active=self.vibration_active)
             self.electrical_spin_detector.reset()
+            self.heating_detector.reset()
             self._reset_finish_detection()
             if not self.tracking_enabled:
                 self.laundry_present = False
@@ -1365,6 +1449,7 @@ class LaundryMonitorRuntime:
             self._reset_finish_detection()
             self.spin_detector.reset(vibration_active=self.vibration_active)
             self.electrical_spin_detector.reset()
+            self.heating_detector.reset()
 
     @callback
     def _initialize_cycle_statistics(self) -> None:
@@ -1373,6 +1458,10 @@ class LaundryMonitorRuntime:
         self.cycle_energy_start = self.energy
         self.cycle_energy_unit = self.energy_unit
         self.final_spin_detected = False
+        # Do not seed from a cached state here. The source-change callback
+        # that starts the cycle will mark a real power update fresh; timer-
+        # confirmed starts wait for the next real source update.
+        self.heating_detector.reset()
         _LOGGER.debug(
             "Initialized cycle statistics for entry %s (%s): "
             "started_at=%s, energy_start=%s, energy_unit=%s",
@@ -1441,10 +1530,12 @@ class LaundryMonitorRuntime:
 
     @callback
     def _async_cycle_statistics_tick(self, _now: datetime) -> None:
-        """Publish live duration and refresh electrical-spin diagnostics."""
+        """Refresh live duration plus electrical and heating diagnostics."""
         if self.cycle_state in _FINISH_EVALUATION_STATES:
+            self._evaluate_heating_context(now=_now)
             self._evaluate_electrical_spin_candidate(now=_now)
-            self._notify_entities()
+            if not self._evaluate_spin(now=_now):
+                self._notify_entities()
 
     @callback
     def _cancel_cycle_statistics_updates(self) -> None:
@@ -1497,6 +1588,41 @@ class LaundryMonitorRuntime:
         async_dispatcher_send(self.hass, self.signal)
 
     @callback
+    def _evaluate_heating_context(
+        self,
+        *,
+        power_updated: bool = False,
+        now: datetime | None = None,
+    ) -> None:
+        """Refresh heating context without changing public cycle state."""
+        if self.cycle_state not in _FINISH_EVALUATION_STATES:
+            return
+        previous_state = self.heating_detector.state
+        evaluation = self.heating_detector.evaluate(
+            power=self.power,
+            power_updated=power_updated,
+            now=now or dt_util.utcnow(),
+        )
+        if (
+            previous_state is not HeatingState.DETECTED
+            and evaluation.state is HeatingState.DETECTED
+        ):
+            self._schedule_snapshot_save()
+        _LOGGER.debug(
+            "Heating context for entry %s (%s): state=%s, active=%s, "
+            "detected_at=%s, observation_coverage=%.1fs, "
+            "confirmation_coverage=%.1fs, power_fresh=%s",
+            self.entry.entry_id,
+            self.name,
+            evaluation.state.value,
+            evaluation.heating_active,
+            evaluation.detected_at,
+            evaluation.observation_coverage_seconds,
+            evaluation.confirmation_coverage_seconds,
+            evaluation.power_source_fresh,
+        )
+
+    @callback
     def _evaluate_electrical_spin_candidate(
         self,
         *,
@@ -1535,38 +1661,44 @@ class LaundryMonitorRuntime:
         )
 
     @callback
-    def _evaluate_spin(self) -> bool:
-        """Evaluate final-spin evidence when vibration is configured."""
+    def _evaluate_spin(self, *, now: datetime | None = None) -> bool:
+        """Evaluate heating-aware final-spin evidence."""
         if self.cycle_state is not LaundryCycleState.RUNNING:
             return False
         if not self.entry.data.get(CONF_VIBRATION_SENSOR):
+            self.spin_gate_reason = "vibration_not_configured"
             return False
         # Current is supporting evidence only. The required power source must
         # remain available before vibration can advance final-spin detection.
         if self.power is None:
+            self.spin_gate_reason = "power_unavailable"
             return False
 
-        evaluation = self.spin_detector.evaluate(
+        timestamp = now or dt_util.utcnow()
+        valuation = self.spin_detector.evaluate(
             vibration_active=self.vibration_active,
             activity_detected=self.activity_detected,
             last_activity=self.last_activity,
             cycle_started_at=self.cycle_started_at,
-            now=dt_util.utcnow(),
+            now=timestamp,
         )
 
-        changed = (
+        evidence_changed = (
             self.final_spin_confidence != evaluation.confidence
             or self.final_spin_evidence_count != evaluation.evidence_count
         )
+        previous_gate_reason = self.spin_gate_reason
+        previous_variant = self.final_spin_hybrid_variant
         self.final_spin_confidence = evaluation.confidence
         self.final_spin_evidence_count = evaluation.evidence_count
 
-        if changed or evaluation.detected:
+        if evidence_changed or evaluation.detected:
             _LOGGER.debug(
                 "Evaluated final-spin evidence for entry %s (%s): "
                 "events=%s/%s, confidence=%.3f, detected=%s, "
                 "activity_detected=%s, power_activity=%s, "
-                "current_activity=%s, vibration_active=%s",
+                "current_activity=%s, vibration_active=%s, heating=%s, "
+                "heating_active=%s",
                 self.entry.entry_id,
                 self.name,
                 evaluation.evidence_count,
@@ -1577,18 +1709,66 @@ class LaundryMonitorRuntime:
                 self.power_activity_detected,
                 self.current_activity_detected,
                 self.vibration_active,
+                self.heating_state.value,
+                self.heating_detector.heating_active,
             )            
         confirmation_path: str | None = None
-        if evaluation.detected:
+        hybrid_variant: str | None = None
+
+        if self.heating_detector.heating_active:
+            gate_reason = "heating_active"
+        elif evaluation.detected:
             confirmation_path = "vibration_only"
+            gate_reason = "confirmed_vibration_only"
+        elif not self.hybrid_spin_enabled:
+            gate_reason = "hybrid_disabled"
+        elif self.electrical_spin_detector.power_threshold_w is None:
+            gate_reason = "hybrid_spin_threshold_not_configured"
+        elif self.heating_detector.power_threshold_w is None:
+            gate_reason = "hybrid_heating_not_configured"
+        elif not self.spin_electrical_candidate:
+            gate_reason = "electrical_candidate_inactive"
+        elif not evaluation.activity_recent:
+            gate_reason = "activity_not_recent"
+        elif self.heating_state is HeatingState.UNKNOWN:
+            gate_reason = "heating_unknown"
         elif (
-            self.hybrid_spin_enabled
-            and self.spin_electrical_candidate
-            and evaluation.activity_recent
-            and evaluation.cycle_mature
-            and evaluation.evidence_count >= self.hybrid_spin_required_events
+            self.heating_state is HeatingState.NOT_SEEN
+            and not evaluation.cycle_mature
         ):
+            if evaluation.evidence_count >= self.spin_detector.required_events:
+                confirmation_path = "hybrid"
+                hybrid_variant = "fast_non_heated"
+                gate_reason = "confirmed_fast_non_heated"
+            else:
+                gate_reason = "fast_path_requires_full_vibration"
+        elif evaluation.evidence_count < self.hybrid_spin_required_events:
+            gate_reason = "hybrid_vibration_insufficient"
+        elif self.heating_state is HeatingState.DETECTED:
+            if self.cycle_started_at is None:
+                gate_reason = "cycle_age_unknown"
+            else:
+                cycle_age = max(
+                    (timestamp - self.cycle_started_at).total_seconds(),
+                    0.0,
+                )
+                effective_min = max(
+                    self.spin_detector.min_cycle_seconds,
+                    self.heated_cycle_min_seconds,
+                )
+                if cycle_age < effective_min:
+                    gate_reason = "heated_cycle_too_young"
+                else:
+                    confirmation_path = "hybrid"
+                    hybrid_variant = "reduced"
+                    gate_reason = "confirmed_hybrid_reduced"
+        else:
             confirmation_path = "hybrid"
+            hybrid_variant = "reduced"
+            gate_reason = "confirmed_hybrid_reduced"
+
+        self.spin_gate_reason = gate_reason
+        self.final_spin_hybrid_variant = hybrid_variant
 
         if confirmation_path is not None:
             self.final_spin_confirmation_path = confirmation_path
@@ -1597,6 +1777,8 @@ class LaundryMonitorRuntime:
                 REASON_FINAL_SPIN_CONFIRMED,
             ):
                 self.final_spin_confirmation_path = None
+                self.final_spin_hybrid_variant = None
+                self.spin_gate_reason = "transition_rejected"
                 return False
             self.hass.bus.async_fire(
                 EVENT_FINAL_SPIN_DETECTED,
@@ -1607,15 +1789,27 @@ class LaundryMonitorRuntime:
                     "evidence_count": evaluation.evidence_count,
                     "window_seconds": self.spin_detector.window_seconds,
                     "confirmation_path": confirmation_path,
+                    "hybrid_variant": hybrid_variant,
                     "electrical_candidate": self.spin_electrical_candidate,
                     "power_rolling_median": self.spin_power_rolling_median,
                     "current_rolling_median": self.spin_current_rolling_median,
-                    "timestamp": dt_util.utcnow().isoformat(),
+                    "heating_state": self.heating_state.value,
+                    "heating_active": self.heating_detector.heating_active,
+                    "heating_observation_coverage": (
+                        self.heating_detector.observation_coverage_seconds
+                    ),
+                    "effective_hybrid_min_cycle_seconds": (
+                        self.effective_hybrid_min_cycle_seconds
+                    ),
+                    "timestamp": timestamp.isoformat(),
                 },
             )
             return True
-
-        if changed:
+        if (
+            evidence_changed
+            or previous_gate_reason != self.spin_gate_reason
+            or previous_variant != self.final_spin_hybrid_variant
+        ):
             self._notify_entities()
         return False
 
