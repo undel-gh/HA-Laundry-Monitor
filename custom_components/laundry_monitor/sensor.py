@@ -30,6 +30,7 @@ from .const import (
     LaundryCycleState,
 )
 from .entity import LaundryMonitorEntity
+from .heating import HeatingState
 from .runtime import LaundryMonitorRuntime
 
 
@@ -124,6 +125,15 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         value_fn=lambda runtime: runtime.final_spin_confirmation_path,
     ),
     LaundryMonitorSensorDescription(
+    key="heating_state",
+    translation_key="heating_state",
+    device_class=SensorDeviceClass.ENUM,
+    options=[state.value for state in HeatingState],
+    entity_category=EntityCategory.DIAGNOSTIC,
+    entity_registry_enabled_default=False,
+    value_fn=lambda runtime: runtime.heating_state.value,
+),
++LaundryMonitorSensorDescription(     
         key="spin_power_rolling_median",
         translation_key="spin_power_rolling_median",
         native_unit_of_measurement=UnitOfPower.WATT,
