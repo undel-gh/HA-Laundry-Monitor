@@ -35,6 +35,13 @@ class RuntimeSnapshot:
     final_spin_detected: bool = False
     heating_detected: bool = False
     heating_detected_at: datetime | None = None
+    heating_not_seen: bool = False
+    heating_detector_version: int | None = None
+    heating_power_threshold_w: float | None = None
+    heating_confirmation_seconds: int | None = None
+    heating_observation_seconds: int | None = None
+    heating_max_source_age_seconds: int | None = None
+    spin_evidence_timestamps: tuple[datetime, ...] = ()
 
     def as_storage_dict(self) -> dict[str, Any]:
         """Serialize the snapshot."""
@@ -65,6 +72,18 @@ class RuntimeSnapshot:
                 if self.heating_detected_at is not None
                 else None
             ),
+            "heating_not_seen": self.heating_not_seen,
+            "heating_detector_version": self.heating_detector_version,
+            "heating_power_threshold_w": self.heating_power_threshold_w,
+            "heating_confirmation_seconds": self.heating_confirmation_seconds,
+            "heating_observation_seconds": self.heating_observation_seconds,
+            "heating_max_source_age_seconds": (
+                self.heating_max_source_age_seconds
+            ),
+            "spin_evidence_timestamps": [
+                timestamp.isoformat()
+                for timestamp in self.spin_evidence_timestamps
+            ],
         }
 
     @classmethod
@@ -114,6 +133,25 @@ class RuntimeSnapshot:
                 if data.get("heating_detected_at")
                 else None
             )
+            heating_not_seen = bool(data.get("heating_not_seen", False))
+            heating_detector_version = _optional_positive_int(
+                data.get("heating_detector_version")
+            )
+            heating_power_threshold_w = _optional_finite_float(
+                data.get("heating_power_threshold_w")
+            )
+            heating_confirmation_seconds = _optional_positive_int(
+                data.get("heating_confirmation_seconds")
+            )
+            heating_observation_seconds = _optional_positive_int(
+                data.get("heating_observation_seconds")
+            )
+            heating_max_source_age_seconds = _optional_positive_int(
+                data.get("heating_max_source_age_seconds")
+            )
+            spin_evidence_timestamps = _datetime_tuple(
+                data.get("spin_evidence_timestamps")
+            )
         except (KeyError, TypeError, ValueError):
             return None
 
@@ -123,6 +161,22 @@ class RuntimeSnapshot:
             return None
         if data.get("heating_detected_at") and heating_detected_at is None:
             return None
+        if heating_detected and heating_not_seen:
+            return None
+        if heating_not_seen and any(
+            value is None
+            for value in (
+                heating_detector_version,
+                heating_power_threshold_w,
+                heating_confirmation_seconds,
+                heating_observation_seconds,
+                heating_max_source_age_seconds,
+            )
+        ):
+            # Keep the rest of a valid legacy/corrupt snapshot recoverable,
+            # but never grant persisted NOT_SEEN privileges without the
+            # complete detector fingerprint.
+            heating_not_seen = False 
         return cls(
             cycle_state=cycle_state,
             last_transition_reason=reason,
@@ -138,6 +192,13 @@ class RuntimeSnapshot:
             final_spin_detected=final_spin_detected,
             heating_detected=heating_detected,
             heating_detected_at=heating_detected_at,
+            heating_not_seen=heating_not_seen,
+            heating_detector_version=heating_detector_version,
+            heating_power_threshold_w=heating_power_threshold_w,
+            heating_confirmation_seconds=heating_confirmation_seconds,
+            heating_observation_seconds=heating_observation_seconds,
+            heating_max_source_age_seconds=heating_max_source_age_seconds,
+            spin_evidence_timestamps=spin_evidence_timestamps,
         )
 
 
@@ -157,6 +218,34 @@ def _optional_string(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+def _optional_positive_int(value: Any) -> int | None:
+    """Return an optional positive integer or raise for invalid storage."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError
+    number = int(value)
+    if number <= 0 or str(number) != str(value).strip():
+        raise ValueError
+    return number
+
+
+def _datetime_tuple(value: Any) -> tuple[datetime, ...]:
+    """Return validated aware timestamps from persisted storage."""
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError
+    timestamps: list[datetime] = []
+    for item in value:
+        if not isinstance(item, str):
+            raise ValueError
+        timestamp = dt_util.parse_datetime(item)
+        if timestamp is None or timestamp.tzinfo is None:
+            raise ValueError
+        timestamps.append(timestamp)
+    return tuple(timestamps)
 
 
 class LaundryStateStore:
