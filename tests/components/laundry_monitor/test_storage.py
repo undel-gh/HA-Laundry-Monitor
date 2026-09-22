@@ -139,13 +139,19 @@ def test_snapshot_without_heating_fields_is_backward_compatible() -> None:
     assert restored.heating_detected_at is None
 
 
-def test_invalid_heating_detected_timestamp_is_rejected() -> None:
-    """Test corrupt persisted heating timing cannot affect recovery."""
+def test_invalid_heating_detected_timestamp_is_discarded_locally() -> None:
+    """Bad heating timing must not invalidate an otherwise safe snapshot."""
     stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
     stored["heating_detected"] = True
     stored["heating_detected_at"] = "not-a-timestamp"
 
-    assert RuntimeSnapshot.from_storage_dict(stored) is None
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.cycle_state is LaundryCycleState.RUNNING
+    assert restored.laundry_present is True
+    assert restored.heating_detected is True
+    assert restored.heating_detected_at is None
 
 
 def test_heating_detected_round_trip() -> None:
