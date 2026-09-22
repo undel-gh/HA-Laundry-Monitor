@@ -710,9 +710,13 @@ When restoring `running`, the integration should preserve:
 * last meaningful activity timestamp;
 * accumulated cycle energy, when available;
 * a reliably known latched `heating_detected` fact and associated timing context;
+* a confirmed `not_seen` fact together with the heating-detector persistence version and complete detector parameters;
+* timestamps of vibration rising-edge evidence still relevant to the rolling spin window;
 * detector context required for safe continuation.
 
-If heating observation history cannot be restored with sufficient confidence, heating context must recover as `unknown`. Recovery must not infer `not_seen` merely because the restored cycle is already older than the heating observation interval.
+A persisted `not_seen` conclusion is restored only when its detector version and parameter fingerprint still match the current configuration. Otherwise heating recovers as `unknown`; cycle age alone never recreates `not_seen`.
+
+Persisted vibration evidence is re-pruned against the current spin window. The current vibration input seeds the post-restart edge baseline, so a sensor that is already ON at startup does not create a synthetic rising edge.
 
 The integration must not immediately declare the cycle finished solely because the first power reading after restart is low.
 
