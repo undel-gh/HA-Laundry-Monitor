@@ -113,7 +113,11 @@ from .const import (
     SIGNAL_RUNTIME_UPDATED,
 )
 from .finish import FinishDetector, FinishEvaluation
-from .heating import HeatingContextDetector, HeatingState
+from .heating import (
+    HEATING_CONTEXT_PERSISTENCE_VERSION,
+    HeatingContextDetector,
+    HeatingState,
+)
 from .spin import ElectricalSpinCandidateDetector, SpinDetector
 from .state_machine import LaundryStateMachine, TransitionStatus
 from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
@@ -577,9 +581,16 @@ class LaundryMonitorRuntime:
         self._cancel_pending_finished_retention("runtime stopping")
         self._cancel_pending_power_unavailable("runtime stopping")
         self._cancel_cycle_statistics_updates()
+        # A graceful entry reload is our best opportunity to checkpoint all
+        # active-cycle detector context synchronously.
+        await self.state_store.async_save(
+            self.entry.entry_id,
+            self._snapshot(),
+        )
 
     def _snapshot(self) -> RuntimeSnapshot:
         """Return the persistable part of runtime state."""
+        snapshot_now = dt_util.utcnow()
         return RuntimeSnapshot(
             cycle_state=self.cycle_state,
             last_transition_reason=self.last_transition_reason,
@@ -597,6 +608,43 @@ class LaundryMonitorRuntime:
                 self.heating_state is HeatingState.DETECTED
             ),
             heating_detected_at=self.heating_detector.detected_at,
+            heating_not_seen=(
+                self.heating_state is HeatingState.NOT_SEEN
+            ),
+            heating_detector_version=HEATING_CONTEXT_PERSISTENCE_VERSION,
+            heating_power_threshold_w=self.heating_detector.power_threshold_w,
+            heating_confirmation_seconds=(
+                self.heating_detector.confirmation_seconds
+            ),
+            heating_observation_seconds=(
+                self.heating_detector.observation_seconds
+            ),
+            heating_max_source_age_seconds=(
+                self.heating_detector.max_source_age_seconds
+            ),
+            spin_evidence_timestamps=self.spin_detector.snapshot_evidence(
+                now=snapshot_now
+            ),
+        )
+    
+    def _persisted_not_seen_is_compatible(
+        self,
+        snapshot: RuntimeSnapshot,
+    ) -> bool:
+        """Return whether persisted NOT_SEEN was proven with this detector."""
+        return bool(
+            snapshot.heating_not_seen
+            and self.heating_detector.power_threshold_w is not None
+            and snapshot.heating_detector_version
+            == HEATING_CONTEXT_PERSISTENCE_VERSION
+            and snapshot.heating_power_threshold_w
+            == self.heating_detector.power_threshold_w
+            and snapshot.heating_confirmation_seconds
+            == self.heating_detector.confirmation_seconds
+            and snapshot.heating_observation_seconds
+            == self.heating_detector.observation_seconds
+            and snapshot.heating_max_source_age_seconds
+            == self.heating_detector.max_source_age_seconds
         )
 
     @callback
@@ -699,18 +747,34 @@ class LaundryMonitorRuntime:
             else snapshot.final_spin_detected
         )
 
-        self.spin_detector.reset(vibration_active=self.vibration_active)
+        restored_evidence_count = 0
+        if active_cycle_restored:
+            restored_evidence_count = self.spin_detector.restore_evidence(
+                snapshot.spin_evidence_timestamps,
+                vibration_active=self.vibration_active,
+                now=now,
+            )
+        else:
+            self.spin_detector.reset(vibration_active=self.vibration_active)
+        
         # Cached source states are not proof of freshness after a restart.
         # Wait for real source updates before electrical/heating evidence may
-        # be used. Only a safely persisted latched heating fact is restored.
+        # be used. Persisted heating conclusions are restored only when their
+        # safety conditions remain valid.
         self.electrical_spin_detector.reset()
         self.heating_detector.reset()
         if active_cycle_restored and snapshot.heating_detected:
             self.heating_detector.restore_detected(
                 snapshot.heating_detected_at
             )
+        elif (
+            active_cycle_restored
+            and self._persisted_not_seen_is_compatible(snapshot)
+        ):
+            self.heating_detector.restore_not_seen()
+        
         self.final_spin_confidence = 0.0
-        self.final_spin_evidence_count = 0
+        self.final_spin_evidence_count = restored_evidence_count
         # Confirmation-path metadata is diagnostic-only and is not persisted.
         self.final_spin_confirmation_path = None
         self.final_spin_hybrid_variant = None
@@ -1604,8 +1668,9 @@ class LaundryMonitorRuntime:
             now=now or dt_util.utcnow(),
         )
         if (
-            previous_state is not HeatingState.DETECTED
-            and evaluation.state is HeatingState.DETECTED
+            previous_state is not evaluation.state
+            and evaluation.state
+            in {HeatingState.NOT_SEEN, HeatingState.DETECTED}
         ):
             self._schedule_snapshot_save()
         _LOGGER.debug(
@@ -1691,6 +1756,10 @@ class LaundryMonitorRuntime:
         previous_variant = self.final_spin_hybrid_variant
         self.final_spin_confidence = evaluation.confidence
         self.final_spin_evidence_count = evaluation.evidence_count
+        if evaluation.new_evidence:
+            # Vibration edges are sparse and safety-relevant; persist them
+            # immediately so restart/reload can reconstruct the live window.
+            self._schedule_snapshot_save()
 
         if evidence_changed or evaluation.detected:
             _LOGGER.debug(
