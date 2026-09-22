@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import StrEnum
 
+HEATING_CONTEXT_PERSISTENCE_VERSION = 1
+
 
 class HeatingState(StrEnum):
     """Cycle-local heating context used by hybrid spin gating."""
@@ -80,7 +82,21 @@ class HeatingContextDetector:
         self.reset()
         self.state = HeatingState.DETECTED
         self.detected_at = detected_at
-
+    
+    def restore_not_seen(self) -> None:
+        """Restore a previously confirmed no-heating conclusion.
+    
+        The conclusion is restored only by runtime code that has already
+        verified the persisted detector version and parameters. Cached
+        source freshness and heater-active state are deliberately not
+        restored.
+        """
+        self.reset()
+        if self.power_threshold_w is None:
+            return
+        self.state = HeatingState.NOT_SEEN
+        self.observation_coverage_seconds = float(self.observation_seconds)
+    
     def evaluate(
         self,
         *,
