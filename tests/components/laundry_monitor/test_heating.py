@@ -213,3 +213,27 @@ def test_restore_detected_keeps_fact_but_discards_freshness() -> None:
     assert result.heating_active is False
     assert result.power_source_fresh is False
     assert result.observation_coverage_seconds == 0.0
+
+
+def test_restore_not_seen_keeps_conclusion_but_discards_freshness() -> None:
+    """A safely persisted NOT_SEEN conclusion can survive recovery."""
+    detector = _detector(observation=60)
+
+    detector.restore_not_seen()
+    result = detector.evaluation
+
+    assert result.state is HeatingState.NOT_SEEN
+    assert result.observation_coverage_seconds == 60.0
+    assert result.heating_active is False
+    assert result.power_source_fresh is False
+    assert result.confirmation_coverage_seconds == 0.0
+
+
+def test_restore_not_seen_without_threshold_fails_closed() -> None:
+    """NOT_SEEN cannot be restored when heating calibration is absent."""
+    detector = _detector(threshold=None, observation=60)
+
+    detector.restore_not_seen()
+
+    assert detector.state is HeatingState.UNKNOWN
+    assert detector.observation_coverage_seconds == 0.0
