@@ -162,9 +162,9 @@ class RuntimeSnapshot:
         if data.get("last_unloaded_at") and last_unloaded_at is None:
             return None
         if heating_detected and heating_not_seen:
-        # DETECTED is the stricter latched fact; a contradictory
-        # NOT_SEEN bit is treated as corrupt optional context rather
-        # than invalidating the entire snapshot.
+            # DETECTED is the stricter latched fact; a contradictory
+            # NOT_SEEN bit is treated as corrupt optional context rather
+            # than invalidating the entire snapshot.
             heating_not_seen = False
         if heating_not_seen and any(
             value is None
