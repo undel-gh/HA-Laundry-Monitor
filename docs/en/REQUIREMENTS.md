@@ -336,13 +336,19 @@ An enabled reduced-evidence hybrid configuration shall require an explicit heati
 
 ## FR-055
 
-Heating context that changes future spin-gating decisions shall be included in restart recovery. At minimum, a reliably known `heating_detected` fact shall survive safe recovery. When sufficient heating history cannot be restored, the runtime shall recover heating context conservatively as `unknown`; it shall not infer `not_seen` from missing pre-restart history.
+Heating context that changes future spin-gating decisions shall be included in restart recovery. A reliably known `heating_detected` fact shall survive safe recovery. A confirmed `not_seen` conclusion may also survive recovery, but only when the persisted heating-detector persistence version and the complete detector parameter set match the currently configured detector. If that proof is missing, incomplete, incompatible, or corrupt, the runtime shall recover heating context conservatively as `unknown`; it shall never infer `not_seen` from elapsed cycle age or missing pre-restart history.
 
 ---
 
 ## FR-056
 
 Diagnostics shall expose enough heating context to explain a blocked or accepted terminal-spin decision, including the heating state, whether heater-level power is currently active, observation coverage, the configured heating threshold/timers, and the effective heating-aware cycle-age gate.
+
+---
+ 
+## FR-057
+
+For an active recovered cycle, vibration rising-edge timestamps that are still inside the configured spin rolling window shall survive safe restart/reload recovery. Recovery shall re-prune persisted timestamps against the current window, discard stale, duplicate, corrupt, or future evidence, and seed the edge detector from the current vibration state so startup cannot create a synthetic rising edge.
 
 ---
 
