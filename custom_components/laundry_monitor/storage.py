@@ -128,41 +128,44 @@ class RuntimeSnapshot:
                 data.get("final_spin_detected", False)
             )
             heating_detected = bool(data.get("heating_detected", False))
-            heating_detected_at = (
-                dt_util.parse_datetime(data["heating_detected_at"])
-                if data.get("heating_detected_at")
-                else None
+            heating_detected_at = _optional_aware_datetime(
+                data.get("heating_detected_at")
             )
             heating_not_seen = bool(data.get("heating_not_seen", False))
-            heating_detector_version = _optional_positive_int(
-                data.get("heating_detector_version")
-            )
-            heating_power_threshold_w = _optional_finite_float(
-                data.get("heating_power_threshold_w")
-            )
-            heating_confirmation_seconds = _optional_positive_int(
-                data.get("heating_confirmation_seconds")
-            )
-            heating_observation_seconds = _optional_positive_int(
-                data.get("heating_observation_seconds")
-            )
-            heating_max_source_age_seconds = _optional_positive_int(
-                data.get("heating_max_source_age_seconds")
-            )
-            spin_evidence_timestamps = _datetime_tuple(
-                data.get("spin_evidence_timestamps")
-            )
+           
         except (KeyError, TypeError, ValueError):
             return None
-
+        # Recovery-only detector context degrades independently from the
+        # core snapshot. Corrupt optional proof must never discard an
+        # otherwise valid active cycle, laundry tracking state, or
+        # statistics.
+        heating_detector_version = _safe_optional_positive_int(
+            data.get("heating_detector_version")
+        )
+        heating_power_threshold_w = _safe_optional_finite_float(
+            data.get("heating_power_threshold_w")
+        )
+        heating_confirmation_seconds = _safe_optional_positive_int(
+            data.get("heating_confirmation_seconds")
+        )
+        heating_observation_seconds = _safe_optional_positive_int(
+            data.get("heating_observation_seconds")
+        )
+        heating_max_source_age_seconds = _safe_optional_positive_int(
+            data.get("heating_max_source_age_seconds")
+        )
+        spin_evidence_timestamps = _aware_datetime_tuple_discard_invalid(
+            data.get("spin_evidence_timestamps")
+        )
         if last_state_change is None:
             return None
         if data.get("last_unloaded_at") and last_unloaded_at is None:
             return None
-        if data.get("heating_detected_at") and heating_detected_at is None:
-            return None
         if heating_detected and heating_not_seen:
-            return None
+        # DETECTED is the stricter latched fact; a contradictory
+        # NOT_SEEN bit is treated as corrupt optional context rather
+        # than invalidating the entire snapshot.
+            heating_not_seen = False
         if heating_not_seen and any(
             value is None
             for value in (
@@ -231,20 +234,43 @@ def _optional_positive_int(value: Any) -> int | None:
     return number
 
 
-def _datetime_tuple(value: Any) -> tuple[datetime, ...]:
-    """Return validated aware timestamps from persisted storage."""
+def _safe_optional_positive_int(value: Any) -> int | None:
+    """Return a positive integer, degrading corrupt optional data to None."""
+    try:
+        return _optional_positive_int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_optional_finite_float(value: Any) -> float | None:
+    """Return a finite float, degrading corrupt optional data to None."""
+    try:
+        return _optional_finite_float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_aware_datetime(value: Any) -> datetime | None:
+    """Return an optional timezone-aware timestamp or None if unusable."""
     if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    timestamp = dt_util.parse_datetime(value)
+    if timestamp is None or timestamp.tzinfo is None:
+        return None
+    return timestamp
+
+
+def _aware_datetime_tuple_discard_invalid(value: Any) -> tuple[datetime, ...]:
+    """Return valid aware timestamps, discarding only corrupt entries."""
+    if not isinstance(value, list):        
         return ()
-    if not isinstance(value, list):
-        raise ValueError
     timestamps: list[datetime] = []
     for item in value:
-        if not isinstance(item, str):
-            raise ValueError
-        timestamp = dt_util.parse_datetime(item)
-        if timestamp is None or timestamp.tzinfo is None:
-            raise ValueError
-        timestamps.append(timestamp)
+        timestamp = _optional_aware_datetime(item)
+        if timestamp is not None:
+            timestamps.append(timestamp)
     return tuple(timestamps)
 
 
