@@ -43,6 +43,7 @@ class SpinDetector:
         """Reset evidence for a new cycle or an idle state."""
         self._evidence.clear()
         self._previous_vibration_active = vibration_active
+        
     def snapshot_evidence(self, *, now: datetime) -> tuple[datetime, ...]:
         """Return only vibration evidence still inside the rolling window."""
         self._prune(now)
