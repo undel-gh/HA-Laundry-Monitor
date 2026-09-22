@@ -169,6 +169,46 @@ def test_minimum_cycle_time_is_required() -> None:
     assert result.confidence == 0.5
 
 
+def test_restore_evidence_prunes_window_and_avoids_synthetic_edge() -> None:
+    """Persisted rising edges survive recovery without inventing a new one."""
+    detector = SpinDetector(
+        required_events=3,
+        window_seconds=180,
+        min_cycle_seconds=0,
+        activity_max_age_seconds=120,
+    )
+    now = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
+    recent = (
+        now - timedelta(seconds=120),
+        now - timedelta(seconds=60),
+    )
+
+    restored = detector.restore_evidence(
+        (
+            now - timedelta(seconds=181),
+            *recent,
+            recent[-1],
+            now + timedelta(seconds=1),
+        ),
+        vibration_active=True,
+        now=now,
+    )
+
+    assert restored == 2
+    assert detector.snapshot_evidence(now=now) == recent
+
+    result = detector.evaluate(
+        vibration_active=True,
+        activity_detected=True,
+        last_activity=now,
+        cycle_started_at=now - timedelta(minutes=20),
+        now=now,
+    )
+
+    assert result.new_evidence is False
+    assert result.evidence_count == 2
+
+
 def test_electrical_candidate_requires_configured_power_threshold() -> None:
     """No universal power threshold means no electrical candidate."""
     detector = ElectricalSpinCandidateDetector(
