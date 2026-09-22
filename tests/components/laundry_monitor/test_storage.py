@@ -1,6 +1,6 @@
 """Test snapshot validation and recovery policy."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -164,6 +164,55 @@ def test_heating_detected_round_trip() -> None:
     assert RuntimeSnapshot.from_storage_dict(
         snapshot.as_storage_dict()
     ) == snapshot
+
+def test_not_seen_fingerprint_and_spin_evidence_round_trip() -> None:
+    """Persist safe NOT_SEEN proof and the live vibration window."""
+    now = datetime(2026, 9, 22, 12, 0, tzinfo=timezone.utc)
+    snapshot = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="test",
+        last_state_change=now,
+        cycle_started_at=now - timedelta(minutes=10),
+        laundry_present=True,
+        heating_not_seen=True,
+        heating_detector_version=1,
+        heating_power_threshold_w=1000.0,
+        heating_confirmation_seconds=30,
+        heating_observation_seconds=300,
+        heating_max_source_age_seconds=30,
+        spin_evidence_timestamps=(
+            now - timedelta(seconds=120),
+            now - timedelta(seconds=60),
+        ),
+    )
+
+    assert RuntimeSnapshot.from_storage_dict(
+        snapshot.as_storage_dict()
+    ) == snapshot
+
+
+def test_not_seen_without_complete_fingerprint_fails_closed() -> None:
+    """Incomplete persisted calibration must not restore NOT_SEEN."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored["heating_not_seen"] = True
+    stored["heating_detector_version"] = 1
+    stored["heating_power_threshold_w"] = 1000.0
+    stored["heating_confirmation_seconds"] = 30
+    stored["heating_observation_seconds"] = 300
+    stored["heating_max_source_age_seconds"] = None
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.heating_not_seen is False
+
+
+def test_invalid_spin_evidence_timestamp_is_rejected() -> None:
+    """Corrupt vibration timestamps cannot participate in recovery."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored["spin_evidence_timestamps"] = ["not-a-timestamp"]
+
+    assert RuntimeSnapshot.from_storage_dict(stored) is None
 
 
 def test_last_unloaded_at_round_trip() -> None:
