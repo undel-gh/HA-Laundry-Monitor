@@ -610,3 +610,98 @@ async def test_snapshot_recovery_restores_latched_heating_fact(
     assert runtime.heating_detector.detected_at == detected_at
     assert runtime.heating_detector.heating_active is False
     assert runtime.heating_detector.power_source_fresh is False
+
+
+async def test_snapshot_recovery_restores_matching_not_seen_and_vibration_window(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Safe recovery preserves proven no-heating context and live edges."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+        heating_power_threshold=1000.0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    evidence = (
+        now - timedelta(seconds=120),
+        now - timedelta(seconds=60),
+    )
+    snapshot = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="stored_running",
+        last_state_change=now - timedelta(seconds=5),
+        cycle_started_at=now - timedelta(minutes=12),
+        laundry_present=True,
+        heating_not_seen=True,
+        heating_detector_version=1,
+        heating_power_threshold_w=runtime.heating_detector.power_threshold_w,
+        heating_confirmation_seconds=(
+            runtime.heating_detector.confirmation_seconds
+        ),
+        heating_observation_seconds=(
+            runtime.heating_detector.observation_seconds
+        ),
+        heating_max_source_age_seconds=(
+            runtime.heating_detector.max_source_age_seconds
+        ),
+        spin_evidence_timestamps=evidence,
+    )
+    runtime.state_store.async_get = AsyncMock(return_value=snapshot)
+
+    await runtime._async_restore_snapshot()
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.heating_state is HeatingState.NOT_SEEN
+    assert runtime.heating_detector.heating_active is False
+    assert runtime.heating_detector.power_source_fresh is False
+    assert runtime.final_spin_evidence_count == 2
+    assert runtime.spin_detector.snapshot_evidence(
+        now=dt_util.utcnow()
+    ) == evidence
+
+
+async def test_snapshot_recovery_discards_not_seen_when_parameters_changed(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Changed heating calibration invalidates persisted NOT_SEEN."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+        heating_power_threshold=1000.0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    snapshot = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="stored_running",
+        last_state_change=now - timedelta(seconds=5),
+        cycle_started_at=now - timedelta(minutes=12),
+        laundry_present=True,
+        heating_not_seen=True,
+        heating_detector_version=1,
+        heating_power_threshold_w=900.0,
+        heating_confirmation_seconds=(
+            runtime.heating_detector.confirmation_seconds
+        ),
+        heating_observation_seconds=(
+            runtime.heating_detector.observation_seconds
+        ),
+        heating_max_source_age_seconds=(
+            runtime.heating_detector.max_source_age_seconds
+        ),
+        spin_evidence_timestamps=(
+            now - timedelta(seconds=181),
+            now - timedelta(seconds=60),
+        ),
+    )
+    runtime.state_store.async_get = AsyncMock(return_value=snapshot)
+
+    await runtime._async_restore_snapshot()
+
+    assert runtime.heating_state is HeatingState.UNKNOWN
+    assert runtime.final_spin_evidence_count == 1
