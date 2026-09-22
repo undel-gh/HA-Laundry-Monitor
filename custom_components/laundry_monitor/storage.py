@@ -132,7 +132,7 @@ class RuntimeSnapshot:
                 data.get("heating_detected_at")
             )
             heating_not_seen = bool(data.get("heating_not_seen", False))
-           
+
         except (KeyError, TypeError, ValueError):
             return None
         # Recovery-only detector context degrades independently from the
@@ -179,7 +179,7 @@ class RuntimeSnapshot:
             # Keep the rest of a valid legacy/corrupt snapshot recoverable,
             # but never grant persisted NOT_SEEN privileges without the
             # complete detector fingerprint.
-            heating_not_seen = False 
+            heating_not_seen = False
         return cls(
             cycle_state=cycle_state,
             last_transition_reason=reason,
@@ -264,7 +264,7 @@ def _optional_aware_datetime(value: Any) -> datetime | None:
 
 def _aware_datetime_tuple_discard_invalid(value: Any) -> tuple[datetime, ...]:
     """Return valid aware timestamps, discarding only corrupt entries."""
-    if not isinstance(value, list):        
+    if not isinstance(value, list):
         return ()
     timestamps: list[datetime] = []
     for item in value:

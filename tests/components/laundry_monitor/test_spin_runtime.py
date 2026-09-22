@@ -321,7 +321,7 @@ async def test_hybrid_path_requires_electrical_candidate(
     )
     runtime = entry.runtime_data
     _mark_heating_not_seen(runtime, dt_util.utcnow())
-   
+
     assert runtime.spin_electrical_candidate is False
     await _vibration_pulse(hass)
     await _vibration_pulse(hass)

@@ -355,7 +355,7 @@ async def test_door_opened_after_finish_event_is_emitted(
     @callback
     def _capture_door_event(event) -> None:
         events.append(event)
-        
+
     hass.bus.async_listen(
         EVENT_DOOR_OPENED_AFTER_FINISH,
         _capture_door_event,

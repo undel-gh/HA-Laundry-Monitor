@@ -626,7 +626,7 @@ class LaundryMonitorRuntime:
                 now=snapshot_now
             ),
         )
-    
+
     def _persisted_not_seen_is_compatible(
         self,
         snapshot: RuntimeSnapshot,
@@ -756,7 +756,7 @@ class LaundryMonitorRuntime:
             )
         else:
             self.spin_detector.reset(vibration_active=self.vibration_active)
-        
+
         # Cached source states are not proof of freshness after a restart.
         # Wait for real source updates before electrical/heating evidence may
         # be used. Persisted heating conclusions are restored only when their
@@ -772,7 +772,7 @@ class LaundryMonitorRuntime:
             and self._persisted_not_seen_is_compatible(snapshot)
         ):
             self.heating_detector.restore_not_seen()
-        
+
         self.final_spin_confidence = 0.0
         self.final_spin_evidence_count = restored_evidence_count
         # Confirmation-path metadata is diagnostic-only and is not persisted.

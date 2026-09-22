@@ -43,12 +43,12 @@ class SpinDetector:
         """Reset evidence for a new cycle or an idle state."""
         self._evidence.clear()
         self._previous_vibration_active = vibration_active
-        
+
     def snapshot_evidence(self, *, now: datetime) -> tuple[datetime, ...]:
         """Return only vibration evidence still inside the rolling window."""
         self._prune(now)
         return tuple(self._evidence)
-    
+
     def restore_evidence(
         self,
         timestamps: tuple[datetime, ...],
@@ -57,7 +57,7 @@ class SpinDetector:
         now: datetime,
     ) -> int:
         """Restore still-valid vibration rising-edge timestamps.
-    
+
         The current vibration state seeds the edge baseline so an ON state
         already present during startup is not counted as a new rising edge.
         Stale, duplicate, and future timestamps fail closed.
@@ -68,7 +68,7 @@ class SpinDetector:
             if cutoff <= timestamp <= now:
                 self._evidence.append(timestamp)
         return len(self._evidence)
-    
+
     def evaluate(
         self,
         *,

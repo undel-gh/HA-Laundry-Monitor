@@ -26,7 +26,7 @@ from custom_components.laundry_monitor.const import (
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
     DOMAIN,
-    LaundryCycleState,    
+    LaundryCycleState,
     REASON_FINISH_FALLBACK_CONFIRMED,
     REASON_FINISH_INACTIVITY_CONFIRMED,
 )
@@ -269,7 +269,7 @@ async def test_terminal_activity_resets_finish_confirmation(
 
     hass.states.async_set("sensor.washing_machine_power", "45")
     await hass.async_block_till_done()
-    
+
     assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
     assert runtime.finish_deadline is None
 
@@ -285,5 +285,5 @@ async def test_terminal_activity_resets_finish_confirmation(
     await hass.async_block_till_done()
     assert runtime.cycle_state is LaundryCycleState.FINISHED
     assert runtime.last_transition_reason == REASON_FINISH_INACTIVITY_CONFIRMED
-    
+
     assert runtime.finish_deadline is None
