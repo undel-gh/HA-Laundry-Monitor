@@ -13,7 +13,11 @@ from custom_components.laundry_monitor.sensor import SENSOR_DESCRIPTIONS
 
 
 def _sensor_description(key: str):
-    return next(description for description in SENSOR_DESCRIPTIONS if description.key == key)
+    return next(
+        description
+        for description in SENSOR_DESCRIPTIONS
+        if description.key == key
+    )
 
 
 def _binary_description(key: str):
