@@ -352,6 +352,12 @@ For an active recovered cycle, vibration rising-edge timestamps that are still i
 
 ---
 
+## FR-058
+
+When hybrid terminal-spin confirmation is enabled and the current cycle has latched heating as `detected`, full vibration evidence shall not independently confirm `final_spin`. After active heating has ended, a heated cycle shall still require a fresh sustained electrical spin candidate, recent meaningful activity, sufficient vibration evidence, and the applicable heated-cycle minimum age. This rule prevents an intermediate spin in a heated wash from bypassing electrical corroboration through the vibration-only path. When hybrid confirmation is disabled, the existing vibration-only path shall remain unchanged.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
