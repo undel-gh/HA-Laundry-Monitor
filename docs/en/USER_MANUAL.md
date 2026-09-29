@@ -328,7 +328,7 @@ At cycle start it is `unknown`.
 
 While heater-level operation is actively confirmed, Laundry Monitor blocks `final_spin`.
 
-If heating has been detected, the reduced-evidence hybrid path is delayed until **Heated-cycle minimum spin time** has elapsed from cycle start.
+If heating has been detected, the reduced-evidence hybrid path is delayed until **Heated-cycle minimum spin time** has elapsed from cycle start. When hybrid mode is enabled, a heated cycle also cannot fall back to vibration-only confirmation: even a complete vibration pattern still needs a fresh electrical spin candidate. This prevents an intermediate spin in a heated wash from bypassing the hybrid safeguards. With hybrid mode disabled, the normal vibration-only behavior is unchanged.
 
 If heating is confidently `not_seen`, Laundry Monitor may use a **fast non-heated path** before the normal spin minimum cycle time. That fast path is intentionally stricter mechanically: it requires the full vibration-event requirement plus the electrical spin candidate. This supports short spin-only or rinse-and-spin programs without assuming that every no-heating program is a spin-only program.
 
