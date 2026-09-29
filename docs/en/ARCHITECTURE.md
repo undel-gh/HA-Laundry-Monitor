@@ -192,7 +192,7 @@ The Heating Context Detector consumes the same normalized required power source 
 
 `not_seen` is an evidence statement, not a default. It may be reached only after sufficient valid source coverage. Missing, unavailable, invalid, or stale power cannot advance the no-heating observation coverage.
 
-While heater-level operation is actively confirmed, the Spin Detector must reject every terminal-spin confirmation path. Once heating has been detected, reduced-evidence hybrid confirmation uses a stricter minimum cycle age. If heating is confidently `not_seen`, a fast non-heated hybrid path may bypass the normal minimum age, but only with the full vibration requirement plus the sustained electrical spin candidate.
+While heater-level operation is actively confirmed, the Spin Detector must reject every terminal-spin confirmation path. Once heating has been detected, reduced-evidence hybrid confirmation uses a stricter minimum cycle age. When hybrid confirmation is enabled for such a heated cycle, full vibration evidence must not bypass the electrical-corroboration stage: the electrical spin candidate remains required even when the ordinary vibration-only detector would otherwise report a complete pattern. If heating is confidently `not_seen`, a fast non-heated hybrid path may bypass the normal minimum age, but only with the full vibration requirement plus the sustained electrical spin candidate. Hybrid-disabled configurations retain the existing vibration-only behavior.
 
 Window, coverage, freshness, electrical thresholds, heating threshold, and heating timing values are configurable. Architecture must not encode machine-specific field values as universal power/current/heating defaults.
 
