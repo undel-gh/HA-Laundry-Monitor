@@ -421,6 +421,9 @@ Heating-aware timing rules are:
 heating = detected:
     effective reduced-hybrid minimum age =
         max(spin_min_cycle_time, heated_cycle_min_seconds)
+    when hybrid confirmation is enabled:
+        full vibration evidence is not an independent confirmation path
+        a fresh sustained electrical spin candidate remains required
 
 heating = not_seen:
     normal reduced-hybrid path keeps the normal spin_min_cycle_time
@@ -470,6 +473,8 @@ fast non-heated hybrid path:
 ```
 
 The current defaults require three vibration events for the vibration-only path. The experimental hybrid path is disabled by default; when enabled, its normal reduced-evidence requirement is two events and must remain lower than the configured vibration-only requirement. The fast non-heated path does not use the reduced requirement.
+
+When hybrid confirmation is enabled and heating has been latched as `detected`, the vibration-only path is no longer an independent terminal-spin confirmation path for that cycle. Full vibration evidence remains valid mechanical evidence, but it must be corroborated by a fresh sustained electrical spin candidate and must satisfy the heated-cycle timing gate. This prevents ordinary intermediate spins in a heated wash from bypassing the heating-aware hybrid safeguards. If hybrid confirmation is disabled, the existing vibration-only behavior is unchanged.
 
 Electrical spin evidence is based on time-weighted rolling medians over piecewise-constant source observations. Candidate evaluation also requires minimum observed coverage. A single power or current spike is insufficient.
 
