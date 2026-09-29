@@ -300,7 +300,8 @@ A hybrid confirmation requires:
 - a sustained electrical spin candidate;
 - known heating context;
 - no active heater signature;
-- the applicable heating-aware minimum cycle age;- recent meaningful activity;
+- the applicable heating-aware minimum cycle age;
+- recent meaningful activity;
 - fresh electrical source data.
 
 Electrical evidence **alone can never confirm final spin**.
