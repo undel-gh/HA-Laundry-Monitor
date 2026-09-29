@@ -462,6 +462,79 @@ async def test_heated_cycle_delays_reduced_hybrid_confirmation(
     assert runtime.final_spin_confirmation_path == "hybrid"
     assert runtime.final_spin_hybrid_variant == "reduced"
 
+async def test_heated_hybrid_full_vibration_waits_for_electrical_candidate(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """FR-058: heated hybrid cannot fall through to vibration-only."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+        heating_power_threshold=1000.0,
+        spin_min_cycle_time=600,
+        heated_cycle_min_time=900,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    runtime.heating_detector.restore_detected(now - timedelta(minutes=15))
+    runtime.cycle_started_at = now - timedelta(minutes=20)
+
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.final_spin_evidence_count == 3
+    assert runtime.final_spin_confirmation_path is None
+    assert (
+        runtime.spin_gate_reason
+        == "heated_cycle_requires_electrical_candidate"
+    )
+
+    candidate_now = dt_util.utcnow()
+    runtime.electrical_spin_detector.reset(
+        now=candidate_now - timedelta(seconds=30),
+        power=150.0,
+    )
+    runtime.electrical_spin_detector.evaluate(
+        power=150.0,
+        current=None,
+        power_updated=False,
+        current_updated=False,
+        now=candidate_now,
+    )
+
+    assert runtime.spin_electrical_candidate is True
+    assert runtime._evaluate_spin(now=candidate_now)
+    assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
+    assert runtime.final_spin_confirmation_path == "hybrid"
+    assert runtime.final_spin_hybrid_variant == "reduced"
+
+
+async def test_heated_cycle_keeps_vibration_only_when_hybrid_disabled(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """FR-058 does not change the legacy path when hybrid is disabled."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=False,
+        heating_power_threshold=1000.0,
+        spin_min_cycle_time=0,
+    )
+    runtime = entry.runtime_data
+    runtime.heating_detector.restore_detected(
+        dt_util.utcnow() - timedelta(minutes=10)
+    )
+
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
+    assert runtime.final_spin_confirmation_path == "vibration_only"
+
 
 async def test_fast_non_heated_path_requires_full_vibration_evidence(
     hass: HomeAssistant,
