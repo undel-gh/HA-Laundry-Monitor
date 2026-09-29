@@ -773,6 +773,7 @@ When heating-aware hybrid detection is configured, final-spin timing shall use c
 * `not_seen` requires the configured amount of valid power-observation coverage without heating; elapsed wall-clock time alone is insufficient.
 * Active heater-level operation blocks all `final_spin` confirmation.
 * After heating is `detected`, reduced-evidence hybrid confirmation uses the stricter heated-cycle minimum age.
+* When hybrid confirmation is enabled and heating is `detected`, full vibration evidence cannot independently confirm `final_spin`; a fresh sustained electrical spin candidate is still required.
 * While heating remains `unknown`, reduced-evidence hybrid confirmation is blocked.
 * After heating is `not_seen`, the fast non-heated hybrid path may bypass the normal minimum cycle age only with full vibration evidence and the sustained electrical spin candidate.
 
@@ -853,6 +854,7 @@ The implementation must preserve the following invariants:
 22. Reduced-evidence hybrid confirmation must not run with `unknown` heating context.
 23. A fast non-heated path must use the full vibration requirement, not the reduced hybrid requirement.
 24. Restart recovery must not infer `not_seen` from heating history that was not observed or safely restored.
+25. When hybrid confirmation is enabled and heating is `detected`, full vibration evidence must not bypass the required electrical spin candidate.
     
 ## 18. Edge Cases
 
@@ -959,8 +961,9 @@ If heater operation overlaps vibration or otherwise satisfies the electrical spi
 * recognize the separate sustained heater-level signature;
 * latch the cycle as heated;
 * block `final_spin` while heater-level operation is active;
-* apply the heated-cycle minimum age to reduced-evidence hybrid confirmation;
-* remain in `running` when the heating-aware timing gate is not satisfied.
+* when hybrid confirmation is enabled, prevent full vibration evidence from bypassing the electrical spin candidate after heating has been detected;
+* apply the heated-cycle minimum age to hybrid confirmation;
+* remain in `running` when the heating-aware electrical or timing gate is not satisfied.
 
 ### 18.13 Spin-only or rinse-and-spin program
 
