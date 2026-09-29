@@ -371,6 +371,10 @@ A practical calibration workflow is:
 9. Observe several additional cycles in shadow mode, including at least one heated wash and, if available, a spin-only or rinse-and-spin program.
 10. Enable hybrid confirmation only after the combination does not show false terminal-spin candidates.
 
+Before enabling hybrid confirmation, verify that the power sensor publishes real updates more frequently than **Maximum electrical source age**. If the plug publishes only every 60 seconds while the maximum source age is 30 seconds, the electrical source will repeatedly become stale. In a heated cycle, FR-058 then prevents vibration-only fallback, so `final_spin` may remain unconfirmed and the cycle will finish later through the conservative running-state fallback.
+
+If a heated wash has full vibration evidence but `spin_gate_reason` remains `heated_cycle_requires_electrical_candidate`, first check the electrical spin threshold and source freshness/publication interval. That diagnostic points to missing or stale electrical corroboration, not to insufficient vibration evidence.
+
 Example spin values such as `100 W` and `0.7 A`, or heater values observed on one particular machine, are **not universal recommendations**.
 
 ### 10.7 Hybrid configuration rules
