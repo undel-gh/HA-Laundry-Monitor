@@ -443,7 +443,8 @@ The fast non-heated path is intended for programs such as spin-only or rinse-and
 
 #### Experimental hybrid electrical corroboration
 
-The implemented detector retains the vibration-only confirmation path and also provides an experimental, opt-in hybrid path. The hybrid path derives an internal **electrical spin candidate** from sustained power behavior and, when available, current behavior.
+The implemented detector retains the vibration-only confirmation path and also provides an experimental, opt-in hybrid path, except in heated cycles when hybrid confirmation is enabled (see FR-058). In that case, full vibration evidence remains mechanical evidence but cannot independently confirm `final_spin` without a fresh electrical spin candidate. The hybrid path derives an internal **electrical spin candidate** from sustained power behavior and, when available, current behavior.
+
 
 The electrical candidate corroborates mechanical evidence; it never replaces it. The runtime supports two confirmation paths:
 
