@@ -1783,10 +1783,13 @@ class LaundryMonitorRuntime:
             )
         confirmation_path: str | None = None
         hybrid_variant: str | None = None
-
+        heated_hybrid_requires_electrical = (
+            self.hybrid_spin_enabled
+            and self.heating_state is HeatingState.DETECTED
+        )
         if self.heating_detector.heating_active:
             gate_reason = "heating_active"
-        elif evaluation.detected:
+        elif evaluation.detected and not heated_hybrid_requires_electrical:
             confirmation_path = "vibration_only"
             gate_reason = "confirmed_vibration_only"
         elif not self.hybrid_spin_enabled:
@@ -1796,6 +1799,9 @@ class LaundryMonitorRuntime:
         elif self.heating_detector.power_threshold_w is None:
             gate_reason = "hybrid_heating_not_configured"
         elif not self.spin_electrical_candidate:
+        if heated_hybrid_requires_electrical and evaluation.detected:
+            gate_reason = "heated_cycle_requires_electrical_candidate"
+        else:
             gate_reason = "electrical_candidate_inactive"
         elif not evaluation.activity_recent:
             gate_reason = "activity_not_recent"
