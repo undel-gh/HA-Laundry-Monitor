@@ -1799,10 +1799,10 @@ class LaundryMonitorRuntime:
         elif self.heating_detector.power_threshold_w is None:
             gate_reason = "hybrid_heating_not_configured"
         elif not self.spin_electrical_candidate:
-        if heated_hybrid_requires_electrical and evaluation.detected:
-            gate_reason = "heated_cycle_requires_electrical_candidate"
-        else:
-            gate_reason = "electrical_candidate_inactive"
+            if heated_hybrid_requires_electrical and evaluation.detected:
+                gate_reason = "heated_cycle_requires_electrical_candidate"
+            else:
+                gate_reason = "electrical_candidate_inactive"
         elif not evaluation.activity_recent:
             gate_reason = "activity_not_recent"
         elif self.heating_state is HeatingState.UNKNOWN:
