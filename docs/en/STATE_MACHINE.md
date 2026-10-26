@@ -1,7 +1,7 @@
 # Laundry Monitor State Machine
 
 Status: Draft
-Version: 0.1.4-rc1
+Revision basis: current `main` implementation
 Language: English
 Project: HA-Laundry-Monitor
 
@@ -45,7 +45,7 @@ The state machine shall:
 The public cycle state is exposed through:
 
 ```text
-sensor.<device>_state
+sensor.<device>_cycle_state
 ```
 
 The state value must use stable, non-localized identifiers.
@@ -65,7 +65,7 @@ New public states should not be introduced without a clear use case and a compat
 
 ## 4. Internal States
 
-The  may use more detailed internal states.
+The implementation may use more detailed internal states.
 
 Possible internal states include:
 
@@ -82,7 +82,7 @@ Possible internal states include:
 | `FINISHED`                  | `finished`                | Cycle completion confirmed.                                                     |
 | `ERROR`                     | `error`                   | State evaluation cannot safely continue.                                        |
 
-Internal states are  details and may change between compatible releases.
+Internal states are implementation details and may change between compatible releases.
 
 ## 5. State Machine Inputs
 
@@ -337,7 +337,7 @@ The public state is therefore a **terminal spin sequence / terminal phase** mark
 
 The State Machine does not depend on the internal implementation of the Spin Detector. It consumes a confirmed terminal-spin result together with its evidence and diagnostic confidence.
 
-The vibration-only path requires the configured full vibration evidence plus the applicable activity-recency and cycle-age gates. When confirmed heater operation is currently active, even a vibration-only terminal-spin result is blocked until heater-level operation is no longer active.
+The full-evidence vibration path normally requires the configured vibration evidence plus the applicable activity-recency and cycle-age gates. When confirmed heater operation is currently active, every terminal-spin confirmation path is blocked. In addition, when hybrid confirmation is enabled and heating has been latched as `detected`, full vibration evidence is no longer an independent confirmation path even after active heating ends: it must be corroborated by a fresh sustained electrical spin candidate and satisfy the heated-cycle timing gate. Hybrid-disabled configurations retain the ordinary vibration-only behavior.
 
 The experimental hybrid detector combines vibration and electrical evidence with heating-aware cycle context.
 
@@ -360,7 +360,9 @@ The fast non-heated hybrid path is different. It may bypass the normal spin mini
 * meaningful activity is recent;
 * heater-level operation is not active.
 
-The electrical candidate is based on time-weighted rolling statistics, minimum observed coverage and bounded source freshness. Heating classification has its own sustained high-power threshold and observed-coverage rule. Neither detector may treat a single spike, stale source value, or missing observation as sufficient evidence.
+The full vibration requirement refers to observed OFF-to-ON source events. A battery-powered vibration sensor may rate-limit reports or keep its binary state active long enough that fewer independent rising edges are observable than the physical motion would suggest. In that case the fast path must remain unconfirmed; the runtime stays in `running` and may later finish through the conservative running-state fallback.
+
+The electrical candidate is based on time-weighted rolling statistics, minimum observed coverage and bounded source freshness.
 
 If power and current are supplied by the same smart plug or measurement device, they are correlated measurements of one electrical load and must not be interpreted as two independent votes.
 
