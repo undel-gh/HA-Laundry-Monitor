@@ -1,7 +1,7 @@
 # Laundry Monitor Specification
 
 Status: Draft  
-Version: 0.1.4-rc1
+Revision basis: current `main` implementation
 Language: English  
 Project: HA-Laundry-Monitor
 
@@ -440,6 +440,7 @@ fast non-heated path:
 ```
 
 The fast non-heated path is intended for programs such as spin-only or rinse-and-spin that may legitimately approach their terminal sequence early. It deliberately requires the **full** vibration requirement rather than the reduced hybrid requirement, because absence of observed heating does not prove that the program is spin-only; cold washes and programs with delayed heating remain possible.
+Vibration evidence is based on observable source events, not on an estimate of physical drum motion. Some battery-powered vibration sensors rate-limit reports or keep their binary vibration state active for a device-specific timeout. Such a source may therefore fail to provide the full number of independent OFF-to-ON events during a short program even when electrical spin corroboration is strong. This is insufficient mechanical evidence, not a detector error: the runtime must remain in `running` unless another valid confirmation rule is satisfied, and the conservative running-state finish fallback remains available.
 
 #### Experimental hybrid electrical corroboration
 
@@ -501,7 +502,7 @@ Example defaults:
 |---|---:|---|
 | Spin required events | 3 | Number of vibration events required inside the rolling spin window |
 | Spin window | 180 s | Rolling time window used to accumulate vibration evidence |
-| Spin minimum cycle time | 600 s | Minimum confirmed cycle age before terminal-spin detection is allowed |
+| Spin minimum cycle time | 600 s | Minimum age for ordinary vibration-only and reduced-evidence hybrid confirmation; the stricter fast non-heated path may confirm earlier |
 | Spin activity max age | 120 s | Maximum age of meaningful electrical activity that may support spin evidence |
 | Electrical spin window | 30 s | Window for time-weighted electrical rolling statistics |
 | Electrical spin minimum coverage | 20 s | Minimum observed coverage before a power candidate may become valid |
@@ -511,7 +512,7 @@ Example defaults:
 | Heating power threshold | unset | Machine-specific sustained-power threshold used to identify heater operation |
 | Heating confirmation | 30 s | Required observed duration of heater-level power before heating is latched |
 | Heating observation | 300 s | Valid early-cycle power-observation coverage required before heating may be classified as `not_seen` |
-| Heated-cycle minimum spin time | 900 s | Minimum cycle age for reduced-evidence hybrid confirmation once heating has been detected |
+| Heated-cycle minimum spin time | 900 s | Minimum cycle age for hybrid confirmation once heating has been detected; with hybrid enabled, FR-058 also applies to full vibration evidence |
 | Hybrid spin enabled | false | Experimental heating-aware hybrid confirmation is opt-in |
 | Hybrid spin required events | 2 | Reduced vibration requirement used by the normal hybrid path; the fast non-heated path uses the full vibration requirement |
 Confidence is diagnostic and implementation-specific; it is not a replacement for the configured evidence gates above.
@@ -616,10 +617,10 @@ timing, evidence, and state-machine decisions.
 | `binary_sensor.<device>_current_activity_detected` | Current-based activity state | Current sensor configured | Yes |
 | `binary_sensor.<device>_leak` | Mirrored leak-detector state | Leak sensor configured | Yes |
 | `sensor.<device>_final_spin_confirmation_path` | Path that confirmed the latest terminal-spin decision, for example `vibration_only` or `hybrid` | Always | No |
-| `binary_sensor.<device>_spin_electrical_candidate` | Whether the sustained electrical spin candidate is currently active | Always | No |
+| `binary_sensor.<device>_electrical_spin_candidate` | Whether the sustained electrical spin candidate is currently active | Always | No |
 | `sensor.<device>_spin_power_rolling_median` | Time-weighted rolling power statistic used by the electrical spin detector | Always | No |
 | `sensor.<device>_spin_current_rolling_median` | Time-weighted rolling current statistic used as corroborating evidence | Current sensor configured | No |
-| `sensor.<device>_spin_electrical_candidate_since` | Timestamp from which the current electrical spin candidate has remained active | Always | No |
+| `sensor.<device>_electrical_spin_candidate_since` | Timestamp from which the current electrical spin candidate has remained active | Always | No |
 | `sensor.<device>_heating_state` | Cycle-local heating context: `unknown`, `not_seen`, or `detected` | Always | No |
 | `binary_sensor.<device>_heating_active` | Whether fresh power currently satisfies the heater-level signature | Always | No |
 
@@ -739,10 +740,9 @@ Laundry Monitor must support localization from the first version.
 - Entity states used for automations must remain stable.
 - UI labels, descriptions, config flow text, options text, and diagnostics must use Home Assistant translation files.
 
-### 13.2 Suggested structure
+### 13.2 Current structure
 ```text
-custom_components/laundry_monitor/
-  strings.json
+custom_components/laundry_monitor/  
   translations/
     en.json
     ru.json
@@ -755,16 +755,16 @@ docs/
   en/
     SPECIFICATION.md
     ARCHITECTURE.md
+    REQUIREMENTS.md
     STATE_MACHINE.md
+    USER_MANUAL.md
   ru/
-    SPECIFICATION.md
-    ARCHITECTURE.md
-    STATE_MACHINE.md
+    USER_MANUAL.md
 ```
 
 The English documentation is canonical.
 
-Translated documentation should follow the English version and must not define separate behavior.
+he Russian user manual should follow the English version and must not define separate semantics.
 
 ## 14. Debugging and Diagnostics
 
@@ -848,8 +848,7 @@ The following capabilities are implemented:
   - `armed`;
   - `running`;
   - `final_spin`;
-  - `finished`;
-  - `unloaded`;
+  - `finished`;  
   - `error`;
 - vibration-based terminal-spin detection;
 - experimental electrical spin-candidate diagnostics;
@@ -858,6 +857,7 @@ The following capabilities are implemented:
   states;
 - active-heating hard gate for terminal-spin confirmation;
 - stricter minimum cycle age after detected heating;
+- FR-058 heated-cycle electrical-corroboration gate, preventing full vibration evidence from bypassing hybrid safeguards after heating has been detected;
 - fast non-heated hybrid path with full vibration evidence;
 - terminal-phase finish confirmation;
 - cycle duration and optional energy statistics;
