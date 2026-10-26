@@ -286,7 +286,7 @@ For detailed behavior and invariants, use the canonical English documentation.
 - [`docs/en/ARCHITECTURE.md`](docs/en/ARCHITECTURE.md) — component boundaries and data flow.
 - [`docs/en/REQUIREMENTS.md`](docs/en/REQUIREMENTS.md) — normative functional and non-functional requirements.
 - [`docs/en/STATE_MACHINE.md`](docs/en/STATE_MACHINE.md) — detailed public/internal states, transitions, timers, recovery, edge cases, and invariants.
-- [`docs/ru/`](docs/ru/) — Russian translations. English documentation remains canonical.
+- [`docs/ru/USER_MANUAL.md`](docs/ru/USER_MANUAL.md) — Russian user-facing manual. English documentation remains canonical."
 
 When looking for implementation details, start with [`PROJECT_MAP.md`](PROJECT_MAP.md) instead of scanning the repository.
 
