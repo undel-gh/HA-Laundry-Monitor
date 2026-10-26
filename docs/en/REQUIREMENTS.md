@@ -4,7 +4,7 @@
 
 Status: Draft
 
-Version: 0.1.4-rc1
+Revision basis: current `main` implementation
 
 ---
 
