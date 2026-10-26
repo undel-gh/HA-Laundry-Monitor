@@ -395,6 +395,20 @@ In particular:
 
 If an upgraded experimental configuration has hybrid enabled but no valid heating threshold, reduced-evidence hybrid confirmation must remain disabled until the missing heating configuration is supplied.
 
+### 10.8 Battery-powered vibration sensors and report-rate limits
+
+Laundry Monitor counts observable vibration **OFF-to-ON** transitions. It does not estimate how many physical vibration episodes occurred between sensor reports.
+
+Some battery-powered Zigbee vibration sensors rate-limit their reports or keep the binary `vibration` state active for a configurable timeout. This can reduce the number of independent rising edges available to both the vibration-only path and the full-evidence fast non-heated path.
+
+For example, Zigbee2MQTT documents that the Aqara **DJT11LM** emits `vibration` actions no more frequently than about once per minute, while its device-specific `vibration_timeout` defaults to 90 seconds:
+
+https://www.zigbee2mqtt.io/devices/DJT11LM.html
+
+If the binary vibration state remains `on` across a later device report, Home Assistant may not expose a new OFF-to-ON edge for Laundry Monitor to count. Reducing a supported device-side timeout so the state can clear between reports may improve observability, but it does not remove the sensor's own report-rate limit.
+
+Do not lower Laundry Monitor's vibration evidence requirements solely to compensate for a rate-limited sensor without validating the change against real cycles. If a short non-heated program has strong electrical spin corroboration but does not provide the full configured vibration count, the fast path intentionally remains unconfirmed and the cycle can still complete through the conservative running-state finish fallback.
+
 ---
 
 ## 11. Finish detection
