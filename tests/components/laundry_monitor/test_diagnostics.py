@@ -175,8 +175,10 @@ async def test_device_diagnostics(
 ) -> None:
     """Test diagnostics from the logical device page."""
     entry = await _async_setup_entry(hass)
-    device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, entry.entry_id)}
+    device_registry = dr.async_get(hass)
+    device = device_registry.async_get_device_by_identifier(
+        (DOMAIN, entry.entry_id),
+        entry.entry_id,
     )
     assert device is not None
 
