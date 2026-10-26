@@ -17,7 +17,7 @@ Home Assistant custom integration that infers washing-machine cycle state from e
 | Normative functional requirements | `docs/en/REQUIREMENTS.md` | — | — |
 | States, transitions, timers, recovery, edge cases | `docs/en/STATE_MACHINE.md` | `runtime.py`, `state_machine.py`, `storage.py` | `test_state_machine.py`, `test_state_machine_runtime.py`, `test_storage.py` |
 | Power/current meaningful activity and cycle start | `SPECIFICATION.md §7.1`, `STATE_MACHINE.md §5.1/§9` | `activity.py`, `runtime.py` | `test_activity.py`, `test_activity_runtime.py` |
-| Terminal spin sequence / terminal phase / experimental hybrid spin confirmation | `SPECIFICATION.md §7.2`, `STATE_MACHINE.md §8.4` | `spin.py`, `runtime.py` | `test_spin.py`, `test_spin_runtime.py` |
+| Terminal spin sequence / terminal phase / experimental hybrid spin confirmation | `SPECIFICATION.md §7.2`, `STATE_MACHINE.md §8.4` | `spin.py`, `heating.py`, `runtime.py` | `test_spin.py`, `test_spin_runtime.py`, `test_heating.py`, `test_heating_entities.py` |
 | Cycle finish / quiet timers / fallback finish | `SPECIFICATION.md §7.3`, `STATE_MACHINE.md §10/§14` | `finish.py`, `runtime.py` | `test_finish.py`, `test_finish_runtime.py` |
 | Door arming / unload behavior | `STATE_MACHINE.md §8/§10` | `runtime.py`, `button.py` | `test_state_machine_runtime.py`, `test_entities.py` |
 | Persisted state / restart recovery | `STATE_MACHINE.md §13` | `storage.py`, `runtime.py` | `test_storage.py`, `test_state_machine_runtime.py` |
@@ -43,16 +43,16 @@ Canonical product specification. Defines scope/non-goals, inputs, public state m
 Component boundaries and data flow: source normalization → Activity Detector / Spin Detector / Finish Detector → State Machine, with Laundry Tracking, Leak Detector, statistics, diagnostics, and HA entities separated. Start here when deciding **which component should own new logic**.
 
 ### `docs/en/REQUIREMENTS.md`
-Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase and hybrid-spin rules are currently FR-029 through FR-046.
+Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase, hybrid-spin, heating-context, and recovery rules are currently FR-029 through FR-058.
 
 ### `docs/en/STATE_MACHINE.md`
 Most detailed behavioral document. Defines public/internal states, allowed transitions, detector inputs, state entry/exit semantics, timers, source failures, restart recovery, invariants, edge cases, examples, and test expectations. Start here for any state-transition question.
 
 ### `docs/en/USER_MANUAL.md`
-User-facing manual: detailed setup, availiable settings and defaults described here with some use cases. Start here when deciding **how to setup integration properly**.
+User-facing manual: detailed setup, available settings and defaults, calibration guidance, and relevant limitations. Start here when deciding **how to set up the integration properly**.
 
 ### `docs/ru/`
-Russian translations of project documentation. English `docs/en/` remains canonical; Russian docs must not define different behavior.
+Russian user-facing documentation. The current Russian document is `USER_MANUAL.md`; English `docs/en/` remains canonical and must define behavior.
 
 ## Integration implementation — `custom_components/laundry_monitor/`
 
@@ -72,6 +72,9 @@ Activity Detector. Normalizes/evaluates power and optional current activity, cyc
 
 ### `spin.py`
 Spin detection implementation. `SpinDetector` maintains vibration-event evidence/windowing, cycle-age and activity gates. `ElectricalSpinCandidateDetector` maintains time-weighted electrical rolling statistics, source freshness, and the experimental sustained electrical candidate used by the opt-in hybrid confirmation path.
+
+### `heating.py`
+Heating-context implementation. `HeatingContextDetector` maintains the cycle-local `unknown` / `not_seen` / `detected` state, sustained heater confirmation, valid observation coverage, source freshness, and persistence compatibility metadata used by heating-aware spin gating.
 
 ### `finish.py`
 Finish Detector. Evaluates sustained absence of meaningful activity and exposes quiet-period/deadline/confirmation information. Runtime uses separate confirmation durations for final-spin and running fallback paths.
@@ -138,6 +141,12 @@ Unit tests for vibration evidence, electrical rolling statistics, source freshne
 ### `test_spin_runtime.py`
 Runtime state transitions and event behavior for vibration-only and experimental hybrid final-spin confirmation.
 
+### `test_heating.py`
+Heating-context unit tests: sustained confirmation, valid-observation coverage, source freshness, `not_seen`/`detected` transitions, and persistence compatibility.
+
+### `test_heating_entities.py`
+Heating and electrical-spin diagnostic entity exposure/default-enabled behavior.
+
 ### `test_finish.py`
 Unit tests for Finish Detector quiet-period/deadline behavior.
 
@@ -190,7 +199,7 @@ For behavioral changes, use this order:
 2. `docs/en/STATE_MACHINE.md` — what exact state/timer behavior is intended?
 3. `docs/en/SPECIFICATION.md` — broader product semantics and public API.
 4. `docs/en/ARCHITECTURE.md` — which component owns the behavior?
-5. `runtime.py` plus the relevant detector (`activity.py`, `spin.py`, `finish.py`) — what is actually implemented?
+5. `runtime.py` plus the relevant detector (`activity.py`, `spin.py`, `heating.py`, `finish.py`) — what is actually implemented?
 6. matching `test_*.py` files — what behavior is regression-protected?
 7. `const.py` / `config_flow.py` — defaults, option keys and UI configuration.
 
