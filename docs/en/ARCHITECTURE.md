@@ -4,7 +4,7 @@
 
 Status: Draft
 
-Version: 0.1.4-rc1
+Revision basis: current `main` implementation
 
 ---
 
@@ -163,7 +163,7 @@ Primary inputs:
 
 Current activity may increase spin confidence by supporting the conclusion that a motor is operating during a vibration window.
 
-Current activity must not independently confirm final spin. The implemented runtime retains the full vibration-only path and additionally provides an experimental, opt-in **hybrid spin confirmation path** that combines reduced vibration evidence with a sustained electrical spin candidate.
+Current activity must not independently confirm final spin. The implemented runtime provides a full-evidence vibration path and an experimental, opt-in **hybrid spin confirmation path**. The full-evidence vibration path remains independently usable except when hybrid confirmation is enabled and heating has been latched as `detected`; in that heated-cycle case FR-058 requires fresh electrical corroboration even when the full vibration pattern is present.
 
 The electrical-corroboration stage and heating context are implemented as separate internal detector concerns:
 ```text
@@ -181,6 +181,8 @@ The electrical stage uses time-weighted rolling medians and minimum observed cov
 Power remains the primary electrical signal. Current is optional corroboration. When both are measured by the same smart plug or meter, the implementation should treat them as correlated observations of the same electrical load rather than as two independent votes.
 
 The hybrid path reduces the amount of vibration evidence required for confirmation only when the electrical candidate, heating context, and all applicable timing gates are simultaneously satisfied. Electrical evidence alone must not produce a final-spin result.
+
+Vibration evidence is based on observable OFF-to-ON source events. The detector must not synthesize missing mechanical events when a battery-powered vibration sensor rate-limits reports or keeps its state latched. A rate-limited source can therefore make the full-evidence fast non-heated path unavailable for a short cycle; the state machine must then continue through the ordinary `running` path and retain the conservative finish fallback.
 
 Heating context is deliberately small and cycle-local:
 
