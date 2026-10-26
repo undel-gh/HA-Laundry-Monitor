@@ -1,8 +1,8 @@
 # Laundry Monitor — User Manual
 
-> **Document status:** first user-manual version for the current Laundry Monitor implementation.
->
-> The English documentation is canonical. The Russian manual is maintained as a user-facing translation.
+**Document status:** maintained for the current Laundry Monitor implementation on `main`.
+
+The English documentation is canonical. The Russian manual is maintained as a user-facing translation.
 
 ## 1. What Laundry Monitor does
 
