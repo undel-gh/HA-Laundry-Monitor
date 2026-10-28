@@ -2,7 +2,7 @@
   "domain": "laundry_monitor",
   "name": "Laundry Monitor",
   "codeowners": [
-    "@undel-gh", "@codex", "@claude"
+    "@undel-gh"
   ],
   "config_flow": true,
   "documentation": "https://github.com/undel-gh/HA-Laundry-Monitor",
@@ -10,5 +10,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/undel-gh/HA-Laundry-Monitor/issues",
   "requirements": [],
-  "version": "0.1.8-rc5"
+  "version": "0.1.8-rc7"
 }
