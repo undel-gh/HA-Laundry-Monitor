@@ -43,7 +43,7 @@ Canonical product specification. Defines scope/non-goals, inputs, public state m
 Component boundaries and data flow: source normalization → Activity Detector / Spin Detector / Finish Detector → State Machine, with Laundry Tracking, Leak Detector, statistics, diagnostics, and HA entities separated. Start here when deciding **which component should own new logic**.
 
 ### `docs/en/REQUIREMENTS.md`
-Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase, hybrid-spin, heating-context, and recovery rules are currently FR-029 through FR-058.
+Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase, hybrid-spin, heating-context, and recovery rules are currently FR-029 through FR-060.
 
 ### `docs/en/STATE_MACHINE.md`
 Most detailed behavioral document. Defines public/internal states, allowed transitions, detector inputs, state entry/exit semantics, timers, source failures, restart recovery, invariants, edge cases, examples, and test expectations. Start here for any state-transition question.

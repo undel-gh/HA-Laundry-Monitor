@@ -339,6 +339,8 @@ The State Machine does not depend on the internal implementation of the Spin Det
 
 The full-evidence vibration path normally requires the configured vibration evidence plus the applicable activity-recency and cycle-age gates. When confirmed heater operation is currently active, every terminal-spin confirmation path is blocked. In addition, when hybrid confirmation is enabled and heating has been latched as `detected`, full vibration evidence is no longer an independent confirmation path even after active heating ends: it must be corroborated by a fresh sustained electrical spin candidate and satisfy the heated-cycle timing gate. Hybrid-disabled configurations retain the ordinary vibration-only behavior.
 
+For heated cycles using hybrid confirmation, the electrical candidate must also mature for the experimental 45-second minimum, and at least one retained vibration rising edge must occur at or after the start of that same electrical candidate. Old vibration evidence from before the current electrical episode cannot complete heated-cycle confirmation.
+
 The experimental hybrid detector combines vibration and electrical evidence with heating-aware cycle context.
 
 The normal reduced-evidence hybrid path requires:

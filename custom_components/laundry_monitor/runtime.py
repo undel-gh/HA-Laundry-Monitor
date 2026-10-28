@@ -95,6 +95,7 @@ from .const import (
     EVENT_MACHINE_UNLOADED,
     EVENT_STATE_CHANGED,
     EVENT_TRANSITION_REJECTED,
+    HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION,
     LaundryCycleState,
     REASON_ARMING_TIMEOUT,
     REASON_DOOR_CLOSED,
@@ -493,6 +494,45 @@ class LaundryMonitorRuntime:
     def spin_electrical_candidate_since(self) -> datetime | None:
         """Return when the current electrical candidate started."""
         return self.electrical_spin_detector.candidate_since
+
+    @property
+    def spin_electrical_candidate_age_seconds(self) -> float | None:
+        """Return how long the current electrical candidate has lived."""
+        if (
+            not self.spin_electrical_candidate
+            or self.spin_electrical_candidate_since is None
+        ):
+            return None
+        return round(
+            max(
+                (
+                    dt_util.utcnow()
+                    - self.spin_electrical_candidate_since
+                ).total_seconds(),
+                0.0,
+            ),
+            1,
+        )
+
+    @property
+    def heated_electrical_candidate_min_duration_seconds(self) -> int:
+        """Return the heated-cycle electrical maturity requirement."""
+        return HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION
+
+    def _heated_electrical_candidate_is_mature(
+        self,
+        now: datetime,
+    ) -> bool:
+        """Return whether the current candidate survived the maturity gate."""
+        since = self.spin_electrical_candidate_since
+        return bool(
+            self.spin_electrical_candidate
+            and since is not None
+            and now - since
+            >= timedelta(
+                seconds=HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION
+            )
+        )
 
     @property
     def current_cycle_duration(self) -> float | None:
@@ -1833,6 +1873,20 @@ class LaundryMonitorRuntime:
                 )
                 if cycle_age < effective_min:
                     gate_reason = "heated_cycle_too_young"
+                elif not self._heated_electrical_candidate_is_mature(
+                    timestamp
+                ):
+                    gate_reason = "heated_electrical_candidate_immature"
+                elif (
+                    self.spin_electrical_candidate_since is None
+                    or evaluation.latest_evidence_at is None
+                    or evaluation.latest_evidence_at
+                    < self.spin_electrical_candidate_since
+                ):
+                    gate_reason = (
+                        "heated_cycle_requires_fresh_vibration_"
+                        "after_electrical_candidate"
+                    )
                 else:
                     confirmation_path = "hybrid"
                     hybrid_variant = "reduced"
@@ -1866,6 +1920,22 @@ class LaundryMonitorRuntime:
                     "confirmation_path": confirmation_path,
                     "hybrid_variant": hybrid_variant,
                     "electrical_candidate": self.spin_electrical_candidate,
+                    "electrical_candidate_since": (
+                        self.spin_electrical_candidate_since.isoformat()
+                        if self.spin_electrical_candidate_since is not None
+                        else None
+                    ),
+                    "electrical_candidate_age_seconds": (
+                        self.spin_electrical_candidate_age_seconds
+                    ),
+                    "heated_candidate_min_duration_seconds": (
+                        self.heated_electrical_candidate_min_duration_seconds
+                    ),
+                    "latest_vibration_evidence_at": (
+                        evaluation.latest_evidence_at.isoformat()
+                        if evaluation.latest_evidence_at is not None
+                        else None
+                    ),
                     "power_rolling_median": self.spin_power_rolling_median,
                     "current_rolling_median": self.spin_current_rolling_median,
                     "heating_state": self.heating_state.value,

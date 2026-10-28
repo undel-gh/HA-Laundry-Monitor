@@ -245,6 +245,9 @@ async def _async_build_diagnostics(
                 "evidence_count": (
                     runtime.final_spin_evidence_count
                 ),
+                "latest_vibration_evidence_at": _serialize_datetime(
+                    runtime.spin_detector.latest_evidence_at
+                ),
                 "confirmation_path": runtime.final_spin_confirmation_path,
                 "gate_reason": runtime.spin_gate_reason,
                 "hybrid": {
@@ -291,6 +294,12 @@ async def _async_build_diagnostics(
                     "candidate": runtime.spin_electrical_candidate,
                     "candidate_since": _serialize_datetime(
                         runtime.spin_electrical_candidate_since
+                    ),
+                    "candidate_age_seconds": (
+                        runtime.spin_electrical_candidate_age_seconds
+                    ),
+                    "heated_min_duration_seconds": (
+                        runtime.heated_electrical_candidate_min_duration_seconds
                     ),
                     "window_seconds": (
                         runtime.electrical_spin_detector.window_seconds

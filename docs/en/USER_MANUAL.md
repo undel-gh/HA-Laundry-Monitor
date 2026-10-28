@@ -411,6 +411,14 @@ Do not lower Laundry Monitor's vibration evidence requirements solely to compens
 
 ---
 
+### 10.9 Heated-cycle terminal-profile maturity
+
+For a cycle where heating has been detected and hybrid confirmation is enabled, an electrical spin candidate does not confirm the terminal phase immediately. The current experimental implementation requires the candidate to remain active for at least **45 seconds** and requires at least one retained vibration OFF-to-ON edge to occur at or after the start of that same electrical candidate. Vibration accumulated only before the electrical episode cannot complete heated-cycle confirmation.
+
+This is a targeted heated-cycle safeguard. It does not change the non-heated hybrid path, hybrid-disabled vibration-only behavior, or finish detection semantics.
+
+---
+
 ## 11. Finish detection
 
 Laundry Monitor uses inactivity confirmation rather than trying to recognize an exact standby wattage.

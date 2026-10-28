@@ -27,6 +27,7 @@ from custom_components.laundry_monitor.const import (
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
     DOMAIN,
+    HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION,
     LaundryCycleState,
     REASON_FINAL_SPIN_CONFIRMED,
 )
@@ -449,6 +450,13 @@ async def test_heated_cycle_delays_reduced_hybrid_confirmation(
     hass.states.async_set("sensor.washing_machine_power", "150")
     await hass.async_block_till_done()
 
+    assert runtime.spin_electrical_candidate is True
+    runtime.electrical_spin_detector.candidate_since = (
+        dt_util.utcnow()
+        - timedelta(
+            seconds=HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION
+        )
+    )
     await _vibration_pulse(hass)
     await _vibration_pulse(hass)
 
@@ -506,7 +514,21 @@ async def test_heated_hybrid_full_vibration_waits_for_electrical_candidate(
     )
 
     assert runtime.spin_electrical_candidate is True
-    assert runtime._evaluate_spin(now=candidate_now)
+    assert not runtime._evaluate_spin(now=candidate_now)
+    assert runtime.spin_gate_reason == "heated_electrical_candidate_immature"
+
+    mature_now = candidate_now + timedelta(
+        seconds=HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION
+    )
+    assert not runtime._evaluate_spin(now=mature_now)
+    assert runtime.spin_gate_reason == (
+        "heated_cycle_requires_fresh_vibration_after_electrical_candidate"
+    )
+
+    runtime.vibration_active = True
+    assert runtime._evaluate_spin(now=mature_now + timedelta(seconds=1))
+    runtime.vibration_active = False
+
     assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
     assert runtime.final_spin_confirmation_path == "hybrid"
     assert runtime.final_spin_hybrid_variant == "reduced"
@@ -649,6 +671,49 @@ async def test_snapshot_recovery_discards_electrical_and_confirmation_path(
     assert runtime.heating_state is HeatingState.UNKNOWN
     assert runtime.heating_detector.power_source_fresh is False
     assert runtime.final_spin_confirmation_path is None
+
+
+async def test_snapshot_recovery_requires_new_heated_candidate_correlation(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """FR-059/060: restart cannot reuse old electrical maturity."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+        heating_power_threshold=1000.0,
+        spin_min_cycle_time=0,
+        heated_cycle_min_time=0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    evidence = (
+        now - timedelta(seconds=120),
+        now - timedelta(seconds=60),
+        now - timedelta(seconds=10),
+    )
+    snapshot = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="stored_running",
+        last_state_change=now - timedelta(seconds=5),
+        cycle_started_at=now - timedelta(minutes=20),
+        laundry_present=True,
+        heating_detected=True,
+        heating_detected_at=now - timedelta(minutes=15),
+        spin_evidence_timestamps=evidence,
+    )
+    runtime.state_store.async_get = AsyncMock(return_value=snapshot)
+
+    await runtime._async_restore_snapshot()
+
+    assert runtime.heating_state is HeatingState.DETECTED
+    assert runtime.final_spin_evidence_count == 3
+    assert runtime.spin_electrical_candidate is False
+    assert runtime.spin_electrical_candidate_since is None
+
+    assert not runtime._evaluate_spin(now=now)
+    assert runtime.spin_gate_reason == "heated_cycle_requires_electrical_candidate"
 
 
 async def test_snapshot_recovery_restores_latched_heating_fact(
