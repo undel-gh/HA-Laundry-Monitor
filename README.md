@@ -269,6 +269,7 @@ Important design rules:
 - If sufficient valid early-cycle power coverage is observed without any heater signature, a fast non-heated hybrid path may bypass the normal minimum cycle age, but only with the full vibration requirement plus a fresh sustained electrical spin candidate.
 - Missing or stale early-cycle power data must not be interpreted as evidence that heating did not occur.
 - Electrical evidence alone can never confirm `final_spin`.
+- In a heated hybrid cycle, the electrical spin candidate must mature for 45 seconds and at least one vibration edge must occur at or after the start of that candidate before it may confirm `final_spin`.
 - Stale electrical samples must not continue supporting an electrical candidate after the configured maximum source age.
 - Finish is inferred from the absence of meaningful electrical activity over time rather than from an exact standby-power value.
 - Optional vibration provides terminal-spin evidence.

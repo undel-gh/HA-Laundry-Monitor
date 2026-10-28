@@ -358,6 +358,18 @@ When hybrid terminal-spin confirmation is enabled and the current cycle has latc
 
 ---
 
+## FR-059
+
+When hybrid terminal-spin confirmation is enabled and heating has been latched as `detected`, the electrical spin candidate shall not corroborate `final_spin` immediately upon becoming active. It shall first satisfy a minimum maturity duration. The initial experimental implementation uses 45 seconds. This requirement is based on sustained terminal-profile structure rather than a second machine-specific power threshold.
+
+---
+
+## FR-060
+
+For a heated cycle using hybrid confirmation, at least one retained vibration rising edge used for terminal confirmation shall occur at or after the start of the current electrical spin candidate. Vibration evidence accumulated entirely before the current electrical episode shall not be sufficient, even after the candidate becomes mature. The maturity requirement from FR-059 and this temporal-correlation requirement are cumulative.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001

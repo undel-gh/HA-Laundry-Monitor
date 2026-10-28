@@ -447,6 +447,8 @@ Vibration evidence is based on observable source events, not on an estimate of p
 The implemented detector retains the vibration-only confirmation path and also provides an experimental, opt-in hybrid path, except in heated cycles when hybrid confirmation is enabled (see FR-058). In that case, full vibration evidence remains mechanical evidence but cannot independently confirm `final_spin` without a fresh electrical spin candidate. The hybrid path derives an internal **electrical spin candidate** from sustained power behavior and, when available, current behavior.
 
 
+For a heated cycle with hybrid confirmation enabled, the electrical spin candidate must remain active for an experimental minimum of 45 seconds before it may corroborate `final_spin`. At least one retained vibration rising edge must also occur at or after the start of that same electrical candidate. A short intermediate electrical spin or vibration evidence accumulated only before the current candidate cannot satisfy the heated terminal rule.
+
 The electrical candidate corroborates mechanical evidence; it never replaces it. The runtime supports two confirmation paths:
 
 ```text
@@ -515,6 +517,7 @@ Example defaults:
 | Heated-cycle minimum spin time | 900 s | Minimum cycle age for hybrid confirmation once heating has been detected; with hybrid enabled, FR-058 also applies to full vibration evidence |
 | Hybrid spin enabled | false | Experimental heating-aware hybrid confirmation is opt-in |
 | Hybrid spin required events | 2 | Reduced vibration requirement used by the normal hybrid path; the fast non-heated path uses the full vibration requirement |
+| Heated electrical candidate maturity | 45 s | Experimental internal minimum candidate age before heated hybrid confirmation |
 Confidence is diagnostic and implementation-specific; it is not a replacement for the configured evidence gates above.
 
 The heating threshold is machine-specific and has no universal project default. For active hybrid confirmation it must be configured explicitly and must be higher than the configured electrical spin power threshold so that ordinary spin-level motor power does not classify itself as heater activity.

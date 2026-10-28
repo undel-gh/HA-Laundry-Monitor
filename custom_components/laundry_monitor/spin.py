@@ -15,6 +15,7 @@ class SpinEvaluation:
     confidence: float
     evidence_count: int
     new_evidence: bool
+    latest_evidence_at: datetime | None
     activity_recent: bool
     cycle_mature: bool
 
@@ -127,9 +128,17 @@ class SpinDetector:
             confidence=confidence,
             evidence_count=evidence_count,
             new_evidence=new_evidence,
+            latest_evidence_at=(
+                self._evidence[-1] if self._evidence else None
+            ),
             activity_recent=activity_recent,
             cycle_mature=cycle_mature,
         )
+
+    @property
+    def latest_evidence_at(self) -> datetime | None:
+        """Return the newest currently retained vibration edge."""
+        return self._evidence[-1] if self._evidence else None
 
     def _prune(self, now: datetime) -> None:
         """Remove vibration evidence outside the rolling window."""
