@@ -1,6 +1,7 @@
 {
   "domain": "laundry_monitor",
   "name": "Laundry Monitor",
+  "categories": ["appliances_cleaning.laundry"],
   "codeowners": [
     "@undel-gh"
   ],
