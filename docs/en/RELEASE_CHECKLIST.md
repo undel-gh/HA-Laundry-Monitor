@@ -112,9 +112,10 @@ The version above is **illustrative**, not an instruction to publish it now.
 
 ## 5. Tag and publish (after merge)
 
-- [ ] Merge the approved release-preparation PR to `main`. Check the
-      resulting commit; the **tag must point to this tested main commit**,
-      not the original release branch HEAD if squash merging changed its SHA.
+- [ ] Merge the approved release-preparation PR to `main`. Wait for the
+      **Validate run on the resulting main commit** to pass all required
+      checks. The **tag must point to that verified main commit**, not the
+      original release branch HEAD if squash merging changed its SHA.
 - [ ] Confirm `manifest.json` at the to-be-tagged commit has the
       intended version. Create the tag using **GitHub → Releases →
       Draft a new release → Choose a tag → Create new tag on main**,
