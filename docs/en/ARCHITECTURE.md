@@ -94,7 +94,10 @@ Responsibilities:
 
 * validate the required power value;
 * validate the optional current value when configured;
-* reject unavailable, unknown, and non-numeric source states;
+* reject unavailable, unknown, non-numeric and non-finite source states;
+* normalize valid power/current inputs into W/A with Home Assistant's installed unit converters before downstream threshold evaluation;
+* accept canonical, case-sensitive HA unit symbols; assume W/A only when `unit_of_measurement` is absent for backward compatibility;
+* treat explicit unsupported units or non-finite conversion results as unusable data, not as raw W/A values or zero;
 * preserve source timestamps and availability;
 * preserve valid numeric zero values as observations and keep them distinct from missing or unavailable source data;
 * prevent missing data from being interpreted as zero;
@@ -112,7 +115,9 @@ observed_at
 
 Normalization must preserve the distinction between value and availability. A valid `0 W` or `0 A` observation remains available data with a numeric value of zero. Only unavailable, unknown, invalid, or absent observations are treated as missing telemetry; they must never be replaced with a synthetic zero.
 
-Loss of the optional current source must degrade to power-only operation.
+Loss of the optional current source, including an incompatible declared unit, must degrade to power-only operation without a Repairs issue. A required power reading that cannot be normalized must follow the existing power-unavailability path and required-source Repairs warning; runtime and Repairs use the shared `source_units.py` validation. An invalid required source is distinct from a valid zero-power observation.
+
+The supported unit list is determined by the installed Home Assistant Core version (`PowerConverter` / `ElectricCurrentConverter`). Unit conversion does not change source reporting/freshness semantics, the electrical detectors' thresholds, or the separate energy-source statistics.
 
 ---
 
