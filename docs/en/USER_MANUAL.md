@@ -531,7 +531,9 @@ Important user-facing entities include:
 
 Additional diagnostic entities expose detector internals.
 
-Some experimental electrical/hybrid diagnostic entities are disabled by default in the entity registry. Enable them from the device/entity page when tuning or troubleshooting hybrid detection.
+To reduce Home Assistant history/Recorder writes, most high-frequency detector diagnostics (power/current mirrors, detailed activity timestamps, spin evidence and finish timers) and experimental electrical/hybrid entities are disabled by default on **new** setups. Enable only the ones needed from the device/entity page for investigations. Existing installations retain their saved enabled/disabled choices.
+
+The public `current_cycle_duration` shows exact elapsed seconds when updated, but updates at most once per five-minute elapsed-time bucket during an unchanged phase; phase changes and completion update it immediately. Internal detection still evaluates at its original cadence, and **Download diagnostics** exposes live detector details regardless of these publication limits.
 
 Useful hybrid diagnostics include:
 
