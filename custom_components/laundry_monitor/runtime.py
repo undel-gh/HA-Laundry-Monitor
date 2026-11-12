@@ -6,7 +6,6 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from math import isfinite
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -15,8 +14,6 @@ from homeassistant.const import (
     STATE_ON,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
-    UnitOfElectricCurrent,
-    UnitOfPower,
 )
 from homeassistant.core import (
     Event,
@@ -32,11 +29,6 @@ from homeassistant.helpers.event import (
     async_track_time_interval,
 )
 from homeassistant.util import dt as dt_util
-from homeassistant.util.unit_conversion import (
-    BaseUnitConverter,
-    ElectricCurrentConverter,
-    PowerConverter,
-)
 
 from .activity import ActivityDetector
 from .const import (
@@ -126,6 +118,7 @@ from .heating import (
     HeatingContextDetector,
     HeatingState,
 )
+from .source_units import normalized_current, normalized_power, state_as_float
 from .spin import ElectricalSpinCandidateDetector, SpinDetector
 from .state_machine import LaundryStateMachine, TransitionStatus
 from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
@@ -1350,14 +1343,10 @@ class LaundryMonitorRuntime:
 
         if entity_id == self.entry.data.get(CONF_POWER_SENSOR):
             data_key = "power"
-            value = _state_as_normalized_measurement(
-                state, PowerConverter, UnitOfPower.WATT
-            )
+            value = normalized_power(state)
         elif entity_id == self.entry.data.get(CONF_CURRENT_SENSOR):
             data_key = "current"
-            value = _state_as_normalized_measurement(
-                state, ElectricCurrentConverter, UnitOfElectricCurrent.AMPERE
-            )
+            value = normalized_current(state)
         elif entity_id == self.entry.data.get(CONF_DOOR_SENSOR):
             data_key = "door_open"
             value = _state_as_bool(state)
@@ -1368,7 +1357,7 @@ class LaundryMonitorRuntime:
             data_key = "leak_detected"
             value = _state_as_bool(state) is True
         elif entity_id == self.entry.data.get(CONF_ENERGY_SENSOR):
-            value = _state_as_float(state)
+            value = state_as_float(state)
             unit = (
                 str(state.attributes[ATTR_UNIT_OF_MEASUREMENT])
                 if state is not None
@@ -2168,43 +2157,6 @@ def _state_is_available(state: State | None) -> bool:
         state is not None
         and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
     )
-
-
-def _state_as_float(state: State | None) -> float | None:
-    """Convert a Home Assistant state to float."""
-    if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-        return None
-
-    try:
-        value = float(state.state)
-    except (TypeError, ValueError):
-        return None
-
-    return value if isfinite(value) else None
-
-
-def _state_as_normalized_measurement(
-    state: State | None,
-    converter: type[BaseUnitConverter],
-    target_unit: str,
-) -> float | None:
-    """Read power/current in canonical units, rejecting unknown units.
-
-    Historical source sensors without a unit implicitly use W/A. A declared
-    but unsupported unit must not be treated as a canonical measurement.
-    """
-    value = _state_as_float(state)
-    if value is None or state is None:
-        return None
-
-    source_unit = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
-    if source_unit is None:
-        source_unit = target_unit
-    if not isinstance(source_unit, str) or source_unit not in converter.VALID_UNITS:
-        return None
-
-    converted = converter.convert(value, source_unit, target_unit)
-    return converted if isfinite(converted) else None
 
 
 def _state_as_bool(state: State | None) -> bool | None:
