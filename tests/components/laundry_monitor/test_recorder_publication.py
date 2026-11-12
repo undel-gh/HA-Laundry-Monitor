@@ -194,7 +194,9 @@ def test_high_churn_diagnostics_are_disabled_by_default() -> None:
     assert description.entity_category is EntityCategory.DIAGNOSTIC
     assert description.entity_registry_enabled_default is False
 
-    assert _sensor_description("current_cycle_duration").entity_registry_enabled_default is False
-    assert _sensor_description("cycle_started_at").entity_registry_enabled_default is True
+    duration = _sensor_description("current_cycle_duration")
+    started_at = _sensor_description("cycle_started_at")
+    assert duration.entity_registry_enabled_default is False
+    assert started_at.entity_registry_enabled_default is True
     assert _sensor_description("cycle_state").entity_registry_enabled_default is True
     assert _binary_description("running").entity_registry_enabled_default is True
