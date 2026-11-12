@@ -9,6 +9,7 @@ from homeassistant.const import (
     ATTR_UNIT_OF_MEASUREMENT,
     CONF_NAME,
     UnitOfElectricCurrent,
+    UnitOfEnergy,
     UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
@@ -21,6 +22,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.laundry_monitor.const import (
     CONF_CURRENT_SENSOR,
+    CONF_ENERGY_SENSOR,
     CONF_POWER_SENSOR,
     CONF_START_CONFIRMATION,
     CONF_TRACK_LAUNDRY,
@@ -33,19 +35,30 @@ _POWER_ENTITY = "sensor.washer_power"
 _CURRENT_ENTITY = "sensor.washer_current"
 
 
-async def _setup_entry(hass: HomeAssistant) -> MockConfigEntry:
-    """Create an integration with power and optional current sources."""
+async def _setup_entry(
+    hass: HomeAssistant, *, with_energy: bool = False
+) -> MockConfigEntry:
+    """Create an integration with power, current and optional energy sources."""
     hass.states.async_set(_POWER_ENTITY, "0.25")
     hass.states.async_set(_CURRENT_ENTITY, "0")
+    data = {
+        CONF_NAME: "Washer",
+        CONF_POWER_SENSOR: _POWER_ENTITY,
+        CONF_CURRENT_SENSOR: _CURRENT_ENTITY,
+        CONF_TRACK_LAUNDRY: False,
+    }
+    if with_energy:
+        hass.states.async_set(
+            "sensor.washer_energy",
+            "125.3",
+            {ATTR_UNIT_OF_MEASUREMENT: UnitOfEnergy.KILO_WATT_HOUR},
+        )
+        data[CONF_ENERGY_SENSOR] = "sensor.washer_energy"
+
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Washer",
-        data={
-            CONF_NAME: "Washer",
-            CONF_POWER_SENSOR: _POWER_ENTITY,
-            CONF_CURRENT_SENSOR: _CURRENT_ENTITY,
-            CONF_TRACK_LAUNDRY: False,
-        },
+        data=data,
         options={CONF_START_CONFIRMATION: 5},
     )
     entry.add_to_hass(hass)
@@ -228,11 +241,20 @@ async def test_overflow_after_conversion_is_unavailable(
     assert entry.runtime_data.activity_detector.start_candidate is False
 
 
-async def test_current_source_does_not_change_energy_units(
+async def test_energy_source_units_are_not_affected(
     hass: HomeAssistant,
     enable_custom_integrations: None,
 ) -> None:
-    """Power/current normalization does not affect unrelated stored energy."""
-    entry = await _setup_entry(hass)
-    assert entry.runtime_data.energy is None
-    assert entry.runtime_data.energy_unit is None
+    """Power/current normalization leaves energy-source statistics unchanged."""
+    entry = await _setup_entry(hass, with_energy=True)
+    assert entry.runtime_data.energy == 125.3
+    assert entry.runtime_data.energy_unit == UnitOfEnergy.KILO_WATT_HOUR
+
+    hass.states.async_set(
+        "sensor.washer_energy",
+        "125.8",
+        {ATTR_UNIT_OF_MEASUREMENT: UnitOfEnergy.KILO_WATT_HOUR},
+    )
+    await hass.async_block_till_done()
+    assert entry.runtime_data.energy == 125.8
+    assert entry.runtime_data.energy_unit == UnitOfEnergy.KILO_WATT_HOUR
