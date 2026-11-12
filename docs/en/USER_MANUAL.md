@@ -80,6 +80,14 @@ Unit labels must use Home Assistant's **exact, case-sensitive notation**: `kW` i
 
 An explicitly unsupported unit, an invalid numeric value, or a conversion overflow makes that measurement **unavailable to Laundry Monitor**, not zero. An unusable required power source triggers the existing Repairs warning and may lead to `error` after the configured grace period. An unusable optional current source disables current-based evidence and diagnostics without creating a Repairs issue; valid power-only detection continues. The optional energy sensor retains its original energy units.
 
+### 2.5 Repeated readings and freshness
+
+A sensor may legitimately report the **same power or current value** more than once. Laundry Monitor counts each valid new Home Assistant report as a fresh observation, including reports where the state and attributes do not change. This helps stable low-power readings establish sufficient no-heating observation coverage and stable spin-level readings remain eligible for electrical corroboration.
+
+Invalid and unavailable reports do not refresh evidence. Repeated vibration ON reports do not create extra vibration events, and routine identical electrical reports do not themselves cause bulk diagnostic state updates.
+
+Home Assistant can confirm that the source entity was republished, **not** that its physical device sampled the value again. For reliable hybrid detection, ensure your plug/sensor integration reports actual measurements rather than automatically republishing an old cached value.
+
 ---
 
 ## 3. Installation
