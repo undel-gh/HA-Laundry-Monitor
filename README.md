@@ -357,12 +357,29 @@ Use Home Assistant automations to build actions on top of Laundry Monitor states
 
 Issues and pull requests are welcome.
 
-Install test dependencies and run the suite:
+Before submitting a pull request, run the pinned read-only Ruff check and
+the test suite:
 
 ```bash
-pip install -r requirements_test.txt
-pytest
+python -m pip install ruff==0.16.8
+python -m pip install -r requirements_test.txt
+ruff check custom_components tests --select E,W,F
+python -m pytest
 ```
+
+Ruff runs on **every pull request**, including documentation-only changes, and
+on pushes to `main` through the read-only `Validate / Ruff check` CI job.
+To apply *safe* fixes, run `ruff check custom_components tests --select E,W,F
+--fix` locally on a working branch, inspect the diff, then commit the changes
+in the PR for review. Do **not** use unattended `--unsafe-fixes` or push
+autofixes directly to `main`. All automated validation has read-only
+repository permissions.
+
+For maintainers: configure branch protection/rulesets for `main` to require
+the `Ruff check` status (alongside `Tests`, `Hassfest` and `HACS`, where
+applicable), prevent bypasses and enforce changes through reviewed PRs.
+The CI workflow does not itself enforce branch protection; this repository
+setting must be enabled separately.
 
 The English documentation under `docs/en/` is canonical. Translations must follow it and must not define separate behavior.
 
@@ -723,12 +740,29 @@ automation:
 
 Сообщения о проблемах и pull request приветствуются.
 
-Установите тестовые зависимости и запустите набор тестов:
+Перед созданием pull request запустите закреплённую версию Ruff
+в режиме проверки (без исправлений), а затем тесты:
 
 ```bash
-pip install -r requirements_test.txt
-pytest
+python -m pip install ruff==0.16.8
+python -m pip install -r requirements_test.txt
+ruff check custom_components tests --select E,W,F
+python -m pytest
 ```
+
+Задача `Validate / Ruff check` запускается для **каждого PR**, включая
+изменения только документации, и при push в `main`. Безопасные исправления
+можно выполнять локально в рабочей ветке через
+`ruff check custom_components tests --select E,W,F --fix`, после чего
+нужно проверить diff и отправить его на ревью в PR. Не запускайте
+автоматически `--unsafe-fixes` и не публикуйте исправления напрямую в
+`main`. Проверяющий workflow не имеет прав на запись в репозиторий.
+
+Для владельца репозитория: настройте protection/rulesets для `main`,
+сделайте статус `Ruff check` обязательным (при необходимости вместе с
+`Tests`, `Hassfest` и `HACS`), запретите обход правил и прямые изменения
+`main` без проверенного PR. Сам workflow не включает защиту ветки — это
+отдельная настройка GitHub.
 
 Английская документация в `docs/en/` является канонической. Переводы должны следовать ей и не должны определять отдельное поведение.
 
