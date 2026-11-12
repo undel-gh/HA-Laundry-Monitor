@@ -119,6 +119,10 @@ Loss of the optional current source, including an incompatible declared unit, mu
 
 The supported unit list is determined by the installed Home Assistant Core version (`PowerConverter` / `ElectricCurrentConverter`). Unit conversion does not change source reporting/freshness semantics, the electrical detectors' thresholds, or the separate energy-source statistics.
 
+For FR-063/064, **new observation** and **value change** must be tracked independently. Runtime listens for both `state_changed` and `state_reported` for power/current; a same-value or attribute-only electrical report updates the activity, heating and rolling electrical evidence without a generic entity-publication broadcast. Invalid/unavailable repeated values cannot refresh evidence. Vibration/door/leak remain change/edge driven and must never gain synthetic events from identical re-reports. The report listener is removed on unload, and periodic detector evaluations must not impersonate new sensor reports.
+
+The physical-sampling guarantee ends at the Home Assistant source boundary: `state_reported` identifies a new HA entity publication, not necessarily a new hardware sample. Upstream cached-value republishing must be avoided or accounted for when selecting sources and configuring freshness limits.
+
 ---
 
 
