@@ -400,6 +400,12 @@ The public cycle state `error` shall indicate that **Laundry Monitor cannot reli
 
 ---
 
+## FR-066
+
+Downloadable source diagnostics shall distinguish **Home Assistant entity availability** from **measurement usability for Laundry Monitor**. The `sources[*].entity_available` field shall indicate an entity state that is neither `unknown` nor `unavailable` (and exists), while `sources[*].available` shall indicate a usable observation for the configured source type. Required power and optional current usability shall follow the same W/A normalization and finite-value validation as runtime and Repairs. The `required_sources_unavailable` list shall reflect unusable *required* sources only, including a numeric value with incompatible units or conversion overflow. Optional current faults shall not be classified as required failures. Optional energy shall retain its independent numeric validation without W/A conversion. Source raw states, declared units, timestamps, and safe selected metadata shall remain available for troubleshooting.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
