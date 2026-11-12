@@ -214,6 +214,50 @@ async def test_invalid_current_unit_degrades_to_power_only(
     assert _diagnostic_state(hass, entry, "current").state == "unknown"
 
 
+async def test_opted_in_power_mirror_publishes_normalized_state(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """A previously disabled debug sensor publishes after explicit opt-in."""
+    entry = await _setup_entry(hass)
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_current_power"
+    )
+    assert entity_id is not None
+    registry_entry = registry.async_get(entity_id)
+    assert registry_entry is not None
+    assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entity_id) is None
+
+    registry.async_update_entity(entity_id, disabled_by=None)
+    assert registry.async_get(entity_id).disabled_by is None
+
+    # Disabled entities are not instantiated until the integration reloads.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    initial = hass.states.get(entity_id)
+    assert initial is not None
+    assert float(initial.state) == pytest.approx(0.25)
+
+    _set_measurement(hass, _POWER_ENTITY, "0.12", UnitOfPower.KILO_WATT)
+    await hass.async_block_till_done()
+    converted = hass.states.get(entity_id)
+    assert converted is not None
+    assert float(converted.state) == pytest.approx(120.0)
+    assert (
+        converted.attributes[ATTR_UNIT_OF_MEASUREMENT]
+        == UnitOfPower.WATT
+    )
+
+    _set_measurement(hass, _POWER_ENTITY, "45", "V")
+    await hass.async_block_till_done()
+    invalid = hass.states.get(entity_id)
+    assert invalid is not None
+    assert invalid.state == "unknown"
+
+
 async def test_unit_change_is_processed_even_if_raw_number_is_unchanged(
     hass: HomeAssistant,
     enable_custom_integrations: None,
