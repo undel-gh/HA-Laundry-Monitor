@@ -134,15 +134,9 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q custom_components tests
 
-      - name: Minimum Core API smoke (reports, units, setup, persistence)
+      - name: Minimum Core full regression suite
         if: matrix.scope == 'minimum-smoke'
-        run: |
-          python -m pytest -vv --tb=short \
-            tests/components/laundry_monitor/test_source_freshness_runtime.py \
-            tests/components/laundry_monitor/test_measurement_units.py \
-            tests/components/laundry_monitor/test_config_flow.py \
-            tests/components/laundry_monitor/test_storage_integration.py \
-            tests/components/laundry_monitor/test_sensor_metadata.py
+        run: python -m pytest -vv --tb=short
 
       - name: Current Core full regression suite
         if: matrix.scope == 'current-full'
