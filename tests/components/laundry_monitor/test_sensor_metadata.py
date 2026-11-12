@@ -23,6 +23,11 @@ def test_sensor_descriptions_use_typed_home_assistant_constants() -> None:
     assert current_power.native_unit_of_measurement is UnitOfPower.WATT
     assert current_power.state_class is SensorStateClass.MEASUREMENT
 
+    cycle_started = descriptions["cycle_started_at"]
+    assert cycle_started.device_class is SensorDeviceClass.TIMESTAMP
+    assert cycle_started.entity_registry_enabled_default is True
+    assert descriptions["current_cycle_duration"].entity_registry_enabled_default is False
+
     assert (
         descriptions["final_spin_confidence"].native_unit_of_measurement
         is UnitOfRatio.PERCENTAGE
