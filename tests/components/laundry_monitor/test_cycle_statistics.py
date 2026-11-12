@@ -128,7 +128,9 @@ async def test_cycle_start_timestamp_and_duration_statistics(
 
     started = hass.states.get(start_entity_id)
     assert started is not None
-    assert dt_util.parse_datetime(started.state) == runtime.cycle_started_at
+    assert dt_util.parse_datetime(started.state) == (
+        runtime.cycle_started_at.replace(microsecond=0)
+    )
 
     # Simulate an already-running cycle for fast tests. The exact start
     # timestamp changes, but an ordinary 30-second tick cannot republish it.
@@ -391,7 +393,7 @@ async def test_active_cycle_statistics_survive_real_store_reload(
     assert restored_start is not None
     assert (
         dt_util.parse_datetime(restored_start.state)
-        == restored.cycle_started_at
+        == restored.cycle_started_at.replace(microsecond=0)
     )
 
     assert restored.async_set_cycle_state(
