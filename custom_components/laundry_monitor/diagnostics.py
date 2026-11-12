@@ -90,6 +90,8 @@ def _source_diagnostics(
     # incompatible measurement unit. In that case it is not usable by the
     # runtime, even though HA still considers the entity available.
     entity_available = state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+    # Power/current use source-specific unit validation before the generic
+    # numeric branch; numeric currently applies only to the energy source.
     if source_key == CONF_POWER_SENSOR:
         usable = normalized_power(state) is not None
     elif source_key == CONF_CURRENT_SENSOR:
