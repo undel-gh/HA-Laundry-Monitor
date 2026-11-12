@@ -6,7 +6,7 @@ Short navigation map for maintainers and assistants. Use this file to jump direc
 
 ## Project purpose
 
-Home Assistant custom integration that infers washing-machine cycle state from external sensors. Power is the required source; current, door, vibration, leak, energy, and plug-switch sources are optional. Public cycle states are `idle`, `armed`, `running`, `final_spin`, `finished`, and `error`.
+Home Assistant custom integration that infers washing-machine cycle state from external sensors. Power is the required source; current, door, vibration, leak, energy, and plug-switch sources are optional. Public cycle states are `idle`, `armed`, `running`, `final_spin`, `finished`, and `error`. The `error` state describes inability to monitor the cycle reliably (currently required-power telemetry loss), not appliance fault-code detection.
 
 ## Fast lookup by topic
 
