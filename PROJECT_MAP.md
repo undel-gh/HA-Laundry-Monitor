@@ -101,7 +101,7 @@ Useful symbols/search anchors include:
 Persistent runtime snapshots and recovery-state selection after Home Assistant restart/reload. Check here for snapshot schema, age validation, state reconstruction, and persistence serialization.
 
 ### `entity.py`
-Shared base entity/device metadata and common runtime-update wiring used by entity platforms.
+Shared base entity/device metadata and per-entity change suppression for runtime notifications (Recorder write reduction).
 
 ### `sensor.py`
 Sensor entities: public cycle state, durations/statistics, raw/diagnostic power/current values, last-activity timestamps, transition information, spin/finish diagnostics, etc.
@@ -166,7 +166,7 @@ Snapshot serialization, persistence age/validation, and restart recovery decisio
 Config/reconfigure/options UI validation, duplicate or invalid source handling, and option constraints.
 
 ### `test_entities.py`
-Entity creation, availability, state/value exposure, device linkage, and Laundry Tracking entities.
+Entity creation, availability, state/value exposure, device linkage, Laundry Tracking entities, and `test_recorder_publication.py` for Recorder write suppression and duration publication buckets.
 
 ### `test_init.py`
 Integration setup/unload/reload and runtime lifecycle.
