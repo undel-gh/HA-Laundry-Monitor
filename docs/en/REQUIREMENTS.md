@@ -382,6 +382,18 @@ A power or current reading with a declared but unsupported unit, a non-numeric o
 
 ---
 
+## FR-063
+
+The integration shall distinguish a changed normalized power/current value from a **new valid electrical observation**. Both Home Assistant `state_changed` events (including attribute-only changes) and `state_reported` events for the configured power/current sensors shall refresh the corresponding source timestamps and observed coverage, even when the normalized W/A value remains identical. Repeated unknown, invalid or unavailable readings shall not establish fresh electrical evidence. Startup state reads and timer-only evaluations shall not fabricate source freshness. Sensor freshness and coverage shall remain bounded by the configured maximum source age.
+
+---
+
+## FR-064
+
+Repeated electrical reports shall not create synthetic door/vibration/leak transitions or vibration rising-edge evidence, and shall not trigger a general public entity-state publication merely because a value was re-reported. Meaningful detector/public-state transitions shall remain observable, and source-report listeners shall be removed on integration unload. `state_reported` establishes that a Home Assistant entity was republished; physical hardware sampling freshness remains a responsibility of the upstream source integration.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001
