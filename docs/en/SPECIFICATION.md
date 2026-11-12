@@ -220,7 +220,22 @@ A power reading that cannot be normalized is unavailable **to the detector**, ev
 
 The current sensor is optional: when its unit or value is invalid, current evidence and diagnostics become unavailable; monitoring continues using valid power without a current-source Repairs issue. This preserves the optional-source degradation policy from §4.3.
 
-This change does **not** alter source event freshness or sampling cadence: repeated-value/report handling remains governed by the existing source-update policy and is tracked separately.
+### 4.7 Repeated source reports and evidence freshness
+
+Source **value change** and source **observation** are independent concepts. Home Assistant emits `state_changed` when a source state or its attributes change, and `state_reported` when it publishes the same state and attributes again. The runtime listens to both event types for configured power and current sensors (using `async_track_state_report_event` for the latter), but to `state_changed` only for vibration, door, leak, energy and other non-electrical sources.
+
+On each valid, newly reported power/current measurement, including one whose normalized numeric value is unchanged:
+
+- the corresponding activity timestamps, heating observation window and electrical spin rolling samples may advance, subject to real observation time and maximum source age;
+- repeated low-power readings may accumulate the coverage needed for `heating_state=not_seen`, while repeated heater-level readings may contribute to heating confirmation;
+- repeated spin-level readings may keep the power/current evidence fresh and sustain time-weighted electrical coverage without artificially inflating confidence through higher report rates;
+- an invalid, unknown, unavailable or unsupported-unit reading is **not** fresh evidence. A timer tick or startup cache read is likewise not an electrical report;
+- repeat reports cannot produce vibration rising edges or door/leak events;
+- unchanged source values do not automatically dispatch updates to all Home Assistant entities. A meaningful detector/public-state transition may still publish diagnostics, and the existing scheduled statistics updates remain in effect.
+
+Listeners for both electrical report events and ordinary state changes are unregistered when the runtime stops.
+
+**Evidence limitation:** `state_reported` proves that the Home Assistant entity was republished; it does not independently prove a new physical measurement. An upstream MQTT/template/entity integration that republishes cached data without new device observations can therefore make that data appear fresh. For hybrid configuration, users must ensure that their source entity reports reflect actual device observations.
 
 ## 5. State Model
 ### 5.1 Public states
