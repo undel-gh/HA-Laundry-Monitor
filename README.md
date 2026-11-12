@@ -367,33 +367,27 @@ ruff check custom_components tests --select E,W,F
 python -m pytest
 ```
 
-The full suite tests against **Home Assistant Core 2026.10.4** with
-`pytest-homeassistant-custom-component==0.13.375` (Python 3.14).
-The minimum supported **Core 2026.6.0** has a separate API smoke suite,
-paired with `pytest-homeassistant-custom-component==0.13.336`. These
-fixture packages **pin exact Core versions** and must not be mixed.
-CI prints and checks both installed and imported Home Assistant versions;
-it fails if the imported Core differs from the declared matrix target.
+The **full regression suite** runs against both supported CI targets on
+Python 3.14: minimum **Home Assistant Core 2026.6.0** with
+`pytest-homeassistant-custom-component==0.13.336`, and current
+fixture-supported **Core 2026.10.4** with fixture `0.13.375`.
+The fixture packages pin **exact Core versions** and must not be mixed.
+CI prints and verifies the installed and imported Core and fixture versions;
+a version mismatch fails the job.
 
-To reproduce the minimum-version smoke suite, create a **separate Python
-3.14 virtual environment** and run:
+Use **separate Python 3.14 virtual environments** to reproduce each target.
+For the minimum version:
 
 ```bash
 python -m pip install -r requirements_test_min.txt
 python -m pip check
-python -m pytest -vv \
-  tests/components/laundry_monitor/test_source_freshness_runtime.py \
-  tests/components/laundry_monitor/test_measurement_units.py \
-  tests/components/laundry_monitor/test_config_flow.py \
-  tests/components/laundry_monitor/test_storage_integration.py \
-  tests/components/laundry_monitor/test_sensor_metadata.py
+python -m pytest -vv --tb=short
 ```
 
-The minimum smoke set exercises identical electrical `state_reported`
-observations, W/A normalization and invalid-unit handling, configuration,
-snapshot recovery, and the percentage-unit metadata contract (including
-the legacy Home Assistant 2026.6 fallback). The current-target job runs
-the **full suite**.
+For the current fixture-supported version, replace the requirements file
+with `requirements_test.txt` and run the same checks. Both jobs run the
+entire pytest suite, covering state reports, unit conversion and metadata,
+configuration, diagnostics, persistence, and detector behavior.
 
 CI exposes stable `Tests (minimum)` and `Tests (current)` job names even
 when the underlying Core versions advance. The aggregate `Tests` gate
@@ -794,33 +788,28 @@ ruff check custom_components tests --select E,W,F
 python -m pytest
 ```
 
-Полный набор тестов запускается на **Home Assistant Core 2026.10.4**
-с `pytest-homeassistant-custom-component==0.13.375` (Python 3.14).
-Для минимально поддерживаемой версии **Core 2026.6.0** предусмотрен
-отдельный smoke-набор с `pytest-homeassistant-custom-component==0.13.336`.
-Тестовые пакеты привязаны к **точным версиям Core**: смешивать их нельзя.
-CI выводит и сверяет установленную и импортированную версии Home Assistant;
-при несовпадении с заданной версией матрицы задача завершается ошибкой.
+**Полный набор регрессионных тестов** выполняется на двух версиях
+Home Assistant Core (Python 3.14): минимальной **2026.6.0** с
+`pytest-homeassistant-custom-component==0.13.336` и актуальной проверяемой
+**2026.10.4** с тестовым пакетом `0.13.375`. Тестовые пакеты привязаны
+к **точным версиям Core**, смешивать их нельзя. CI выводит и сверяет
+установленную и импортированную версии Core и fixture; при несовпадении
+задача завершается ошибкой.
 
-Для локальной проверки минимальной версии создайте **отдельное виртуальное
-окружение Python 3.14** и выполните:
+Для локального воспроизведения используйте **отдельные виртуальные
+окружения Python 3.14**. Для минимальной версии выполните:
 
 ```bash
 python -m pip install -r requirements_test_min.txt
 python -m pip check
-python -m pytest -vv \
-  tests/components/laundry_monitor/test_source_freshness_runtime.py \
-  tests/components/laundry_monitor/test_measurement_units.py \
-  tests/components/laundry_monitor/test_config_flow.py \
-  tests/components/laundry_monitor/test_storage_integration.py \
-  tests/components/laundry_monitor/test_sensor_metadata.py
+python -m pytest -vv --tb=short
 ```
 
-Минимальный smoke-набор проверяет повторные электрические отчёты
-`state_reported`, нормализацию Вт/А и некорректные единицы, настройку
-интеграции, восстановление snapshot и контракт единицы процентов
-(в том числе совместимость с Home Assistant 2026.6). Для актуальной
-проверяемой версии запускается **полный набор тестов**.
+Для актуальной проверяемой версии замените файл зависимостей на
+`requirements_test.txt` и выполните те же команды. В обоих окружениях
+запускается **весь pytest-набор**, включая проверки state reports,
+единиц измерения и метаданных, конфигурации, диагностики, сохранения
+состояния и детекторов.
 
 CI создаёт проверки с постоянными именами `Tests (minimum)` и
 `Tests (current)` независимо от версии Core. Итоговая проверка
