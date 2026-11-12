@@ -285,31 +285,31 @@ Internal states may evolve between releases without affecting the public API.
     idle
      ├─ door closed ─────────────→ armed
      ├─ confirmed start ─────────→ running
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     armed
      ├─ door opened ─────────────→ idle
      ├─ arming timeout ──────────→ idle
      ├─ confirmed start ─────────→ running
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     running
      ├─ final spin confirmed ────→ final_spin
      ├─ long inactivity fallback → finished
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     final_spin
      ├─ normal terminal activity ─→ final_spin
      ├─ cycle continuation confirmed → running
      ├─ inactivity confirmed ─────→ finished
-     └─ required source failure ──→ error
+     └─ power unusable past grace ──→ error
 
     finished
      ├─ new cycle confirmed ─────→ running
      ├─ mark unloaded ───────────→ idle
      ├─ retention elapsed
      │   when tracking disabled ─→ idle
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     error
      └─ usable required
@@ -331,7 +331,9 @@ Internal states may evolve between releases without affecting the public API.
 | `final_spin` | No activity timeout | `finished` | Cycle finished |
 | `finished` | Door opened | `finished` | Door opening is diagnostic only; it must not imply laundry removal |
 | `finished` | Mark unloaded | `idle` | Explicit user action via button or service |
-| Any | Leak detected | Same cycle state + leak alert | Leak engine is separate |
+| Any normal cycle state | Required power unusable beyond grace period | `error` | Monitoring is unreliable; this is not an appliance fault indication |
+| `error` | Usable required power observation | `idle` | Resume monitoring conservatively; this does not imply the appliance was repaired |
+| Any | Leak detected | Same cycle state | The separate leak layer updates its diagnostic state and emits `laundry_monitor.leak_detected`; notifications/alarms require user automations |
 
 ### 6.3 Laundry Tracking
 
