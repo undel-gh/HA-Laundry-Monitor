@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
+import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import CONF_NAME, STATE_OFF
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.laundry_monitor import DATA_STATE_STORE
@@ -18,7 +23,12 @@ from custom_components.laundry_monitor.const import (
     REASON_STATE_RECOVERY_FALLBACK,
     REASON_STATE_RESTORED,
 )
-from custom_components.laundry_monitor.storage import LaundryStateStore
+from custom_components.laundry_monitor.storage import (
+    STORAGE_KEY,
+    STORAGE_VERSION,
+    LaundryStateStore,
+    RuntimeSnapshot,
+)
 
 
 def _set_source_states(
@@ -322,3 +332,46 @@ async def test_last_unloaded_at_is_restored_after_unload_and_setup(
     assert restored_runtime.cycle_state is LaundryCycleState.IDLE
     assert restored_runtime.last_unloaded_at == unloaded_at
 
+@pytest.mark.parametrize(
+    ("corrupt_field", "expected_laundry_present"),
+    [
+        ("last_state_change", False),
+        ("cycle_started_at", True),
+    ],
+)
+async def test_naive_snapshot_timestamp_does_not_block_entry_setup(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+    corrupt_field: str,
+    expected_laundry_present: bool,
+) -> None:
+    """An invalid stored timestamp must not make a config entry fail setup."""
+    _set_source_states(hass, prefix="naive_snapshot", power=0.25)
+    entry = _create_entry(
+        name="Washer With Invalid Snapshot",
+        prefix="naive_snapshot",
+    )
+
+    now = dt_util.utcnow()
+    stored = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="stored_running",
+        last_state_change=now - timedelta(minutes=1),
+        cycle_started_at=now - timedelta(minutes=20),
+        laundry_present=True,
+    ).as_storage_dict()
+    stored[corrupt_field] = "2026-01-01T00:00:00"
+
+    await Store(hass, STORAGE_VERSION, STORAGE_KEY).async_save(
+        {entry.entry_id: stored}
+    )
+
+    await _async_add_and_setup_entry(hass, entry)
+
+    runtime = entry.runtime_data
+    assert entry.state is ConfigEntryState.LOADED
+    assert runtime.cycle_state is LaundryCycleState.IDLE
+    assert runtime.laundry_present is expected_laundry_present
+    if corrupt_field == "cycle_started_at":
+        assert runtime.last_transition_reason == REASON_STATE_RECOVERY_FALLBACK
+        assert runtime.cycle_started_at is None
