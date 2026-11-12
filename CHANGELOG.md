@@ -70,6 +70,11 @@ Release candidate changes since the published `0.1.8-rc7` tag.
 - **No configuration migration or entity renaming is introduced by the
   release-preparation PR.** The behavior changes above may require
   updating frontend templates or external diagnostics parsers.
+- **HACS update-channel change:** earlier RC3–RC7 were incorrectly
+  published as regular releases, but rc8 will have `prerelease=true`.
+  Existing HACS users without this repository's Pre-release option enabled
+  will not be offered rc8 as a normal update; opt in for the RC. Verify both
+  HACS channels before publishing. Historical metadata remains unchanged.
 - This is an RC: fresh/upgrade HACS smoke testing and field verification
   must be recorded before publication. To roll back, select a previously
   published known-good version (for example `0.1.8-rc7`) and restore a
