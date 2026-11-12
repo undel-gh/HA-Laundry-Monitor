@@ -413,13 +413,19 @@ runtime notification. Each enabled entity shall suppress unchanged
 observable-state writes (including a sensor's dynamic measurement unit) while
 publishing relevant transitions promptly. High-churn internal diagnostic
 entities shall default to disabled in the entity registry for new
-installations, preserving existing user choices. The enabled
-`current_cycle_duration` sensor shall publish exact elapsed time at most
-once per five-minute elapsed-time bucket while a phase remains unchanged, but
-shall publish promptly on activation, terminal-phase transitions and
-completion. The 30-second internal detector tick, input-event processing,
-downloadable diagnostics and recovery snapshot persistence shall not be
-weakened or slowed to reduce Recorder load.
+installations, preserving existing user choices. A default-enabled
+`cycle_started_at` timestamp entity shall expose the persisted start time
+during `running` and `final_spin`, become unknown outside the active
+cycle, survive valid cycle recovery, and never require periodic publications
+for time passage. Consumers shall calculate live elapsed duration from that
+timestamp in the presentation layer. The legacy `current_cycle_duration`
+sensor shall remain available for compatibility, be disabled by default in
+new setups, and publish a point-in-time value only when lifecycle/phase or
+start-time information changes (not on elapsed-time ticks). Finalized
+`last_cycle_duration` semantics shall remain unchanged. The 30-second
+internal detector tick, input-event processing, downloadable diagnostics,
+and recovery snapshot persistence shall not be weakened or slowed to reduce
+Recorder load.
 
 ---
 
