@@ -75,7 +75,7 @@ jobs:
       matrix:
         include:
           - check_name: minimum
-            scope: minimum-smoke
+            scope: minimum-full
             ha_core: "2026.6.0"
             fixture: "0.13.336"
             requirements: requirements_test_min.txt
@@ -135,7 +135,7 @@ jobs:
         run: python -m compileall -q custom_components tests
 
       - name: Minimum Core full regression suite
-        if: matrix.scope == 'minimum-smoke'
+        if: matrix.scope == 'minimum-full'
         run: python -m pytest -vv --tb=short
 
       - name: Current Core full regression suite
