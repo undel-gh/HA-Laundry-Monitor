@@ -1,2 +1,5 @@
+# Full regression suite: newest Core/fixture pair verified in CI.
+# pytest-homeassistant-custom-component pins an exact Home Assistant version.
 pytest==9.0.3
-pytest-homeassistant-custom-component==0.13.373
+homeassistant==2026.10.4
+pytest-homeassistant-custom-component==0.13.375

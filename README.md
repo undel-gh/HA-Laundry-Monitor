@@ -367,6 +367,43 @@ ruff check custom_components tests --select E,W,F
 python -m pytest
 ```
 
+The **full regression suite** runs against both supported CI targets on
+Python 3.14: minimum **Home Assistant Core 2026.6.0** with
+`pytest-homeassistant-custom-component==0.13.336`, and current
+fixture-supported **Core 2026.10.4** with fixture `0.13.375`.
+The fixture packages pin **exact Core versions** and must not be mixed.
+CI prints and verifies the installed and imported Core and fixture versions;
+a version mismatch fails the job.
+
+Use **separate Python 3.14 virtual environments** to reproduce each target.
+For the minimum version:
+
+```bash
+python -m pip install -r requirements_test_min.txt
+python -m pip check
+python -m pytest -vv --tb=short
+```
+
+For the current fixture-supported version, replace the requirements file
+with `requirements_test.txt` and run the same checks. Both jobs run the
+entire pytest suite, covering state reports, unit conversion and metadata,
+configuration, diagnostics, persistence, and detector behavior.
+
+CI exposes stable `Tests (minimum)` and `Tests (current)` job names even
+when the underlying Core versions advance. The aggregate `Tests` gate
+succeeds **only if both jobs succeed** and preserves the existing required
+`Tests` check in branch protection. All run on pull requests (including
+docs-only PRs), `main` pushes and scheduled validation, alongside Ruff,
+Hassfest and HACS.
+
+**Upgrade cadence:** at least monthly after the Home Assistant stable
+release, review both the latest stable Core and the newest fixture package.
+Advance the current target only when a matching fixture/Core pair is
+published, pin both versions together, run CI, and update this README.
+A newer Core release without a corresponding fixture is **not yet
+verified**, and must not be labelled as covered. Keep the minimum target
+at 2026.6.0 until the published HACS support floor changes.
+
 Ruff runs on **every pull request**, including documentation-only changes, and
 on pushes to `main` through the read-only `Validate / Ruff check` CI job.
 To apply *safe* fixes, run `ruff check custom_components tests --select E,W,F
@@ -375,11 +412,12 @@ in the PR for review. Do **not** use unattended `--unsafe-fixes` or push
 autofixes directly to `main`. All automated validation has read-only
 repository permissions.
 
-For maintainers: configure branch protection/rulesets for `main` to require
-the `Ruff check` status (alongside `Tests`, `Hassfest` and `HACS`, where
-applicable), prevent bypasses and enforce changes through reviewed PRs.
-The CI workflow does not itself enforce branch protection; this repository
-setting must be enabled separately.
+For maintainers: the current `main` ruleset requires `Ruff check`, `Tests`,
+`Hassfest` and `HACS`. Keep the stable aggregate `Tests` check required:
+it fails whenever either `Tests (minimum)` or `Tests (current)` fails.
+Do not require version-numbered Core job names, which would break on
+monthly upgrades. Enforce reviewed PRs and prevent bypasses separately
+in GitHub branch rules; CI YAML does not replace branch protection.
 
 The English documentation under `docs/en/` is canonical. Translations must follow it and must not define separate behavior.
 
@@ -750,6 +788,45 @@ ruff check custom_components tests --select E,W,F
 python -m pytest
 ```
 
+**Полный набор регрессионных тестов** выполняется на двух версиях
+Home Assistant Core (Python 3.14): минимальной **2026.6.0** с
+`pytest-homeassistant-custom-component==0.13.336` и актуальной проверяемой
+**2026.10.4** с тестовым пакетом `0.13.375`. Тестовые пакеты привязаны
+к **точным версиям Core**, смешивать их нельзя. CI выводит и сверяет
+установленную и импортированную версии Core и fixture; при несовпадении
+задача завершается ошибкой.
+
+Для локального воспроизведения используйте **отдельные виртуальные
+окружения Python 3.14**. Для минимальной версии выполните:
+
+```bash
+python -m pip install -r requirements_test_min.txt
+python -m pip check
+python -m pytest -vv --tb=short
+```
+
+Для актуальной проверяемой версии замените файл зависимостей на
+`requirements_test.txt` и выполните те же команды. В обоих окружениях
+запускается **весь pytest-набор**, включая проверки state reports,
+единиц измерения и метаданных, конфигурации, диагностики, сохранения
+состояния и детекторов.
+
+CI создаёт проверки с постоянными именами `Tests (minimum)` и
+`Tests (current)` независимо от версии Core. Итоговая проверка
+`Tests` проходит **только при успехе обеих** и сохраняет совместимость
+с уже обязательным статусом `Tests` в branch protection. Все эти
+задачи запускаются для каждого PR (включая изменения только
+документации), при push в `main` и по расписанию вместе с Ruff,
+Hassfest и HACS.
+
+**Порядок обновления:** минимум раз в месяц после стабильного релиза
+Home Assistant проверяйте последнюю версию Core и доступный тестовый
+пакет. Продвигайте актуальную проверяемую версию только после выпуска
+совместимой пары Core/fixture, закрепляя обе версии вместе, запуская CI
+и обновляя README. Новейший Core **не считается проверенным**, пока
+для него нет подтверждённой совместимой тестовой среды. Минимальный
+Core 2026.6.0 сохраняется до официального изменения порога HACS.
+
 Задача `Validate / Ruff check` запускается для **каждого PR**, включая
 изменения только документации, и при push в `main`. Безопасные исправления
 можно выполнять локально в рабочей ветке через
@@ -758,11 +835,13 @@ python -m pytest
 автоматически `--unsafe-fixes` и не публикуйте исправления напрямую в
 `main`. Проверяющий workflow не имеет прав на запись в репозиторий.
 
-Для владельца репозитория: настройте protection/rulesets для `main`,
-сделайте статус `Ruff check` обязательным (при необходимости вместе с
-`Tests`, `Hassfest` и `HACS`), запретите обход правил и прямые изменения
-`main` без проверенного PR. Сам workflow не включает защиту ветки — это
-отдельная настройка GitHub.
+Текущий ruleset для `main` требует `Ruff check`, `Tests`,
+`Hassfest` и `HACS`. Оставляйте обязательным постоянный итоговый
+статус `Tests`: он блокирует merge при падении `Tests (minimum)`
+или `Tests (current)`. Не закрепляйте имена с номером версии Core:
+они будут меняться при ежемесячных обновлениях. Запрет обхода правил
+и обязательный ревью-PR настраиваются отдельно в GitHub; workflow
+не заменяет защиту ветки.
 
 Английская документация в `docs/en/` является канонической. Переводы должны следовать ей и не должны определять отдельное поведение.
 

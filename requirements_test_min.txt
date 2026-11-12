@@ -1,0 +1,5 @@
+# Minimum HACS-supported Home Assistant Core (hacs.json: 2026.6.0).
+# Must stay aligned with the fixture package's exact Core dependency.
+pytest==9.0.3
+homeassistant==2026.6.0
+pytest-homeassistant-custom-component==0.13.336

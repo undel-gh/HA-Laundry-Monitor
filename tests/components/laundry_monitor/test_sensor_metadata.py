@@ -4,7 +4,7 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfPower, UnitOfRatio, UnitOfTime
+from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTime
 
 from custom_components.laundry_monitor.sensor import (
     SENSOR_DESCRIPTIONS,
@@ -31,7 +31,7 @@ def test_sensor_descriptions_use_typed_home_assistant_constants() -> None:
 
     assert (
         descriptions["final_spin_confidence"].native_unit_of_measurement
-        is UnitOfRatio.PERCENTAGE
+        == PERCENTAGE
     )
     assert (
         descriptions["finish_remaining"].native_unit_of_measurement
