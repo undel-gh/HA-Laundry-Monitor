@@ -1015,7 +1015,10 @@ class LaundryMonitorRuntime:
                     self._evaluate_finish()
                 elif (
                     previous_heating
-                    != (self.heating_detector.state, self.heating_detector.heating_active)
+                    != (
+                        self.heating_detector.state,
+                        self.heating_detector.heating_active,
+                    )
                     or previous_candidate != self.electrical_spin_detector.candidate
                 ):
                     # Publish a real detector change, but not every repeated
