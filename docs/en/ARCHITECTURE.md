@@ -289,6 +289,8 @@ Outputs:
 The addition or removal of an optional current sensor must not change the public state model.
 The State Machine must distinguish normal terminal-phase activity from a confirmed continuation of the ordinary program. A `final_spin → running` transition may occur only on an explicit `cycle_continuation_confirmed` detector decision, never on raw or normalized activity alone.
 
+The public `error` state is a **Laundry Monitor monitoring-reliability state**, not a washing-machine fault diagnosis. In the current runtime it follows unusable required power telemetry beyond the grace period; usable power recovers it to `idle`. The integration has no appliance fault-code input. The independent Leak Detector does not trigger cycle-state `error`.
+
 ---
 
 ## 3.7 Laundry Tracking
