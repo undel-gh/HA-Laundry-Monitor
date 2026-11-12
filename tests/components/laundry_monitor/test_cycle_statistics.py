@@ -122,7 +122,24 @@ async def test_duration_statistics_and_periodic_entity_update(
         _entity_id(hass, "sensor", entry, "current_cycle_duration")
     )
     assert current_duration is not None
-    assert float(current_duration.state) >= 65
+    # The internal duration advances, but the HA entity is intentionally
+    # kept at its last published bucket until five minutes have elapsed.
+    assert runtime.current_cycle_duration is not None
+    assert runtime.current_cycle_duration >= 65
+    assert float(current_duration.state) < 65
+
+    runtime.cycle_started_at = dt_util.utcnow() - timedelta(seconds=365)
+    async_fire_time_changed(
+        hass,
+        dt_util.utcnow() + timedelta(seconds=61),
+    )
+    await hass.async_block_till_done()
+
+    current_duration = hass.states.get(
+        _entity_id(hass, "sensor", entry, "current_cycle_duration")
+    )
+    assert current_duration is not None
+    assert float(current_duration.state) >= 365
 
     assert runtime.async_set_cycle_state(
         LaundryCycleState.FINISHED,
