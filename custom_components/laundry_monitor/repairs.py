@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import (
     Event,
     EventStateChangedData,
@@ -19,10 +18,8 @@ from homeassistant.helpers.issue_registry import (
     async_delete_issue,
 )
 
-from .const import (
-    CONF_POWER_SENSOR,
-    DOMAIN,
-)
+from .const import CONF_POWER_SENSOR, DOMAIN
+from .source_units import normalized_power
 
 REQUIRED_SOURCE_KEYS: tuple[str, ...] = (
     CONF_POWER_SENSOR,
@@ -127,11 +124,7 @@ class LaundryMonitorRepairs:
             if isinstance(entity_id, str) and entity_id
             else None
         )
-        available = (
-            state is not None
-            and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
-            and _is_numeric_state(state.state)
-        )
+        available = normalized_power(state) is not None
 
         if available:
             async_delete_issue(
@@ -166,11 +159,3 @@ class LaundryMonitorRepairs:
             },
         )
 
-
-def _is_numeric_state(value: str) -> bool:
-    """Return whether a required power state is a finite number."""
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return False
-    return number == number and number not in (float("inf"), float("-inf"))
