@@ -57,7 +57,7 @@ The state value must use stable, non-localized identifiers.
 | `running`    | A washing cycle is believed to be active.                                                                            |
 | `final_spin` | A probable terminal spin sequence / terminal phase has been detected; spinning and draining may overlap, and draining or other end-of-program activity may continue after the drum stops. |
 | `finished`   | The cycle is believed to have finished. Laundry may still be inside the machine.                                     |
-| `error`      | The integration cannot reliably continue normal cycle evaluation because of an abnormal internal or input condition. |
+| `error`      | Laundry Monitor cannot reliably evaluate the cycle (currently due to prolonged unusable required power telemetry); this is not an appliance fault diagnosis. |
 
 Public states form part of the integration's public API.
 
@@ -200,13 +200,13 @@ stateDiagram-v2
     Finished --> Idle: Mark unloaded
     Finished --> Idle: Automatic reset when Laundry Tracking is disabled
 
-    Idle --> Error: Unrecoverable evaluation error
-    Armed --> Error: Unrecoverable evaluation error
-    Running --> Error: Unrecoverable evaluation error
-    FinalSpin --> Error: Unrecoverable evaluation error
-    Finished --> Error: Unrecoverable evaluation error
+    Idle --> Error: Required power unusable past grace
+    Armed --> Error: Required power unusable past grace
+    Running --> Error: Required power unusable past grace
+    FinalSpin --> Error: Required power unusable past grace
+    Finished --> Error: Required power unusable past grace
 
-    Error --> Idle: Recovery or manual reset
+    Error --> Idle: Usable required power observed
 ```
 
 The transition from `finished` to `idle` depends on the Laundry Tracking configuration and is described in Section 10.
@@ -229,8 +229,8 @@ The transition from `finished` to `idle` depends on the Laundry Tracking configu
 | `finished`       | Mark unloaded                  | `idle`           | Available when Laundry Tracking is enabled. Laundry Tracking is updated separately.              |
 | `finished`       | Automatic reset condition      | `idle`           | Used only when Laundry Tracking is disabled.                                                     |
 | `finished`       | New cycle start confirmed      | `running`        | Start a new cycle even if the previous cycle was not explicitly reset.                           |
-| Any normal state | Unrecoverable evaluation error | `error`          | Record the reason and affected inputs.                                                           |
-| `error`          | Recovery completed             | `idle`           | Resume from a conservative known state.                                                          |
+| Any normal state | Required power unusable beyond grace | `error` | Record a monitoring/input failure, not an appliance fault. |
+| `error`          | Usable required power observed | `idle` | Resume monitoring from a conservative known state; this is not an appliance repair confirmation. |
 | Any state        | Leak detected                  | Same cycle state | Leak detection is outside the cycle state machine.                                               |
 
 ## 8. State Definitions
@@ -443,40 +443,19 @@ Opening the door while in `finished`:
 
 #### Meaning
 
-The integration cannot continue normal state evaluation with sufficient reliability.
+`error` means **Laundry Monitor cannot reliably evaluate the washing cycle**. It describes the integration's monitoring/input status, **not** a washing-machine malfunction or manufacturer error code. Laundry Monitor does not read the appliance's internal fault codes and cannot determine whether its hardware is defective.
 
-The `error` state should be used conservatively. Temporary loss of an optional sensor should not cause an error.
+#### Implemented automatic trigger
 
-#### Possible causes
+The current runtime enters `error` after the **required power sensor** remains unusable beyond the configured power-unavailable grace period. This includes a missing, `unknown`, `unavailable`, non-numeric or non-finite reading, or a power reading with an unsupported unit. A valid numeric `0 W` is still a usable observation and is not an error.
 
-Examples include:
+A missing optional current/door/vibration/leak source does not independently cause `error`. Leak detection operates separately and does not change the cycle state. Malformed stored snapshots are handled by the recovery policy; they are not evidence of an appliance fault. Exceptions and internal invariant failures are **not** currently mapped automatically into this public cycle state.
 
-* required power sensor unavailable beyond a configured tolerance;
-* invalid or non-numeric required power data;
-* corrupted restored state;
-* an internal state machine invariant violation;
-* an unrecoverable detector exception.
+#### Entry and recovery
 
-#### Entry actions
+When entering `error`, record the reason and do not fabricate cycle completion or infer that laundry was unloaded.
 
-On entry, the state machine should:
-
-* preserve the previous state;
-* record the error reason;
-* record affected entities or components;
-* avoid fabricating cycle completion;
-* avoid modifying Laundry Tracking;
-* expose diagnostic information.
-
-#### Recovery
-
-When the required input becomes valid again, the implementation may:
-
-* restore the previous state when this is safe and sufficiently supported;
-* reconstruct the likely state from restored cycle context;
-* return to `idle` as a conservative fallback.
-
-Recovery behavior must be recorded as a state transition with an explicit reason.
+Upon receiving a usable required power observation, the current runtime transitions `error → idle` with the reason `power_sensor_recovered`. This conservative recovery does **not** restore the previous active cycle or imply that the washing machine was repaired. An `error` state set manually for testing while valid power is already cached can likewise return to `idle` on the next repeated power report; see Specification §4.7.
 
 ## 9. Start Detection
 

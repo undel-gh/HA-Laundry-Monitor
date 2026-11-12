@@ -191,7 +191,7 @@ Laundry Monitor exposes a public cycle-state sensor.
 | `running` | A washing cycle has been confirmed. |
 | `final_spin` | A probable terminal spin sequence / terminal phase has been detected. |
 | `finished` | Cycle completion has been confirmed. |
-| `error` | Reliable evaluation is not possible, for example after prolonged loss of the required power source. |
+| `error` | Laundry Monitor cannot reliably evaluate the cycle because required power telemetry has remained unusable. This is **not** a washing-machine fault code. |
 
 ### 6.1 About `final_spin`
 
@@ -638,7 +638,7 @@ The power sensor is required.
 
 A brief `unavailable`, `unknown`, missing, non-numeric or unsupported-unit state is tolerated for the configured **Power sensor unavailable grace period**.
 
-If the required source remains unusable beyond the grace period, Laundry Monitor may enter `error` and create a Home Assistant Repairs issue.
+If the required source remains unusable beyond the grace period, Laundry Monitor may enter `error` and create a Home Assistant Repairs issue. This means the **integration lacks reliable monitoring data**; it does not establish a mechanical or electronic fault in the washing machine. A valid power reading permits recovery to `idle`. Optional current-sensor failures and leak events do not independently cause this cycle-state error.
 
 Remember:
 
@@ -728,9 +728,9 @@ If the entity is available and the value is numeric, `0 W` is valid data. This i
 
 ### Integration enters `error`
 
-Check the required power source and Home Assistant Repairs.
+This is a **Laundry Monitor source/monitoring problem**, not an appliance diagnostic code. Check the required power sensor, its `unit_of_measurement`, and Home Assistant Repairs. A prolonged missing, unavailable, unknown, non-numeric, or unsupported-unit power reading is different from a valid `0 W`.
 
-A prolonged unavailable/unknown/non-numeric power source is different from a valid numeric zero.
+Laundry Monitor does not read the washing machine's internal error codes. If the appliance itself displays a fault, consult its manufacturer documentation; that fault is not diagnosed by the Laundry Monitor `error` state.
 
 ---
 

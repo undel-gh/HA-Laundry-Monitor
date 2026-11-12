@@ -12,7 +12,8 @@ The only required source is a **power sensor**. Optional current, door, vibratio
 
 **Laundry Monitor** is intended to answer questions such as:
 
-- Is the washing machine idle, armed, running, in its terminal phase, finished, or in an error state?
+- Is the washing machine idle, armed, running, in its terminal phase, or finished?
+- Is Laundry Monitor still receiving reliable data from the required power sensor?
 - Has a real cycle started?
 - Has a probable terminal spin sequence been detected?
 - Has meaningful electrical activity ended?
@@ -25,7 +26,7 @@ The only required source is a **power sensor**. Optional current, door, vibratio
 
 - Passive, observe-only design: Laundry Monitor does **not** control the washing machine, switch a smart plug, send notifications, or trigger alarms.
 - Small public cycle-state model:
-  `idle → armed → running → final_spin → finished`, plus `error`.
+  `idle → armed → running → final_spin → finished`, plus `error` when reliable cycle monitoring is not possible (not an appliance fault code).
 - Power-based cycle-start detection with a configurable confirmation period.
 - Optional current-assisted meaningful-activity detection.
 - Optional vibration-based detection of a probable **terminal spin sequence / terminal phase**.
@@ -152,7 +153,9 @@ Current measurements supplement activity detection but **do not independently st
 | `running` | A cycle has been confirmed and ordinary cycle execution is in progress. |
 | `final_spin` | A probable **terminal spin sequence / terminal phase** has been detected. |
 | `finished` | Cycle completion has been confirmed. |
-| `error` | A condition prevents reliable cycle evaluation, such as prolonged loss of the required power source. |
+| `error` | Laundry Monitor cannot reliably evaluate the cycle, for example because required power readings remain unusable beyond the configured grace period. This does **not** indicate a diagnosed washing-machine fault. |
+
+The `error` state belongs to **Laundry Monitor's monitoring logic**, not to the washing machine's own diagnostic system. The integration does not read appliance error codes or determine whether the appliance is mechanically or electronically defective. A configured leak sensor is monitored separately and does not cause the cycle state to become `error`.
 
 The historical identifier `final_spin` is retained as part of the public API. Conceptually it represents entry into a probable terminal phase rather than an assertion that the drum is continuously spinning.
 
@@ -365,7 +368,8 @@ Released under the [MIT License](LICENSE).
 
 **Мониторинг стирки** помогает ответить на следующие вопросы:
 
-- Стиральная машина простаивает, готова к запуску, работает, находится в завершающей фазе, завершила цикл или находится в состоянии ошибки?
+- Стиральная машина простаивает, готова к запуску, работает, находится в завершающей фазе или завершила цикл?
+- Продолжает ли Laundry Monitor получать достоверные данные от обязательного датчика мощности?
 - Действительно ли начался цикл стирки?
 - Обнаружена ли вероятная завершающая последовательность отжима?
 - Завершилась ли значимая электрическая активность?
@@ -378,7 +382,7 @@ Released under the [MIT License](LICENSE).
 
 - Пассивная работа только в режиме наблюдения: Laundry Monitor **не** управляет стиральной машиной, не переключает умную розетку, не отправляет уведомления и не включает сигнализацию.
 - Небольшая публичная модель состояний цикла:
-  `idle → armed → running → final_spin → finished`, а также `error`.
+  `idle → armed → running → final_spin → finished`, а также `error`, если достоверный мониторинг цикла невозможен (это не код неисправности машины).
 - Обнаружение начала цикла по мощности с настраиваемым периодом подтверждения.
 - Опциональное обнаружение значимой активности с использованием данных о токе.
 - Опциональное обнаружение вероятной **завершающей последовательности отжима / завершающей фазы** по вибрации.
@@ -501,7 +505,9 @@ Released under the [MIT License](LICENSE).
 | `running` | Цикл подтверждён, выполняется его обычная стадия. |
 | `final_spin` | Обнаружена вероятная **завершающая последовательность отжима / завершающая фаза**. |
 | `finished` | Завершение цикла подтверждено. |
-| `error` | Условие препятствует надёжной оценке цикла, например продолжительная потеря обязательного источника мощности. |
+| `error` | Laundry Monitor не может достоверно оценивать цикл, например если обязательный датчик мощности остаётся непригодным дольше допустимого времени. Это **не** означает, что диагностирована неисправность стиральной машины. |
+
+Состояние `error` относится к **логике мониторинга Laundry Monitor**, а не к системе самодиагностики стиральной машины. Интеграция не читает коды ошибок устройства и не определяет механические или электронные неисправности машины. Настроенный датчик протечки контролируется отдельно и не переводит состояние цикла в `error`.
 
 Исторический идентификатор `final_spin` сохранён как часть публичного API. Концептуально он обозначает вход в вероятную завершающую фазу, а не утверждение о непрерывном вращении барабана.
 

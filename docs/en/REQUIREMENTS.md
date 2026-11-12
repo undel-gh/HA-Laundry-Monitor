@@ -394,6 +394,12 @@ Repeated electrical reports shall not create synthetic door/vibration/leak trans
 
 ---
 
+## FR-065
+
+The public cycle state `error` shall indicate that **Laundry Monitor cannot reliably evaluate the cycle**, not that the washing machine has reported or been diagnosed with an appliance fault. In the current implementation, automatic entry to `error` follows prolonged unavailability or invalidity of the required power measurement after the configured grace period; reception of a usable power observation permits recovery to `idle`. The integration shall not claim to interpret washing-machine fault codes or identify mechanical/electronic defects. Leak detection and failures of optional sources shall remain independent of this cycle-state error policy.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001

@@ -52,6 +52,7 @@ Laundry Monitor shall support:
 Laundry Monitor shall not provide:
 
 - vendor-specific washing machine integration;
+- reading appliance fault codes or diagnosing mechanical/electronic washing-machine failures;
 - direct control of washing machines;
 - automatic plug shutdown;
 - notifications;
@@ -251,7 +252,9 @@ The integration should expose a user-facing state sensor.
 | `running` | Washing cycle is active. |
 | `final_spin` | A probable terminal spin sequence has been detected; the machine may still perform final spinning, draining, positioning, or end-of-program activity. |
 | `finished` | Washing cycle has finished. Laundry may still be inside the machine. |
-| `error` | Abnormal condition detected. |
+| `error` | Laundry Monitor cannot reliably evaluate the cycle because required monitoring input is unusable; this is not a washing-machine fault code. |
+
+Here, `error` describes **monitoring reliability**, not an appliance malfunction. Currently the automatic runtime trigger is a required power reading that remains missing, unknown, unavailable, invalid, or non-convertible beyond the configured power-unavailable grace period. Valid `0 W` is not an error. Receiving usable power permits `error → idle`; it does not certify that the washing machine is healthy or that a fault was repaired. Leak monitoring remains a separate signal and does not set the cycle state to `error`.
 
 The `finished` state remains active until the laundry is explicitly marked as removed by the user (if Laundry Tracking is enabled) or until a new cycle starts.
 
@@ -282,35 +285,35 @@ Internal states may evolve between releases without affecting the public API.
     idle
      ├─ door closed ─────────────→ armed
      ├─ confirmed start ─────────→ running
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     armed
      ├─ door opened ─────────────→ idle
      ├─ arming timeout ──────────→ idle
      ├─ confirmed start ─────────→ running
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     running
      ├─ final spin confirmed ────→ final_spin
      ├─ long inactivity fallback → finished
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     final_spin
      ├─ normal terminal activity ─→ final_spin
      ├─ cycle continuation confirmed → running
      ├─ inactivity confirmed ─────→ finished
-     └─ required source failure ──→ error
+     └─ power unusable past grace ──→ error
 
     finished
      ├─ new cycle confirmed ─────→ running
      ├─ mark unloaded ───────────→ idle
      ├─ retention elapsed
      │   when tracking disabled ─→ idle
-     └─ required source failure ─→ error
+     └─ power unusable past grace ─→ error
 
     error
-     └─ source recovered
-         and machine quiet ──────→ idle
+     └─ usable required
+         power reading ──────────→ idle
 ```
 
 ## 6.2 Transition table
@@ -328,7 +331,9 @@ Internal states may evolve between releases without affecting the public API.
 | `final_spin` | No activity timeout | `finished` | Cycle finished |
 | `finished` | Door opened | `finished` | Door opening is diagnostic only; it must not imply laundry removal |
 | `finished` | Mark unloaded | `idle` | Explicit user action via button or service |
-| Any | Leak detected | Same cycle state + leak alert | Leak engine is separate |
+| Any normal cycle state | Required power unusable beyond grace period | `error` | Monitoring is unreliable; this is not an appliance fault indication |
+| `error` | Usable required power observation | `idle` | Resume monitoring conservatively; this does not imply the appliance was repaired |
+| Any | Leak detected | Same cycle state | The separate leak layer updates its diagnostic state and emits `laundry_monitor.leak_detected`; notifications/alarms require user automations |
 
 ### 6.3 Laundry Tracking
 
