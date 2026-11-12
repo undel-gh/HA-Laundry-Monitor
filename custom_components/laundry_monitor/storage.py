@@ -94,20 +94,16 @@ class RuntimeSnapshot:
         """Deserialize and validate stored data."""
         try:
             cycle_state = LaundryCycleState(data["cycle_state"])
-            last_state_change = dt_util.parse_datetime(
+            last_state_change = _optional_aware_datetime(
                 data["last_state_change"]
             )
-            cycle_started_at = (
-                dt_util.parse_datetime(data["cycle_started_at"])
-                if data.get("cycle_started_at")
-                else None
+            cycle_started_at = _optional_aware_datetime(
+                data.get("cycle_started_at")
             )
             reason = str(data["last_transition_reason"])
             laundry_present = bool(data["laundry_present"])
-            last_unloaded_at = (
-                dt_util.parse_datetime(data["last_unloaded_at"])
-                if data.get("last_unloaded_at")
-                else None
+            last_unloaded_at = _optional_aware_datetime(
+                data.get("last_unloaded_at")
             )
             cycle_energy_start = _optional_finite_float(
                 data.get("cycle_energy_start")
@@ -257,7 +253,7 @@ def _optional_aware_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
     timestamp = dt_util.parse_datetime(value)
-    if timestamp is None or timestamp.tzinfo is None:
+    if timestamp is None or timestamp.utcoffset() is None:
         return None
     return timestamp
 
@@ -360,6 +356,12 @@ def select_recovery_state(
         LaundryCycleState.RUNNING,
         LaundryCycleState.FINAL_SPIN,
     }:
+        # An absent or invalid cycle start cannot support active recovery.
+        # Preserve the rest of the snapshot (e.g., laundry tracking), but
+        # fall back rather than restarting a cycle with unknown timing.
+        if snapshot.cycle_started_at is None:
+            return LaundryCycleState.IDLE
+
         if (
             max_active_snapshot_age_seconds is not None
             and age
