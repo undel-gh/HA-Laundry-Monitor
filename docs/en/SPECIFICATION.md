@@ -837,6 +837,10 @@ Diagnostics should include:
 * the persisted runtime snapshot;
 * rejected transition information.
 
+For each configured source, `sources[*].available` means the **observation is usable by Laundry Monitor**, not merely that Home Assistant has an entity state. `sources[*].entity_available` reports the underlying HA state availability (the entity exists and is neither `unknown` nor `unavailable`). Thus a numeric `45 V` power reading may have `entity_available=true` but `available=false`. The required-power unavailable list uses `available`, consistently with the runtime and Repairs unit validation. For current, the same validity check applies without promoting the optional source to required. Energy remains subject to its existing independent finite-numeric check; other optional binary/switch inputs retain normal Home Assistant availability semantics. A valid `0 W` or convertible `0 kW` remains usable. These flags are point-in-time diagnostics and do not themselves represent sample-age freshness.
+
+Raw source state, timestamps, canonical unit attributes and other allowed metadata remain unchanged. If a source is unconfigured, missing, `unknown` or `unavailable`, both availability flags are false (with `configured` retaining its existing meaning).
+
 Diagnostics must not expose credentials, tokens, unrelated Home Assistant configuration, or arbitrary source-entity attributes.
 
 ### 14.2 Debug logging
