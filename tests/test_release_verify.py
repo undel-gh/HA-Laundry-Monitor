@@ -168,14 +168,9 @@ def test_main_handles_missing_input_file(
     ],
 )
 def test_main_rejects_missing_or_invalid_cli_arguments(
-    tmp_path: Path,
     bad_arguments: list[str],
 ) -> None:
     """argparse rejects absent required options and invalid prerelease flags."""
-    argv = _cli_args(tmp_path)
-    if "--notes-file" not in bad_arguments:
-        # Preserve only the explicitly provided invalid or incomplete args.
-        argv = bad_arguments
     with pytest.raises(SystemExit) as exc:
-        main(argv)
+        main(bad_arguments)
     assert exc.value.code == 2
