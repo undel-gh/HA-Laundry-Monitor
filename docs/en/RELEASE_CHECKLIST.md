@@ -31,10 +31,14 @@ checklist for every release candidate (RC) and stable release.
 
 ## 2. Select scope and freeze a candidate
 
-- [ ] Identify the previous *published* release tag (not merely the
-      latest commit or an unannotated Git tag).
-- [ ] Review merged PRs and compare the candidate to that published tag;
-      distinguish already-shipped changes from changes still unreleased.
+- [ ] Identify the previous *published* release tag and the previous
+      **regular/stable** release, if any (not merely the latest commit or
+      an unannotated Git tag).
+- [ ] Review merged PRs. For an RC, describe the delta since the previous
+      published candidate; for stable, summarize everything regular-channel
+      users have not yet received since the last stable release (or project
+      baseline if none). Do not omit changes merely because they appeared
+      in an earlier RC.
 - [ ] Decide whether this is an **RC** (needs more field validation)
       or **stable** (supported behavior is validated). Do not call an RC
       stable just because CI is green.
@@ -132,8 +136,10 @@ The version above is **illustrative**, not an instruction to publish it now.
       It checks tag, manifest, changelog, notes, metadata and ancestry to
       `main`.
 - [ ] Verify installation/update using HACS and its prerelease opt-in
-      behavior, then monitor issues. Record the published tag, date,
-      CI link, smoke-test result and field-validation scope.
+      behavior, allowing for catalog/Marketplace refresh delays (and the
+      GitHub API polling interval for custom repositories). Do not mistake
+      expected publication latency for a broken release. Monitor issues;
+      record the tag, date, CI link, smoke-test and field-validation scope.
 
 ## 6. Rollback / incident procedure
 
