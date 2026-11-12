@@ -235,6 +235,8 @@ On each valid, newly reported power/current measurement, including one whose nor
 
 Listeners for both electrical report events and ordinary state changes are unregistered when the runtime stops.
 
+A valid repeated **power** report also runs the existing required-source recovery handling. In the unusual case where `error` was set manually while valid power was already cached, such a report can move the public state from `error` to `idle` with the generic `power_sensor_recovered` reason, even though the power source itself did not just recover. Normal automatic entry into `error` occurs only after required power has become unavailable; this edge case does not change that error policy or warrant a different transition rule.
+
 **Evidence limitation:** `state_reported` proves that the Home Assistant entity was republished; it does not independently prove a new physical measurement. An upstream MQTT/template/entity integration that republishes cached data without new device observations can therefore make that data appear fresh. For hybrid configuration, users must ensure that their source entity reports reflect actual device observations.
 
 ## 5. State Model
