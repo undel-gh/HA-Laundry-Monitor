@@ -62,6 +62,8 @@ Only the power sensor is mandatory. Optional sources must degrade cleanly when u
 
 Power and current readings are converted using Home Assistant unit converters to **W** and **A** before evaluation, including sensors reporting kW, mW, mA, or μA. When a source has no `unit_of_measurement` attribute, the existing assumption of W (power) or A (current) is retained for backward compatibility. An explicitly unsupported unit is treated as unavailable; it is never interpreted as a raw W/A value. Unit labels must match Home Assistant's canonical, case-sensitive strings exactly (for example `kW`, not `kw`; `μA` uses Greek μ, not the similar-looking micro sign `µ`). An invalid required power source also triggers an existing Repairs warning. Invalid or unsupported units on the optional current sensor only degrade current-based evidence and diagnostics; they do not create a Repairs issue or block power-only detection. Optional energy-sensor statistics retain their own source-unit handling.
 
+Valid repeated power/current reports count as fresh observations even when the numeric values stay unchanged (Home Assistant `state_changed` and `state_reported` events). This refreshes heating and electrical-spin evidence without creating vibration edges or broadcasting every identical sample to all diagnostic entities. A Home Assistant re-report does not by itself guarantee that the upstream device actually took a new physical measurement.
+
 ## Installation
 
 ### HACS
