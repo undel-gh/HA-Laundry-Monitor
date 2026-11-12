@@ -191,6 +191,15 @@ Opening the door does **not** automatically mean that the laundry was removed.
 
 ### Diagnostic entities
 
+To limit Recorder history, high-churn debug entities are disabled by default
+for new installations (previous entity-registry choices are preserved).
+Enable detailed power/current mirrors, activity timestamps, spin evidence,
+and finish timers only when investigating a problem. Unchanged states do not
+trigger HA writes even when the runtime notifies its entities. The public
+`current_cycle_duration` publishes exact values in five-minute elapsed-time
+buckets and immediately on cycle/phase transitions; internal detector timing
+and downloadable diagnostics are not throttled.
+
 **Laundry Monitor** also exposes diagnostic entities such as:
 
 - last transition reason and timestamp;
@@ -544,6 +553,15 @@ Released under the [MIT License](LICENSE).
 Открытие дверцы **не** означает автоматически, что бельё было извлечено.
 
 #### Диагностические сущности
+
+Для уменьшения нагрузки на Recorder часто меняющиеся отладочные сущности
+по умолчанию отключены в новых установках (существующие настройки реестра
+сохраняются). Подробную мощность/ток, метки активности, свидетельства отжима
+и таймеры завершения включайте только при необходимости. Неизменившиеся
+состояния не публикуются повторно. Публичная `current_cycle_duration`
+публикует точное время каждые пять минут прошедшего цикла и сразу при
+смене фаз/завершении; внутренние детекторы и скачиваемая диагностика
+работают с прежней точностью.
 
 Laundry Monitor также предоставляет диагностические сущности, в частности:
 
