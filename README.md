@@ -173,7 +173,8 @@ Entity IDs depend on the configured machine name.
 | `binary_sensor.<device>_running` | On in `running` and `final_spin`. |
 | `binary_sensor.<device>_finished` | On in `finished`. |
 | `binary_sensor.<device>_final_spin_detected` | Latches when terminal-spin evidence was detected during the cycle. |
-| `sensor.<device>_current_cycle_duration` | Elapsed duration of the current active cycle. |
+| `sensor.<device>_cycle_started_at` | Start timestamp of the active cycle; calculate elapsed time in the dashboard without publishing a new state every minute. |
+| `sensor.<device>_current_cycle_duration` | Legacy duration snapshot (disabled by default for new setups; not a live timer). |
 | `sensor.<device>_last_cycle_duration` | Duration of the most recently completed cycle. |
 | `sensor.<device>_last_cycle_energy` | Last-cycle energy when an energy source is configured. |
 
@@ -196,9 +197,11 @@ for new installations (previous entity-registry choices are preserved).
 Enable detailed power/current mirrors, activity timestamps, spin evidence,
 and finish timers only when investigating a problem. Unchanged states do not
 trigger HA writes even when the runtime notifies its entities. The public
-`current_cycle_duration` publishes exact values in five-minute elapsed-time
-buckets and immediately on cycle/phase transitions; internal detector timing
-and downloadable diagnostics are not throttled.
+`cycle_started_at` is published when an active cycle starts and cleared when
+it ends; an interface can calculate live elapsed time locally using its own
+clock. The legacy `current_cycle_duration` is disabled by default and, when
+enabled, changes only on lifecycle/phase transitions, not as time passes.
+Internal detector timing and downloadable diagnostics are not throttled.
 
 **Laundry Monitor** also exposes diagnostic entities such as:
 
@@ -536,7 +539,8 @@ Released under the [MIT License](LICENSE).
 | `binary_sensor.<device>_running` | Включён в состояниях `running` и `final_spin`. |
 | `binary_sensor.<device>_finished` | Включён в состоянии `finished`. |
 | `binary_sensor.<device>_final_spin_detected` | Фиксируется при обнаружении данных о завершающем отжиме во время цикла. |
-| `sensor.<device>_current_cycle_duration` | Прошедшая длительность текущего активного цикла. |
+| `sensor.<device>_cycle_started_at` | Время начала активного цикла; интерфейс может вычислять длительность локально без периодической записи состояний. |
+| `sensor.<device>_current_cycle_duration` | Устаревающий снимок длительности (по умолчанию отключён для новых установок, не является онлайн-таймером). |
 | `sensor.<device>_last_cycle_duration` | Длительность последнего завершённого цикла. |
 | `sensor.<device>_last_cycle_energy` | Энергопотребление последнего цикла при настроенном источнике энергии. |
 
@@ -558,10 +562,12 @@ Released under the [MIT License](LICENSE).
 по умолчанию отключены в новых установках (существующие настройки реестра
 сохраняются). Подробную мощность/ток, метки активности, свидетельства отжима
 и таймеры завершения включайте только при необходимости. Неизменившиеся
-состояния не публикуются повторно. Публичная `current_cycle_duration`
-публикует точное время каждые пять минут прошедшего цикла и сразу при
-смене фаз/завершении; внутренние детекторы и скачиваемая диагностика
-работают с прежней точностью.
+состояния не публикуются повторно. `cycle_started_at` публикуется при
+начале цикла и очищается после его завершения, а интерфейс может вычислять
+прошедшее время локально. Старая `current_cycle_duration` отключена
+по умолчанию; даже при включении она обновляется только при смене
+состояния/фазы, а не по таймеру. Внутренние детекторы и скачиваемая
+диагностика работают с прежней точностью.
 
 Laundry Monitor также предоставляет диагностические сущности, в частности:
 
