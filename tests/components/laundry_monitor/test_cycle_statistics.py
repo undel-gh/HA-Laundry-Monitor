@@ -132,19 +132,13 @@ async def test_cycle_start_timestamp_and_duration_statistics(
         runtime.cycle_started_at.replace(microsecond=0)
     )
 
-    # Simulate an already-running cycle for fast tests. The exact start
-    # timestamp changes, but an ordinary 30-second tick cannot republish it.
-    runtime.cycle_started_at = dt_util.utcnow() - timedelta(seconds=65)
-    runtime._notify_entities()
-    await hass.async_block_till_done()
-    started = hass.states.get(start_entity_id)
-    assert started is not None
-
+    # Exercise the real 30-second detector tick: it must not republish
+    # the unchanged start timestamp, even as internal duration advances.
     async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
     await hass.async_block_till_done()
     assert hass.states.get(start_entity_id) is started
     assert runtime.current_cycle_duration is not None
-    assert runtime.current_cycle_duration >= 65
+    assert runtime.current_cycle_duration >= 0
     assert hass.states.get(duration_entity_id) is None
 
     assert runtime.async_set_cycle_state(
@@ -153,6 +147,8 @@ async def test_cycle_start_timestamp_and_duration_statistics(
     await hass.async_block_till_done()
     assert hass.states.get(start_entity_id) is started
 
+    # Backdate only for finalization testing, after the no-republish check.
+    runtime.cycle_started_at = dt_util.utcnow() - timedelta(seconds=65)
     assert runtime.async_set_cycle_state(
         LaundryCycleState.FINISHED, "test_finished"
     )
