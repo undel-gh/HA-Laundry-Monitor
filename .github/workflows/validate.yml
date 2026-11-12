@@ -67,27 +67,79 @@ jobs:
           category: integration
 
   tests:
-    name: Tests
+    name: Core ${{ matrix.ha_core }} (${{ matrix.scope }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scope: minimum-smoke
+            ha_core: "2026.6.0"
+            fixture: "0.13.336"
+            requirements: requirements_test_min.txt
+          - scope: current-full
+            ha_core: "2026.10.4"
+            fixture: "0.13.375"
+            requirements: requirements_test.txt
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Set up Python
+      - name: Set up Python 3.14
         uses: actions/setup-python@v5
         with:
           python-version: "3.14"
           cache: pip
-          cache-dependency-path: requirements_test.txt
+          cache-dependency-path: ${{ matrix.requirements }}
 
-      - name: Install test dependencies
+      - name: Install Core-specific test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements_test.txt
+          python -m pip install -r ${{ matrix.requirements }}
+          python -m pip check
+
+      - name: Verify imported Home Assistant and fixture versions
+        env:
+          EXPECTED_HA: ${{ matrix.ha_core }}
+          EXPECTED_FIXTURE: ${{ matrix.fixture }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          from importlib import metadata
+
+          import homeassistant
+          from homeassistant.const import __version__ as imported_core_version
+
+          expected_core = os.environ["EXPECTED_HA"]
+          expected_fixture = os.environ["EXPECTED_FIXTURE"]
+          installed_core = metadata.version("homeassistant")
+          installed_fixture = metadata.version(
+              "pytest-homeassistant-custom-component"
+          )
+          print(f"Python: {sys.version}")
+          print(f"Home Assistant imported from: {homeassistant.__file__}")
+          print(f"Home Assistant imported Core version: {imported_core_version}")
+          print(f"Home Assistant distribution: {installed_core}")
+          print(f"Pytest fixture distribution: {installed_fixture}")
+          assert imported_core_version == expected_core
+          assert installed_core == expected_core
+          assert installed_fixture == expected_fixture
+          PY
 
       - name: Check Python syntax
         run: python -m compileall -q custom_components tests
 
-      - name: Run tests
-        run: python -m pytest -vv --tb=long -o log_cli=true --log-cli-level=DEBUG
+      - name: Minimum Core API smoke (reports, units, setup, persistence)
+        if: matrix.scope == 'minimum-smoke'
+        run: |
+          python -m pytest -vv --tb=short \
+            tests/components/laundry_monitor/test_source_freshness_runtime.py \
+            tests/components/laundry_monitor/test_measurement_units.py \
+            tests/components/laundry_monitor/test_config_flow.py \
+            tests/components/laundry_monitor/test_storage_integration.py
+
+      - name: Current Core full regression suite
+        if: matrix.scope == 'current-full'
+        run: python -m pytest -vv --tb=short
