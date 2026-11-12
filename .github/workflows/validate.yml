@@ -66,18 +66,21 @@ jobs:
         with:
           category: integration
 
-  tests:
-    name: Core ${{ matrix.ha_core }} (${{ matrix.scope }})
+  core_tests:
+    # The matrix jobs keep stable names across monthly Core version bumps.
+    name: Tests (${{ matrix.check_name }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
-          - scope: minimum-smoke
+          - check_name: minimum
+            scope: minimum-smoke
             ha_core: "2026.6.0"
             fixture: "0.13.336"
             requirements: requirements_test_min.txt
-          - scope: current-full
+          - check_name: current
+            scope: current-full
             ha_core: "2026.10.4"
             fixture: "0.13.375"
             requirements: requirements_test.txt
@@ -138,8 +141,28 @@ jobs:
             tests/components/laundry_monitor/test_source_freshness_runtime.py \
             tests/components/laundry_monitor/test_measurement_units.py \
             tests/components/laundry_monitor/test_config_flow.py \
-            tests/components/laundry_monitor/test_storage_integration.py
+            tests/components/laundry_monitor/test_storage_integration.py \
+            tests/components/laundry_monitor/test_sensor_metadata.py
 
       - name: Current Core full regression suite
         if: matrix.scope == 'current-full'
         run: python -m pytest -vv --tb=short
+
+  tests:
+    # Preserve the pre-existing required status "Tests" in branch protection.
+    # A matrix failure must make the aggregate gate fail, not merely skip it.
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: core_tests
+    if: always()
+
+    steps:
+      - name: Require both supported Core environments to pass
+        env:
+          CORE_TESTS_RESULT: ${{ needs.core_tests.result }}
+        run: |
+          echo "Core compatibility matrix result: $CORE_TESTS_RESULT"
+          if [ "$CORE_TESTS_RESULT" != "success" ]; then
+            echo "::error::One or more Home Assistant Core compatibility jobs failed."
+            exit 1
+          fi
