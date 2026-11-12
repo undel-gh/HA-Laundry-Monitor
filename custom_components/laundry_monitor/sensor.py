@@ -14,10 +14,10 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
+    PERCENTAGE,
     EntityCategory,
     UnitOfElectricCurrent,
     UnitOfPower,
-    UnitOfRatio,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
@@ -32,6 +32,17 @@ from .const import (
 from .entity import LaundryMonitorEntity
 from .heating import HeatingState
 from .runtime import LaundryMonitorRuntime
+
+
+# UnitOfRatio was introduced in Core 2026.7; HACS supports Core 2026.6+.
+# Preserve the enum on newer Core and use the equivalent legacy constant
+# on the minimum supported release.
+try:
+    from homeassistant.const import UnitOfRatio
+except ImportError:
+    _PERCENTAGE_UNIT = PERCENTAGE
+else:
+    _PERCENTAGE_UNIT = UnitOfRatio.PERCENTAGE
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -123,7 +134,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         key="final_spin_confidence",
         translation_key="final_spin_confidence",
         entity_registry_enabled_default=False,
-        native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
+        native_unit_of_measurement=_PERCENTAGE_UNIT,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: round(
             runtime.final_spin_confidence * 100,
