@@ -18,6 +18,7 @@ from homeassistant.const import (
 from homeassistant.core import (
     Event,
     EventStateChangedData,
+    EventStateReportedData,
     HomeAssistant,
     State,
     callback,
@@ -26,6 +27,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
+    async_track_state_report_event,
     async_track_time_interval,
 )
 from homeassistant.util import dt as dt_util
@@ -184,6 +186,10 @@ class LaundryMonitorRuntime:
     running_finish_detector: FinishDetector = field(init=False)
 
     _remove_source_listener: Callable[[], None] | None = field(
+        default=None,
+        init=False,
+    )
+    _remove_source_report_listener: Callable[[], None] | None = field(
         default=None,
         init=False,
     )
@@ -590,6 +596,22 @@ class LaundryMonitorRuntime:
                 self._async_source_state_changed,
             )
 
+        # HA emits state_reported (not state_changed) when a source writes an
+        # identical state and attributes. Only electrical observations need
+        # these reports; vibration/door/leak must remain edge-triggered.
+        electrical_sources = tuple(
+            entity_id
+            for source_key in (CONF_POWER_SENSOR, CONF_CURRENT_SENSOR)
+            if isinstance((entity_id := self.entry.data.get(source_key)), str)
+            and entity_id
+        )
+        if electrical_sources:
+            self._remove_source_report_listener = async_track_state_report_event(
+                self.hass,
+                electrical_sources,
+                self._async_electrical_state_reported,
+            )
+
         self._resume_lifecycle_after_start()
         _LOGGER.debug(
             "Laundry Monitor runtime ready for entry %s (%s): "
@@ -614,6 +636,9 @@ class LaundryMonitorRuntime:
         if self._remove_source_listener is not None:
             self._remove_source_listener()
             self._remove_source_listener = None
+        if self._remove_source_report_listener is not None:
+            self._remove_source_report_listener()
+            self._remove_source_report_listener = None
 
         self._cancel_pending_start_confirmation("runtime stopping")
         self._cancel_pending_finish_confirmation("runtime stopping")
@@ -908,35 +933,95 @@ class LaundryMonitorRuntime:
                 new_state.state if new_state is not None else None,
             )
 
-        if not self._update_source(entity_id, new_state):
-            return
+        self._process_source_observation(
+            entity_id,
+            new_state,
+            old_door_open=old_door_open,
+            old_leak=old_leak,
+        )
 
+    @callback
+    def _async_electrical_state_reported(
+        self,
+        event: Event[EventStateReportedData],
+    ) -> None:
+        """Count a real HA re-report as electrical freshness, not a new edge."""
+        entity_id = event.data["entity_id"]
+        state = event.data["new_state"]
+        # State reports carry a mutable State object. Ignore queued reports
+        # superseded by a later state change; that change has its own event.
+        if self.hass.states.get(entity_id) is not state:
+            return
+        self._process_source_observation(
+            entity_id,
+            state,
+            old_door_open=self.door_open,
+            old_leak=self.leak_detected,
+        )
+
+    @callback
+    def _process_source_observation(
+        self,
+        entity_id: str,
+        state: State | None,
+        *,
+        old_door_open: bool | None,
+        old_leak: bool,
+    ) -> None:
+        """Handle new source evidence separately from changes in its value."""
+        value_changed = self._update_source(entity_id, state)
         power_entity = self.entry.data.get(CONF_POWER_SENSOR)
         current_entity = self.entry.data.get(CONF_CURRENT_SENSOR)
         door_entity = self.entry.data.get(CONF_DOOR_SENSOR)
         vibration_entity = self.entry.data.get(CONF_VIBRATION_SENSOR)
+        is_power = entity_id == power_entity
+        is_current = entity_id == current_entity
 
-        if entity_id == power_entity:
+        # Only a valid new electrical observation can refresh the detectors
+        # without a value change. A repeated unavailable/invalid reading must
+        # not reset any timer or masquerade as a fresh measurement.
+        if not value_changed and not (
+            (is_power and self.power is not None)
+            or (is_current and self.current is not None)
+        ):
+            return
+
+        if is_power:
             self._handle_power_update()
-        elif entity_id == current_entity:
+        elif is_current:
             self._handle_current_update()
         elif entity_id == door_entity:
             self._handle_door_update(old_door_open)
 
         if entity_id in (power_entity, current_entity, vibration_entity):
             now = dt_util.utcnow()
+            previous_heating = (
+                self.heating_detector.state,
+                self.heating_detector.heating_active,
+            )
+            previous_candidate = self.electrical_spin_detector.candidate
             self._evaluate_heating_context(
-                power_updated=entity_id == power_entity,
+                power_updated=is_power,
                 now=now,
             )
             self._evaluate_electrical_spin_candidate(
-                power_updated=entity_id == power_entity,
-                current_updated=entity_id == current_entity,
+                power_updated=is_power,
+                current_updated=is_current,
                 now=now,
             )
             spin_transitioned = self._evaluate_spin(now=now)
             if not spin_transitioned:
-                self._evaluate_finish()
+                if value_changed:
+                    self._evaluate_finish()
+                elif (
+                    previous_heating
+                    != (self.heating_detector.state, self.heating_detector.heating_active)
+                    or previous_candidate != self.electrical_spin_detector.candidate
+                ):
+                    # Publish a real detector change, but not every repeated
+                    # sample. Activity timestamps refresh internally and can
+                    # be displayed at the next scheduled/public update.
+                    self._notify_entities()
 
         if not old_leak and self.leak_detected:
             self.hass.bus.async_fire(
@@ -949,7 +1034,8 @@ class LaundryMonitorRuntime:
                 },
             )
 
-        self._notify_entities()
+        if value_changed:
+            self._notify_entities()
 
     @callback
     def _handle_power_update(self) -> None:
