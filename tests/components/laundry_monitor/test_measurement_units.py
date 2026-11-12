@@ -64,6 +64,17 @@ async def _setup_entry(
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+
+    # These tests explicitly validate the optional published W/A diagnostics.
+    # Normal installs keep both mirrors disabled to reduce Recorder traffic.
+    registry = er.async_get(hass)
+    for key in ("current_power", "current"):
+        entity_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_{key}"
+        )
+        assert entity_id is not None
+        registry.async_update_entity(entity_id, disabled_by=None)
+    await hass.async_block_till_done()
     return entry
 
 
