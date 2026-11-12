@@ -301,6 +301,7 @@ async def test_required_power_diagnostics_match_runtime_and_repairs_at_setup(
     ("raw", "unit", "expected"),
     [
         ("0", UnitOfPower.WATT, 0.0),
+        ("0", UnitOfPower.KILO_WATT, 0.0),
         ("0.045", UnitOfPower.KILO_WATT, 45.0),
         ("250", UnitOfPower.MILLIWATT, 0.25),
         ("45", None, 45.0),
