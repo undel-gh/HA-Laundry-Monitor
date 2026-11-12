@@ -104,7 +104,7 @@ Persistent runtime snapshots and recovery-state selection after Home Assistant r
 Shared base entity/device metadata and per-entity change suppression for runtime notifications (Recorder write reduction).
 
 ### `sensor.py`
-Sensor entities: public cycle state, durations/statistics, raw/diagnostic power/current values, last-activity timestamps, transition information, spin/finish diagnostics, etc.
+Sensor entities: public cycle state and active-cycle start timestamp (for frontend-local elapsed time), legacy transition-only duration, finalized statistics, raw/diagnostic power/current values, last-activity timestamps, transition information, spin/finish diagnostics, etc.
 
 ### `binary_sensor.py`
 Binary entities such as running, finished, final-spin-detected, meaningful activity/source-specific activity, laundry presence, and optional leak status.
@@ -166,7 +166,7 @@ Snapshot serialization, persistence age/validation, and restart recovery decisio
 Config/reconfigure/options UI validation, duplicate or invalid source handling, and option constraints.
 
 ### `test_entities.py`
-Entity creation, availability, state/value exposure, device linkage, Laundry Tracking entities, and `test_recorder_publication.py` for Recorder write suppression and duration publication buckets.
+Entity creation, availability, state/value exposure, device linkage, Laundry Tracking entities, and `test_recorder_publication.py` for Recorder write suppression and timestamp-driven UI duration (no periodic elapsed-time writes).
 
 ### `test_init.py`
 Integration setup/unload/reload and runtime lifecycle.
