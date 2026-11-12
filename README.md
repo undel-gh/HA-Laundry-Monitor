@@ -321,6 +321,8 @@ Use **Download diagnostics** on the integration or device to obtain a point-in-t
 - persisted runtime snapshot;
 - rejected-transition information.
 
+In downloaded `sources`, `available` means the reading is usable by Laundry Monitor; `entity_available` means HA exposes an entity state other than `unknown`/`unavailable`. A numeric power reading with an unsupported unit can have `entity_available=true` and `available=false`; it then appears in `required_sources_unavailable`. Raw states, units and timestamps remain visible.
+
 ### Repairs
 
 If the required power source remains unavailable, Laundry Monitor can create a Home Assistant Repairs issue. Brief outages are tolerated according to the configured grace period.
@@ -672,6 +674,8 @@ automation:
 - статистики циклов;
 - сохранённого снимка состояния;
 - информации об отклонённых переходах.
+
+В скачиваемом разделе `sources` поле `available` означает пригодность измерения для Laundry Monitor, а `entity_available` — наличие состояния сущности HA, отличного от `unknown`/`unavailable`. Числовое значение мощности с неподдерживаемой единицей может иметь `entity_available=true` и `available=false`; тогда обязательный источник попадает в `required_sources_unavailable`. Исходные значения, единицы и временные метки сохраняются.
 
 #### Repairs
 

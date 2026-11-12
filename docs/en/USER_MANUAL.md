@@ -757,6 +757,8 @@ Diagnostics can include:
 - persisted snapshot information;
 - rejected transitions.
 
+For each `sources` entry in downloadable diagnostics, `available` means the reading is **usable by Laundry Monitor**, while `entity_available` means Home Assistant exposes a state other than `unknown`/`unavailable`. A numeric power reading with incompatible units (for example `45 V`) can therefore have `entity_available=true` but `available=false`; it will also appear in `required_sources_unavailable`. Invalid optional current affects only that source. The export preserves the original state, unit and timestamps to help identify the cause. Energy values are checked independently, without conversion into W/A.
+
 For hybrid issues, enable the disabled hybrid diagnostic entities before collecting cycle history when practical.
 
 ---
