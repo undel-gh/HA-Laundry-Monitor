@@ -203,6 +203,25 @@ Source availability and source value are distinct concepts.
 
 This distinction is intentional. For example, a smart plug that is reachable and reports `0 W` after its output has been switched off is providing valid information: no power is being delivered to the washing machine. A source that is `unavailable` provides no equivalent evidence about the machine's actual electrical state.
 
+### 4.5 Measurement units and canonical values
+
+Source power and optional current measurements are normalized at the Home Assistant state boundary, before activity, cycle-start, heating, electrical spin and finish evaluation. The canonical runtime units and the corresponding diagnostic sensor units are **W** for power and **A** for current. All user-configured power/current thresholds are expressed in those canonical units.
+
+- Home Assistant's `PowerConverter` and `ElectricCurrentConverter` perform conversion according to the installed Core version. Examples: `250 mW → 0.25 W`, `0.12 kW → 120 W`, `500 mA → 0.5 A`, and `250000 μA → 0.25 A`.
+- A missing `unit_of_measurement` attribute is interpreted as W or A to preserve support for legacy unitless source sensors; a **declared** unit is never silently reinterpreted.
+- Declared units must match Home Assistant's canonical, case-sensitive symbols. For example, `kW` is valid but `kw` is not; `μA` uses Greek small letter mu (U+03BC), not micro sign `µ` (U+00B5). The supported-unit set is determined by the installed Core version, not by a Laundry Monitor-maintained conversion table.
+- Unknown or incompatible units (e.g. `V`, `VA` for active power, `W `, or `watt`) are unusable. Non-numeric/non-finite raw values and values overflowing to non-finite results after conversion are also unusable. They must not count toward threshold evaluation or be synthesized as zero.
+- Valid numeric zero remains a valid observation after conversion; `0 W` is different from `unknown` or an invalid unit.
+- Energy-source readings and their per-cycle energy statistics retain their independent source-unit handling; they are **not** converted to W/A.
+
+### 4.6 Invalid source units, degraded operation and Repairs
+
+A power reading that cannot be normalized is unavailable **to the detector**, even when Home Assistant still displays a finite numeric state. It follows the existing required-power unavailable grace/error path and triggers the existing `required_source_unavailable` Repairs issue. The issue is cleared when a usable reading is received; the issue text explains that invalid units are a possible cause. No separate issue type is introduced.
+
+The current sensor is optional: when its unit or value is invalid, current evidence and diagnostics become unavailable; monitoring continues using valid power without a current-source Repairs issue. This preserves the optional-source degradation policy from §4.3.
+
+This change does **not** alter source event freshness or sampling cadence: repeated-value/report handling remains governed by the existing source-update policy and is tracked separately.
+
 ## 5. State Model
 ### 5.1 Public states
 
