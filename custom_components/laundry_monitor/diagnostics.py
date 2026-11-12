@@ -23,6 +23,7 @@ from .const import (
     CONF_VIBRATION_SENSOR,
 )
 from .runtime import LaundryMonitorRuntime
+from .source_units import normalized_current, normalized_power, state_as_float
 
 type LaundryMonitorConfigEntry = ConfigEntry[LaundryMonitorRuntime]
 
@@ -52,16 +53,18 @@ def _source_diagnostics(
     hass: HomeAssistant,
     entity_id: str | None,
     *,
+    source_key: str,
     required: bool,
     numeric: bool,
 ) -> dict[str, Any]:
-    """Return diagnostics for one configured source entity."""
+    """Report HA availability separately from detector-usable measurements."""
     if not entity_id:
         return {
             "configured": False,
             "required": required,
             "entity_id": None,
             "available": False,
+            "entity_available": False,
             "state": None,
             "last_changed": None,
             "last_updated": None,
@@ -76,21 +79,33 @@ def _source_diagnostics(
             "required": required,
             "entity_id": entity_id,
             "available": False,
+            "entity_available": False,
             "state": None,
             "last_changed": None,
             "last_updated": None,
             "attributes": {},
         }
 
-    valid_state = state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
-    if numeric and valid_state:
-        valid_state = _is_numeric_state(state.state)
+    # A source can exist and report a valid HA state while using an
+    # incompatible measurement unit. In that case it is not usable by the
+    # runtime, even though HA still considers the entity available.
+    entity_available = state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
+    if source_key == CONF_POWER_SENSOR:
+        usable = normalized_power(state) is not None
+    elif source_key == CONF_CURRENT_SENSOR:
+        usable = normalized_current(state) is not None
+    elif numeric:
+        # Energy is independently numeric; do not interpret it as W/A.
+        usable = state_as_float(state) is not None
+    else:
+        usable = entity_available
 
     return {
         "configured": True,
         "required": required,
         "entity_id": entity_id,
-        "available": valid_state,
+        "available": usable,
+        "entity_available": entity_available,
         "state": state.state,
         "last_changed": state.last_changed.isoformat(),
         "last_updated": state.last_updated.isoformat(),
@@ -100,15 +115,6 @@ def _source_diagnostics(
             if key in state.attributes
         },
     }
-
-
-def _is_numeric_state(value: str) -> bool:
-    """Return whether a sensor state is a finite number."""
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return False
-    return number == number and number not in (float("inf"), float("-inf"))
 
 
 async def _async_build_diagnostics(
@@ -122,6 +128,7 @@ async def _async_build_diagnostics(
         source_key: _source_diagnostics(
             hass,
             entry.data.get(source_key),
+            source_key=source_key,
             required=required,
             numeric=numeric,
         )
