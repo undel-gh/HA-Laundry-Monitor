@@ -290,7 +290,7 @@ For detailed behavior and invariants, use the canonical English documentation.
 - [`docs/en/USER_MANUAL.md`](docs/en/USER_MANUAL.md) — English user-facing manual.
 - [`docs/ru/USER_MANUAL.md`](docs/ru/USER_MANUAL.md) — Russian user-facing manual.
 
-When looking for implementation details, start with [`PROJECT_MAP.md`](PROJECT_MAP.md) instead of scanning the repository.
+When looking for implementation details, start with [`PROJECT_MAP.md`](PROJECT_MAP.md) instead of scanning the repository. English documentation always remains canonical.
 
 ## Troubleshooting
 
