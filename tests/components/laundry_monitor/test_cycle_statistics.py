@@ -384,6 +384,16 @@ async def test_active_cycle_statistics_survive_real_store_reload(
     assert restored.current_cycle_duration is not None
     assert restored.current_cycle_duration >= 3600
 
+    # Recovery publishes the original start timestamp, not the reload time.
+    restored_start = hass.states.get(
+        _entity_id(hass, "sensor", entry, "cycle_started_at")
+    )
+    assert restored_start is not None
+    assert (
+        dt_util.parse_datetime(restored_start.state)
+        == restored.cycle_started_at
+    )
+
     assert restored.async_set_cycle_state(
         LaundryCycleState.FINISHED,
         "test_finished",
@@ -392,6 +402,9 @@ async def test_active_cycle_statistics_survive_real_store_reload(
 
     assert restored.last_cycle_duration is not None
     assert restored.last_cycle_duration >= 3600
+    assert hass.states.get(
+        _entity_id(hass, "sensor", entry, "cycle_started_at")
+    ).state == "unknown"
     assert restored.last_cycle_energy == 0.4
     assert (
         restored.last_cycle_energy_unit
