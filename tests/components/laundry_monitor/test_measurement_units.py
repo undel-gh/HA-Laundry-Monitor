@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from homeassistant.const import (
@@ -20,6 +21,11 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.laundry_monitor.sensor import (
+    CURRENT_SENSOR_DESCRIPTIONS,
+    SENSOR_DESCRIPTIONS,
+    LaundryMonitorSensor,
+)
 from custom_components.laundry_monitor.const import (
     CONF_CURRENT_SENSOR,
     CONF_ENERGY_SENSOR,
@@ -64,20 +70,33 @@ async def _setup_entry(
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
+
     return entry
 
 
 def _diagnostic_state(
     hass: HomeAssistant, entry: MockConfigEntry, key: str
 ):
-    """Find the diagnostic entity by stable unique ID."""
+    """Inspect a debug sensor value even when HA registry disables it."""
     entity_id = er.async_get(hass).async_get_entity_id(
         "sensor", DOMAIN, f"{entry.entry_id}_{key}"
     )
     assert entity_id is not None
-    state = hass.states.get(entity_id)
-    assert state is not None
-    return state
+    description = next(
+        description
+        for description in (*SENSOR_DESCRIPTIONS, *CURRENT_SENSOR_DESCRIPTIONS)
+        if description.key == key
+    )
+    # The sensor's value/unit contract remains usable when explicitly
+    # enabled, but new installs do not publish this mirror to Recorder.
+    sensor = LaundryMonitorSensor(entry.runtime_data, description)
+    value = sensor.native_value
+    return SimpleNamespace(
+        state="unknown" if value is None else str(value),
+        attributes={
+            ATTR_UNIT_OF_MEASUREMENT: sensor.native_unit_of_measurement
+        },
+    )
 
 
 def _set_measurement(
@@ -193,6 +212,50 @@ async def test_invalid_current_unit_degrades_to_power_only(
     assert runtime.current_activity_detected is None
     assert runtime.activity_detected is False
     assert _diagnostic_state(hass, entry, "current").state == "unknown"
+
+
+async def test_opted_in_power_mirror_publishes_normalized_state(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """A previously disabled debug sensor publishes after explicit opt-in."""
+    entry = await _setup_entry(hass)
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, f"{entry.entry_id}_current_power"
+    )
+    assert entity_id is not None
+    registry_entry = registry.async_get(entity_id)
+    assert registry_entry is not None
+    assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entity_id) is None
+
+    registry.async_update_entity(entity_id, disabled_by=None)
+    assert registry.async_get(entity_id).disabled_by is None
+
+    # Disabled entities are not instantiated until the integration reloads.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    initial = hass.states.get(entity_id)
+    assert initial is not None
+    assert float(initial.state) == pytest.approx(0.25)
+
+    _set_measurement(hass, _POWER_ENTITY, "0.12", UnitOfPower.KILO_WATT)
+    await hass.async_block_till_done()
+    converted = hass.states.get(entity_id)
+    assert converted is not None
+    assert float(converted.state) == pytest.approx(120.0)
+    assert (
+        converted.attributes[ATTR_UNIT_OF_MEASUREMENT]
+        == UnitOfPower.WATT
+    )
+
+    _set_measurement(hass, _POWER_ENTITY, "45", "V")
+    await hass.async_block_till_done()
+    invalid = hass.states.get(entity_id)
+    assert invalid is not None
+    assert invalid.state == "unknown"
 
 
 async def test_unit_change_is_processed_even_if_raw_number_is_unchanged(

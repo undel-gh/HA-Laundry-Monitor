@@ -121,6 +121,22 @@ The supported unit list is determined by the installed Home Assistant Core versi
 
 For FR-063/064, **new observation** and **value change** must be tracked independently. Runtime listens for both `state_changed` and `state_reported` for power/current; a same-value or attribute-only electrical report updates the activity, heating and rolling electrical evidence without a generic entity-publication broadcast. Invalid/unavailable repeated values cannot refresh evidence. Vibration/door/leak remain change/edge driven and must never gain synthetic events from identical re-reports. The report listener is removed on unload, and periodic detector evaluations must not impersonate new sensor reports.
 
+Recorder/write amplification is handled at the entity publication boundary,
+not by changing detector input processing or persistence. The per-entry
+runtime dispatcher may still notify all registered entities, but each enabled
+entity compares its own observable value and (for sensors) dynamic unit before
+calling `async_write_ha_state()`. High-churn debug entities are disabled in
+new installations unless explicitly enabled. The default-enabled
+`cycle_started_at` timestamp is emitted on active-cycle start and becomes
+unknown after the active cycle ends; it is stable through terminal-phase
+transitions and valid restarts. A frontend should compute live elapsed time
+locally from this timestamp. The legacy `current_cycle_duration` entity is
+disabled on new registrations and, when enabled, publishes a point-in-time
+duration on lifecycle/phase changes only, never by elapsed-time buckets.
+The internal detector tick remains every 30 seconds. Entity Registry
+preferences on existing installations are not overwritten. Downloadable
+diagnostics and recovery snapshot persistence are unaffected.
+
 The physical-sampling guarantee ends at the Home Assistant source boundary: `state_reported` identifies a new HA entity publication, not necessarily a new hardware sample. Upstream cached-value republishing must be avoided or accounted for when selecting sources and configuring freshness limits.
 
 ---

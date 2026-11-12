@@ -66,6 +66,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     LaundryMonitorSensorDescription(
         key="current_power",
         translation_key="current_power",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -73,8 +74,22 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         value_fn=lambda runtime: runtime.power,
     ),
     LaundryMonitorSensorDescription(
+        key="cycle_started_at",
+        translation_key="cycle_started_at",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda runtime: (
+            runtime.cycle_started_at
+            if runtime.cycle_state
+            in (LaundryCycleState.RUNNING, LaundryCycleState.FINAL_SPIN)
+            else None
+        ),
+    ),
+    LaundryMonitorSensorDescription(
         key="current_cycle_duration",
         translation_key="current_cycle_duration",
+        # Compatibility-only value: never refreshed just because time passes.
+        # Use cycle_started_at and UI-local time for a live timer instead.
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
@@ -91,6 +106,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     LaundryMonitorSensorDescription(
         key="last_activity",
         translation_key="last_activity",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.last_activity,
@@ -98,6 +114,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     LaundryMonitorSensorDescription(
         key="last_power_activity",
         translation_key="last_power_activity",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.last_power_activity,
@@ -105,6 +122,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     LaundryMonitorSensorDescription(
         key="final_spin_confidence",
         translation_key="final_spin_confidence",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=UnitOfRatio.PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: round(
@@ -114,6 +132,7 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     LaundryMonitorSensorDescription(
         key="final_spin_evidence_count",
         translation_key="final_spin_evidence_count",
+        entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.final_spin_evidence_count,
     ),
@@ -153,18 +172,21 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
     ),
     LaundryMonitorSensorDescription(
         key="finish_quiet_since", translation_key="finish_quiet_since",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.finish_quiet_since,
     ),
     LaundryMonitorSensorDescription(
         key="finish_deadline", translation_key="finish_deadline",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.finish_deadline,
     ),
     LaundryMonitorSensorDescription(
         key="finish_remaining", translation_key="finish_remaining",
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.finish_remaining_seconds,
@@ -189,6 +211,7 @@ CURRENT_SENSOR_DESCRIPTIONS: tuple[
     LaundryMonitorSensorDescription(
         key="current",
         translation_key="current",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.CURRENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -198,6 +221,7 @@ CURRENT_SENSOR_DESCRIPTIONS: tuple[
     LaundryMonitorSensorDescription(
         key="last_current_activity",
         translation_key="last_current_activity",
+        entity_registry_enabled_default=False,
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.last_current_activity,
@@ -286,3 +310,19 @@ class LaundryMonitorSensor(LaundryMonitorEntity, SensorEntity):
     def native_value(self) -> str | int | float | datetime | None:
         """Return the sensor value."""
         return self.entity_description.value_fn(self.runtime)
+
+    def _runtime_state_signature(self) -> object:
+        """Identify changes without publishing every transient derived value."""
+        value = self.native_value
+        if self.entity_description.key == "current_cycle_duration":
+            # Legacy sensor: provide a point-in-time duration on lifecycle
+            # changes only, without creating any periodic Recorder states.
+            # The timestamp sensor is the authoritative live UI input.
+            return (
+                self.available,
+                self.runtime.cycle_state,
+                self.runtime.cycle_started_at,
+                self.native_unit_of_measurement,
+            )
+        # Last-cycle energy can change its unit without changing its value.
+        return (self.available, value, self.native_unit_of_measurement)

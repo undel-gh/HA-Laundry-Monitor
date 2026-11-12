@@ -97,39 +97,66 @@ async def _async_setup_entry(
     return entry
 
 
-async def test_duration_statistics_and_periodic_entity_update(
+async def test_cycle_start_timestamp_and_duration_statistics(
     hass: HomeAssistant,
     enable_custom_integrations: None,
 ) -> None:
-    """Test live duration updates and duration finalization."""
+    """Publish start/end timestamps, not periodic elapsed-duration states."""
     entry = await _async_setup_entry(hass)
     runtime = entry.runtime_data
+    start_entity_id = _entity_id(hass, "sensor", entry, "cycle_started_at")
+    duration_entity_id = _entity_id(
+        hass, "sensor", entry, "current_cycle_duration"
+    )
+    registry = er.async_get(hass)
+
+    initial = hass.states.get(start_entity_id)
+    assert initial is not None
+    assert initial.state == "unknown"
+    duration_registry_entry = registry.async_get(duration_entity_id)
+    assert duration_registry_entry is not None
+    assert (
+        duration_registry_entry.disabled_by
+        is er.RegistryEntryDisabler.INTEGRATION
+    )
+    assert hass.states.get(duration_entity_id) is None
 
     assert runtime.async_set_cycle_state(
-        LaundryCycleState.RUNNING,
-        "test_started",
+        LaundryCycleState.RUNNING, "test_started"
     )
     await hass.async_block_till_done()
 
+    started = hass.states.get(start_entity_id)
+    assert started is not None
+    assert dt_util.parse_datetime(started.state) == (
+        runtime.cycle_started_at.replace(microsecond=0)
+    )
+
+    # Exercise the real 30-second detector tick: it must not republish
+    # the unchanged start timestamp, even as internal duration advances.
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))
+    await hass.async_block_till_done()
+    assert hass.states.get(start_entity_id) is started
+    assert runtime.current_cycle_duration is not None
+    assert runtime.current_cycle_duration >= 0
+    assert hass.states.get(duration_entity_id) is None
+
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.FINAL_SPIN, "test_final_spin"
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get(start_entity_id) is started
+
+    # Backdate only for finalization testing, after the no-republish check.
     runtime.cycle_started_at = dt_util.utcnow() - timedelta(seconds=65)
-    async_fire_time_changed(
-        hass,
-        dt_util.utcnow() + timedelta(seconds=31),
-    )
-    await hass.async_block_till_done()
-
-    current_duration = hass.states.get(
-        _entity_id(hass, "sensor", entry, "current_cycle_duration")
-    )
-    assert current_duration is not None
-    assert float(current_duration.state) >= 65
-
     assert runtime.async_set_cycle_state(
-        LaundryCycleState.FINISHED,
-        "test_finished",
+        LaundryCycleState.FINISHED, "test_finished"
     )
     await hass.async_block_till_done()
 
+    completed = hass.states.get(start_entity_id)
+    assert completed is not None
+    assert completed.state == "unknown"
     assert runtime.current_cycle_duration is None
     assert runtime.last_cycle_duration is not None
     assert runtime.last_cycle_duration >= 65
@@ -355,6 +382,16 @@ async def test_active_cycle_statistics_survive_real_store_reload(
     assert restored.current_cycle_duration is not None
     assert restored.current_cycle_duration >= 3600
 
+    # Recovery publishes the original start timestamp, not the reload time.
+    restored_start = hass.states.get(
+        _entity_id(hass, "sensor", entry, "cycle_started_at")
+    )
+    assert restored_start is not None
+    assert (
+        dt_util.parse_datetime(restored_start.state)
+        == restored.cycle_started_at.replace(microsecond=0)
+    )
+
     assert restored.async_set_cycle_state(
         LaundryCycleState.FINISHED,
         "test_finished",
@@ -363,6 +400,9 @@ async def test_active_cycle_statistics_survive_real_store_reload(
 
     assert restored.last_cycle_duration is not None
     assert restored.last_cycle_duration >= 3600
+    assert hass.states.get(
+        _entity_id(hass, "sensor", entry, "cycle_started_at")
+    ).state == "unknown"
     assert restored.last_cycle_energy == 0.4
     assert (
         restored.last_cycle_energy_unit

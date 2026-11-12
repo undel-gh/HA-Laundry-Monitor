@@ -139,6 +139,9 @@
       "last_rejected_transition": {
         "name": "Последний отклонённый переход"
       },
+      "cycle_started_at": {
+        "name": "Время начала цикла"
+      },
       "current_cycle_duration": {
         "name": "Текущая длительность цикла"
       },

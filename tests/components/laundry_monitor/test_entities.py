@@ -86,15 +86,10 @@ async def test_base_entities_are_created(
         ("sensor", "cycle_state"): "idle",
         ("sensor", "last_transition_reason"): "initial_setup",
         ("sensor", "last_unloaded_at"): "unknown",
-        ("sensor", "current"): "0.0",
-        ("sensor", "last_current_activity"): "unknown",
-        ("sensor", "last_power_activity"): "unknown",
         ("binary_sensor", "running"): STATE_OFF,
         ("binary_sensor", "finished"): STATE_OFF,
         ("binary_sensor", "leak"): STATE_OFF,
         ("binary_sensor", "laundry_present"): STATE_OFF,
-        ("binary_sensor", "power_activity_detected"): STATE_OFF,
-        ("binary_sensor", "current_activity_detected"): STATE_OFF,
         ("button", "mark_unloaded"): "unknown",
     }
 
@@ -108,6 +103,26 @@ async def test_base_entities_are_created(
     )
     assert timestamp_state is not None
     assert timestamp_state.state not in ("unknown", "unavailable")
+
+    # High-churn diagnostics still have registry entries but are disabled on
+    # new installations; users may opt in to them for field investigations.
+    registry = er.async_get(hass)
+    for platform, key in (
+        ("sensor", "current"),
+        ("sensor", "current_power"),
+        ("sensor", "last_activity"),
+        ("sensor", "last_power_activity"),
+        ("sensor", "last_current_activity"),
+        ("sensor", "final_spin_evidence_count"),
+        ("sensor", "finish_remaining"),
+        ("binary_sensor", "power_activity_detected"),
+        ("binary_sensor", "current_activity_detected"),
+    ):
+        entity_id = _entity_id(hass, platform, entry, key)
+        registry_entry = registry.async_get(entity_id)
+        assert registry_entry is not None
+        assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+        assert hass.states.get(entity_id) is None
 
 
 async def test_current_entities_require_configured_source(

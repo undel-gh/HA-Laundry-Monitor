@@ -621,7 +621,8 @@ Users may create their own automations based on the leak event.
 |sensor.<device>_last_transition_reason	|Power above start threshold|
 |sensor.<device>_confidence	|94|
 |sensor.<device>_current_power	|38.2 W|
-|sensor.<device>_current_cycle_duration	|01:24:12|
+|sensor.<device>_cycle_started_at	|2026-11-12T12:00:00+00:00 (active cycle)|
+|sensor.<device>_current_cycle_duration	|Legacy elapsed-seconds snapshot (not live)|
 |sensor.<device>_last_activity	|timestamp|
 |sensor.<device>_last_cycle_duration	|02:11:34|
 |sensor.<device>_last_cycle_energy	|0.82 kWh|
@@ -642,23 +643,25 @@ timing, evidence, and state-machine decisions.
 
 | Entity | Purpose | Availability | Enabled by default |
 |---|---|---|---|
+| `sensor.<device>_cycle_started_at` | Start timestamp of the active logical cycle; unknown otherwise | Always | Yes |
+| `sensor.<device>_current_cycle_duration` | Legacy point-in-time elapsed duration, not a live timer | Always | No |
 | `sensor.<device>_last_transition_reason` | Reason for the most recent accepted public-state transition | Always | Yes |
 | `sensor.<device>_last_state_change` | Timestamp of the most recent public-state transition | Always | Yes |
-| `sensor.<device>_current_power` | Normalized value of the required power source | Always | Yes |
-| `sensor.<device>_last_activity` | Timestamp of the most recent meaningful electrical activity | Always | Yes |
-| `sensor.<device>_last_power_activity` | Timestamp of the most recent power-based activity | Always | Yes |
-| `sensor.<device>_final_spin_confidence` | Diagnostic confidence reported by the spin detector | Always | Yes |
-| `sensor.<device>_final_spin_evidence_count` | Current vibration-evidence count inside the spin window | Always | Yes |
-| `sensor.<device>_finish_quiet_since` | Start of the currently observed finish-confirmation quiet period | Always | Yes |
-| `sensor.<device>_finish_deadline` | Current finish-confirmation deadline | Always | Yes |
-| `sensor.<device>_finish_remaining` | Remaining finish-confirmation time | Always | Yes |
+| `sensor.<device>_current_power` | Normalized value of the required power source | Always | No |
+| `sensor.<device>_last_activity` | Timestamp of the most recent meaningful electrical activity | Always | No |
+| `sensor.<device>_last_power_activity` | Timestamp of the most recent power-based activity | Always | No |
+| `sensor.<device>_final_spin_confidence` | Diagnostic confidence reported by the spin detector | Always | No |
+| `sensor.<device>_final_spin_evidence_count` | Current vibration-evidence count inside the spin window | Always | No |
+| `sensor.<device>_finish_quiet_since` | Start of the currently observed finish-confirmation quiet period | Always | No |
+| `sensor.<device>_finish_deadline` | Current finish-confirmation deadline | Always | No |
+| `sensor.<device>_finish_remaining` | Remaining finish-confirmation time | Always | No |
 | `sensor.<device>_rejected_transition_count` | Number of rejected state-machine transitions | Always | Yes |
 | `sensor.<device>_last_rejected_transition` | Most recent rejected transition and reason | Always | Yes |
 | `binary_sensor.<device>_activity_detected` | Combined meaningful electrical-activity state | Always | Yes |
-| `binary_sensor.<device>_power_activity_detected` | Power-based activity state | Always | Yes |
-| `sensor.<device>_current` | Normalized value of the optional current source | Current sensor configured | Yes |
-| `sensor.<device>_last_current_activity` | Timestamp of the most recent current-based activity | Current sensor configured | Yes |
-| `binary_sensor.<device>_current_activity_detected` | Current-based activity state | Current sensor configured | Yes |
+| `binary_sensor.<device>_power_activity_detected` | Power-based activity state | Always | No |
+| `sensor.<device>_current` | Normalized value of the optional current source | Current sensor configured | No |
+| `sensor.<device>_last_current_activity` | Timestamp of the most recent current-based activity | Current sensor configured | No |
+| `binary_sensor.<device>_current_activity_detected` | Current-based activity state | Current sensor configured | No |
 | `binary_sensor.<device>_leak` | Mirrored leak-detector state | Leak sensor configured | Yes |
 | `sensor.<device>_final_spin_confirmation_path` | Path that confirmed the latest terminal-spin decision, for example `vibration_only` or `hybrid` | Always | No |
 | `binary_sensor.<device>_electrical_spin_candidate` | Whether the sustained electrical spin candidate is currently active | Always | No |
@@ -668,10 +671,35 @@ timing, evidence, and state-machine decisions.
 | `sensor.<device>_heating_state` | Cycle-local heating context: `unknown`, `not_seen`, or `detected` | Always | No |
 | `binary_sensor.<device>_heating_active` | Whether fresh power currently satisfies the heater-level signature | Always | No |
 
-The calibration-oriented electrical-spin and heating entities are disabled in
+High-churn detector diagnostics (raw power/current mirrors, activity timestamps,
+spin evidence, source-specific activity and finish timers) as well as
+calibration-oriented electrical-spin and heating entities are disabled in
 the Home Assistant Entity Registry by default to avoid exposing experimental
 implementation detail to users who do not need it. They may be enabled
-individually for field testing, graphing, and threshold calibration.
+individually for field testing, graphing, and threshold calibration. Existing
+entity-registry preferences are retained across upgrades; changing the default
+does not disable an entity a user previously enabled.
+
+Runtime continues to evaluate live power/current reports and the 30-second
+internal detector tick with full precision. HA entity updates are suppressed
+when that entity's observable state and dynamic unit are unchanged, regardless
+of the runtime dispatcher notification. The enabled timestamp entity
+`sensor.<device>_cycle_started_at` exposes the persisted start of the current
+logical cycle in `running` and `final_spin`, with no periodic refresh; it
+becomes unknown outside those states. The original timestamp survives
+`FINAL_SPIN → RUNNING` and eligible restart recovery. A dashboard that needs
+a live duration shall calculate elapsed time from this timestamp using its own
+clock and gate the display on the public cycle state.
+
+The historical `sensor.<device>_current_cycle_duration` entity remains
+registered for compatibility, but is disabled by default on new installations.
+When explicitly enabled (including existing installations that already use it),
+it is a **point-in-time snapshot** refreshed only on cycle/phase transitions
+or a change in the underlying cycle-start timestamp, not a running clock.
+`sensor.<device>_last_cycle_duration` remains the authoritative finalized
+duration after completion. Downloadable diagnostics continue to expose the
+precise runtime elapsed duration. Restart/recovery snapshot persistence retains
+its existing independent triggers.
 
 Entity states are live observability aids. Downloadable diagnostics remain the
 authoritative detailed snapshot for source freshness, observed coverage,

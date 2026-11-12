@@ -61,6 +61,7 @@ BINARY_SENSOR_DESCRIPTIONS: tuple[
     LaundryMonitorBinarySensorDescription(
         key="power_activity_detected",
         translation_key="power_activity_detected",
+        entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda runtime: runtime.power_activity_detected,
     ),
@@ -100,6 +101,7 @@ async def async_setup_entry(
                 LaundryMonitorBinarySensorDescription(
                     key="current_activity_detected",
                     translation_key="current_activity_detected",
+                    entity_registry_enabled_default=False,
                     entity_category=EntityCategory.DIAGNOSTIC,
                     value_fn=lambda runtime: (
                         runtime.current_activity_detected
@@ -138,6 +140,10 @@ class LaundryMonitorBinarySensor(
     def is_on(self) -> bool | None:
         """Return the binary sensor state."""
         return self.entity_description.value_fn(self.runtime)
+
+    def _runtime_state_signature(self) -> object:
+        """Track only this binary entity's exposed value."""
+        return (self.available, self.is_on)
 
 
 class LaundryMonitorLeakBinarySensor(
