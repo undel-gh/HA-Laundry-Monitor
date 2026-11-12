@@ -1,5 +1,6 @@
 """Ensure runtime updates do not create unnecessary HA state publications."""
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -92,10 +93,12 @@ def test_binary_sensor_updates_only_on_its_own_value_change() -> None:
         assert write.call_count == 2
 
 
-def test_duration_publication_is_bucketed_but_native_value_is_exact() -> None:
-    """Five-minute HA publication cadence does not round detector time."""
+def test_legacy_duration_publishes_only_on_cycle_boundaries() -> None:
+    """Time passing must never trigger a legacy duration state write."""
+    start = datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
     runtime = _runtime(
         cycle_state=LaundryCycleState.RUNNING,
+        cycle_started_at=start,
         current_cycle_duration=95.5,
     )
     sensor = LaundryMonitorSensor(
@@ -104,29 +107,55 @@ def test_duration_publication_is_bucketed_but_native_value_is_exact() -> None:
     sensor._last_published_signature = sensor._runtime_state_signature()
 
     with patch.object(LaundryMonitorSensor, "async_write_ha_state") as write:
-        runtime.current_cycle_duration = 248.3
-        assert sensor.native_value == 248.3
-        sensor._handle_runtime_update()
+        for elapsed in (248.3, 302.7, 360.9, 3000.0):
+            runtime.current_cycle_duration = elapsed
+            assert sensor.native_value == elapsed
+            sensor._handle_runtime_update()
         write.assert_not_called()
 
-        runtime.current_cycle_duration = 302.7
-        sensor._handle_runtime_update()
-        assert write.call_count == 1
-
-        runtime.current_cycle_duration = 360.9
-        sensor._handle_runtime_update()
-        assert write.call_count == 1
-
-        # Terminal-phase transitions remain immediately observable.
+        # A phase transition can still refresh an explicitly enabled
+        # compatibility sensor, but its value is not a live clock.
         runtime.cycle_state = LaundryCycleState.FINAL_SPIN
+        sensor._handle_runtime_update()
+        assert write.call_count == 1
+
+        runtime.cycle_state = LaundryCycleState.RUNNING
         sensor._handle_runtime_update()
         assert write.call_count == 2
 
-        # Leaving the active cycle clears the published duration immediately.
         runtime.cycle_state = LaundryCycleState.FINISHED
         runtime.current_cycle_duration = None
         sensor._handle_runtime_update()
         assert write.call_count == 3
+
+        runtime.cycle_state = LaundryCycleState.IDLE
+        runtime.cycle_started_at = None
+        sensor._handle_runtime_update()
+        assert write.call_count == 4
+
+
+def test_cycle_start_sensor_tracks_only_active_cycles() -> None:
+    """One timestamp replaces repeated duration state publications."""
+    start = datetime(2026, 11, 12, 12, 0, tzinfo=timezone.utc)
+    runtime = _runtime(
+        cycle_state=LaundryCycleState.IDLE, cycle_started_at=None
+    )
+    sensor = LaundryMonitorSensor(runtime, _sensor_description("cycle_started_at"))
+    assert sensor.native_value is None
+    assert sensor.entity_description.entity_registry_enabled_default is True
+
+    runtime.cycle_state = LaundryCycleState.RUNNING
+    runtime.cycle_started_at = start
+    assert sensor.native_value == start
+
+    runtime.cycle_state = LaundryCycleState.FINAL_SPIN
+    assert sensor.native_value == start
+
+    runtime.cycle_state = LaundryCycleState.RUNNING
+    assert sensor.native_value == start  # Revoked final-spin hypothesis.
+
+    runtime.cycle_state = LaundryCycleState.FINISHED
+    assert sensor.native_value is None
 
 
 def test_dynamic_energy_unit_change_is_not_suppressed() -> None:
@@ -165,6 +194,7 @@ def test_high_churn_diagnostics_are_disabled_by_default() -> None:
     assert description.entity_category is EntityCategory.DIAGNOSTIC
     assert description.entity_registry_enabled_default is False
 
-    assert _sensor_description("current_cycle_duration").entity_registry_enabled_default is True
+    assert _sensor_description("current_cycle_duration").entity_registry_enabled_default is False
+    assert _sensor_description("cycle_started_at").entity_registry_enabled_default is True
     assert _sensor_description("cycle_state").entity_registry_enabled_default is True
     assert _binary_description("running").entity_registry_enabled_default is True
