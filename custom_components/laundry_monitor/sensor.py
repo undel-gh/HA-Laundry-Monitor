@@ -34,11 +34,6 @@ from .heating import HeatingState
 from .runtime import LaundryMonitorRuntime
 
 
-# Recorder should not receive a new duration state at every 30-second tick.
-# Detector evaluation and the unrounded runtime duration remain unchanged.
-_CURRENT_CYCLE_PUBLICATION_SECONDS = 300
-
-
 @dataclass(frozen=True, kw_only=True)
 class LaundryMonitorSensorDescription(SensorEntityDescription):
     """Describe a Laundry Monitor sensor."""
@@ -79,8 +74,22 @@ SENSOR_DESCRIPTIONS: tuple[LaundryMonitorSensorDescription, ...] = (
         value_fn=lambda runtime: runtime.power,
     ),
     LaundryMonitorSensorDescription(
+        key="cycle_started_at",
+        translation_key="cycle_started_at",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        value_fn=lambda runtime: (
+            runtime.cycle_started_at
+            if runtime.cycle_state
+            in (LaundryCycleState.RUNNING, LaundryCycleState.FINAL_SPIN)
+            else None
+        ),
+    ),
+    LaundryMonitorSensorDescription(
         key="current_cycle_duration",
         translation_key="current_cycle_duration",
+        # Compatibility-only value: never refreshed just because time passes.
+        # Use cycle_started_at and UI-local time for a live timer instead.
+        entity_registry_enabled_default=False,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
@@ -305,17 +314,14 @@ class LaundryMonitorSensor(LaundryMonitorEntity, SensorEntity):
     def _runtime_state_signature(self) -> object:
         """Identify changes without publishing every transient derived value."""
         value = self.native_value
-        if (
-            self.entity_description.key == "current_cycle_duration"
-            and value is not None
-        ):
-            # The published value is still the exact current duration; only
-            # publication frequency is grouped into five-minute buckets.
-            # Include phase so entering/leaving final_spin remains immediate.
+        if self.entity_description.key == "current_cycle_duration":
+            # Legacy sensor: provide a point-in-time duration on lifecycle
+            # changes only, without creating any periodic Recorder states.
+            # The timestamp sensor is the authoritative live UI input.
             return (
                 self.available,
                 self.runtime.cycle_state,
-                int(value // _CURRENT_CYCLE_PUBLICATION_SECONDS),
+                self.runtime.cycle_started_at,
                 self.native_unit_of_measurement,
             )
         # Last-cycle energy can change its unit without changing its value.
