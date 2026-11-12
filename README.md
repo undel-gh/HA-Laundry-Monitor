@@ -367,6 +367,41 @@ ruff check custom_components tests --select E,W,F
 python -m pytest
 ```
 
+The full suite tests against **Home Assistant Core 2026.10.4** with
+`pytest-homeassistant-custom-component==0.13.375` (Python 3.14).
+The minimum supported **Core 2026.6.0** has a separate API smoke suite,
+paired with `pytest-homeassistant-custom-component==0.13.336`. These
+fixture packages **pin exact Core versions** and must not be mixed.
+CI prints and checks both installed and imported Home Assistant versions;
+it fails if the imported Core differs from the declared matrix target.
+
+To reproduce the minimum-version smoke suite, create a **separate Python
+3.14 virtual environment** and run:
+
+```bash
+python -m pip install -r requirements_test_min.txt
+python -m pip check
+python -m pytest -vv \
+  tests/components/laundry_monitor/test_source_freshness_runtime.py \
+  tests/components/laundry_monitor/test_measurement_units.py \
+  tests/components/laundry_monitor/test_config_flow.py \
+  tests/components/laundry_monitor/test_storage_integration.py
+```
+
+The minimum smoke set exercises identical electrical `state_reported`
+observations, W/A normalization and invalid-unit handling, configuration,
+and snapshot recovery. The current-target job runs the **full suite**.
+Both jobs run on pull requests (including docs-only PRs), `main` pushes
+and scheduled validation, alongside Ruff, Hassfest and HACS.
+
+**Upgrade cadence:** at least monthly after the Home Assistant stable
+release, review both the latest stable Core and the newest fixture package.
+Advance the current target only when a matching fixture/Core pair is
+published, pin both versions together, run CI, and update this README.
+A newer Core release without a corresponding fixture is **not yet
+verified**, and must not be labelled as covered. Keep the minimum target
+at 2026.6.0 until the published HACS support floor changes.
+
 Ruff runs on **every pull request**, including documentation-only changes, and
 on pushes to `main` through the read-only `Validate / Ruff check` CI job.
 To apply *safe* fixes, run `ruff check custom_components tests --select E,W,F
@@ -749,6 +784,42 @@ python -m pip install -r requirements_test.txt
 ruff check custom_components tests --select E,W,F
 python -m pytest
 ```
+
+Полный набор тестов запускается на **Home Assistant Core 2026.10.4**
+с `pytest-homeassistant-custom-component==0.13.375` (Python 3.14).
+Для минимально поддерживаемой версии **Core 2026.6.0** предусмотрен
+отдельный smoke-набор с `pytest-homeassistant-custom-component==0.13.336`.
+Тестовые пакеты привязаны к **точным версиям Core**: смешивать их нельзя.
+CI выводит и сверяет установленную и импортированную версии Home Assistant;
+при несовпадении с заданной версией матрицы задача завершается ошибкой.
+
+Для локальной проверки минимальной версии создайте **отдельное виртуальное
+окружение Python 3.14** и выполните:
+
+```bash
+python -m pip install -r requirements_test_min.txt
+python -m pip check
+python -m pytest -vv \
+  tests/components/laundry_monitor/test_source_freshness_runtime.py \
+  tests/components/laundry_monitor/test_measurement_units.py \
+  tests/components/laundry_monitor/test_config_flow.py \
+  tests/components/laundry_monitor/test_storage_integration.py
+```
+
+Минимальный smoke-набор проверяет повторные электрические отчёты
+`state_reported`, нормализацию Вт/А и некорректные единицы, настройку
+интеграции и восстановление snapshot. Для актуальной проверяемой версии
+запускается **полный набор тестов**. Обе задачи выполняются для каждого
+PR (включая изменения только документации), при push в `main` и по
+расписанию вместе с Ruff, Hassfest и HACS.
+
+**Порядок обновления:** минимум раз в месяц после стабильного релиза
+Home Assistant проверяйте последнюю версию Core и доступный тестовый
+пакет. Продвигайте актуальную проверяемую версию только после выпуска
+совместимой пары Core/fixture, закрепляя обе версии вместе, запуская CI
+и обновляя README. Новейший Core **не считается проверенным**, пока
+для него нет подтверждённой совместимой тестовой среды. Минимальный
+Core 2026.6.0 сохраняется до официального изменения порога HACS.
 
 Задача `Validate / Ruff check` запускается для **каждого PR**, включая
 изменения только документации, и при push в `main`. Безопасные исправления
