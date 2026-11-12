@@ -60,6 +60,8 @@ The only required source is a **power sensor**. Optional current, door, vibratio
 
 Only the power sensor is mandatory. Optional sources must degrade cleanly when unavailable and must not prevent basic power-only cycle detection.
 
+Power and current readings are converted using Home Assistant unit converters to **W** and **A** before evaluation, including sensors reporting kW, mW, mA, or μA. When a source has no `unit_of_measurement` attribute, the existing assumption of W (power) or A (current) is retained for backward compatibility. An explicitly unsupported unit is treated as unavailable; it is never interpreted as a raw W/A value. Optional energy-sensor statistics retain their own source-unit handling.
+
 ## Installation
 
 ### HACS
