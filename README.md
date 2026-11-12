@@ -385,14 +385,22 @@ python -m pytest -vv \
   tests/components/laundry_monitor/test_source_freshness_runtime.py \
   tests/components/laundry_monitor/test_measurement_units.py \
   tests/components/laundry_monitor/test_config_flow.py \
-  tests/components/laundry_monitor/test_storage_integration.py
+  tests/components/laundry_monitor/test_storage_integration.py \
+  tests/components/laundry_monitor/test_sensor_metadata.py
 ```
 
 The minimum smoke set exercises identical electrical `state_reported`
 observations, W/A normalization and invalid-unit handling, configuration,
-and snapshot recovery. The current-target job runs the **full suite**.
-Both jobs run on pull requests (including docs-only PRs), `main` pushes
-and scheduled validation, alongside Ruff, Hassfest and HACS.
+snapshot recovery, and the percentage-unit metadata contract (including
+the legacy Home Assistant 2026.6 fallback). The current-target job runs
+the **full suite**.
+
+CI exposes stable `Tests (minimum)` and `Tests (current)` job names even
+when the underlying Core versions advance. The aggregate `Tests` gate
+succeeds **only if both jobs succeed** and preserves the existing required
+`Tests` check in branch protection. All run on pull requests (including
+docs-only PRs), `main` pushes and scheduled validation, alongside Ruff,
+Hassfest and HACS.
 
 **Upgrade cadence:** at least monthly after the Home Assistant stable
 release, review both the latest stable Core and the newest fixture package.
@@ -410,11 +418,12 @@ in the PR for review. Do **not** use unattended `--unsafe-fixes` or push
 autofixes directly to `main`. All automated validation has read-only
 repository permissions.
 
-For maintainers: configure branch protection/rulesets for `main` to require
-the `Ruff check` status (alongside `Tests`, `Hassfest` and `HACS`, where
-applicable), prevent bypasses and enforce changes through reviewed PRs.
-The CI workflow does not itself enforce branch protection; this repository
-setting must be enabled separately.
+For maintainers: the current `main` ruleset requires `Ruff check`, `Tests`,
+`Hassfest` and `HACS`. Keep the stable aggregate `Tests` check required:
+it fails whenever either `Tests (minimum)` or `Tests (current)` fails.
+Do not require version-numbered Core job names, which would break on
+monthly upgrades. Enforce reviewed PRs and prevent bypasses separately
+in GitHub branch rules; CI YAML does not replace branch protection.
 
 The English documentation under `docs/en/` is canonical. Translations must follow it and must not define separate behavior.
 
@@ -803,15 +812,23 @@ python -m pytest -vv \
   tests/components/laundry_monitor/test_source_freshness_runtime.py \
   tests/components/laundry_monitor/test_measurement_units.py \
   tests/components/laundry_monitor/test_config_flow.py \
-  tests/components/laundry_monitor/test_storage_integration.py
+  tests/components/laundry_monitor/test_storage_integration.py \
+  tests/components/laundry_monitor/test_sensor_metadata.py
 ```
 
 Минимальный smoke-набор проверяет повторные электрические отчёты
 `state_reported`, нормализацию Вт/А и некорректные единицы, настройку
-интеграции и восстановление snapshot. Для актуальной проверяемой версии
-запускается **полный набор тестов**. Обе задачи выполняются для каждого
-PR (включая изменения только документации), при push в `main` и по
-расписанию вместе с Ruff, Hassfest и HACS.
+интеграции, восстановление snapshot и контракт единицы процентов
+(в том числе совместимость с Home Assistant 2026.6). Для актуальной
+проверяемой версии запускается **полный набор тестов**.
+
+CI создаёт проверки с постоянными именами `Tests (minimum)` и
+`Tests (current)` независимо от версии Core. Итоговая проверка
+`Tests` проходит **только при успехе обеих** и сохраняет совместимость
+с уже обязательным статусом `Tests` в branch protection. Все эти
+задачи запускаются для каждого PR (включая изменения только
+документации), при push в `main` и по расписанию вместе с Ruff,
+Hassfest и HACS.
 
 **Порядок обновления:** минимум раз в месяц после стабильного релиза
 Home Assistant проверяйте последнюю версию Core и доступный тестовый
@@ -829,11 +846,13 @@ Core 2026.6.0 сохраняется до официального измене�
 автоматически `--unsafe-fixes` и не публикуйте исправления напрямую в
 `main`. Проверяющий workflow не имеет прав на запись в репозиторий.
 
-Для владельца репозитория: настройте protection/rulesets для `main`,
-сделайте статус `Ruff check` обязательным (при необходимости вместе с
-`Tests`, `Hassfest` и `HACS`), запретите обход правил и прямые изменения
-`main` без проверенного PR. Сам workflow не включает защиту ветки — это
-отдельная настройка GitHub.
+Текущий ruleset для `main` требует `Ruff check`, `Tests`,
+`Hassfest` и `HACS`. Оставляйте обязательным постоянный итоговый
+статус `Tests`: он блокирует merge при падении `Tests (minimum)`
+или `Tests (current)`. Не закрепляйте имена с номером версии Core:
+они будут меняться при ежемесячных обновлениях. Запрет обхода правил
+и обязательный ревью-PR настраиваются отдельно в GitHub; workflow
+не заменяет защиту ветки.
 
 Английская документация в `docs/en/` является канонической. Переводы должны следовать ей и не должны определять отдельное поведение.
 
