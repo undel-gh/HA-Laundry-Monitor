@@ -139,6 +139,9 @@
       "last_rejected_transition": {
         "name": "Last rejected transition"
       },
+      "cycle_started_at": {
+        "name": "Cycle started at"
+      },
       "current_cycle_duration": {
         "name": "Current cycle duration"
       },
