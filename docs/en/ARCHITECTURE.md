@@ -126,9 +126,14 @@ not by changing detector input processing or persistence. The per-entry
 runtime dispatcher may still notify all registered entities, but each enabled
 entity compares its own observable value and (for sensors) dynamic unit before
 calling `async_write_ha_state()`. High-churn debug entities are disabled in
-new installations unless explicitly enabled. `current_cycle_duration` uses
-five-minute elapsed-time publication buckets, with immediate lifecycle/phase
-updates; the internal detector tick remains every 30 seconds. Entity Registry
+new installations unless explicitly enabled. The default-enabled
+`cycle_started_at` timestamp is emitted on active-cycle start and becomes
+unknown after the active cycle ends; it is stable through terminal-phase
+transitions and valid restarts. A frontend should compute live elapsed time
+locally from this timestamp. The legacy `current_cycle_duration` entity is
+disabled on new registrations and, when enabled, publishes a point-in-time
+duration on lifecycle/phase changes only, never by elapsed-time buckets.
+The internal detector tick remains every 30 seconds. Entity Registry
 preferences on existing installations are not overwritten. Downloadable
 diagnostics and recovery snapshot persistence are unaffected.
 
