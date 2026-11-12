@@ -119,7 +119,7 @@ def test_main_accepts_valid_release_files(
     [
         ({"manifest_version": "0.1.8-rc7"}, "does not match tag"),
         ({"notes": "  "}, "notes must not be empty"),
-        ({"changelog": "# Changelog\\n"}, "dated heading"),
+        ({"changelog": "# Changelog"}, "dated heading"),
         ({"prerelease": "false"}, "prerelease=true"),
     ],
 )
