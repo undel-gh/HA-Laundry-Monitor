@@ -6,7 +6,6 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from math import isfinite
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -119,6 +118,7 @@ from .heating import (
     HeatingContextDetector,
     HeatingState,
 )
+from .source_units import normalized_current, normalized_power, state_as_float
 from .spin import ElectricalSpinCandidateDetector, SpinDetector
 from .state_machine import LaundryStateMachine, TransitionStatus
 from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
@@ -1343,10 +1343,10 @@ class LaundryMonitorRuntime:
 
         if entity_id == self.entry.data.get(CONF_POWER_SENSOR):
             data_key = "power"
-            value = _state_as_float(state)
+            value = normalized_power(state)
         elif entity_id == self.entry.data.get(CONF_CURRENT_SENSOR):
             data_key = "current"
-            value = _state_as_float(state)
+            value = normalized_current(state)
         elif entity_id == self.entry.data.get(CONF_DOOR_SENSOR):
             data_key = "door_open"
             value = _state_as_bool(state)
@@ -1357,7 +1357,7 @@ class LaundryMonitorRuntime:
             data_key = "leak_detected"
             value = _state_as_bool(state) is True
         elif entity_id == self.entry.data.get(CONF_ENERGY_SENSOR):
-            value = _state_as_float(state)
+            value = state_as_float(state)
             unit = (
                 str(state.attributes[ATTR_UNIT_OF_MEASUREMENT])
                 if state is not None
@@ -2157,19 +2157,6 @@ def _state_is_available(state: State | None) -> bool:
         state is not None
         and state.state not in (STATE_UNKNOWN, STATE_UNAVAILABLE)
     )
-
-
-def _state_as_float(state: State | None) -> float | None:
-    """Convert a Home Assistant state to float."""
-    if state is None or state.state in (STATE_UNKNOWN, STATE_UNAVAILABLE):
-        return None
-
-    try:
-        value = float(state.state)
-    except (TypeError, ValueError):
-        return None
-
-    return value if isfinite(value) else None
 
 
 def _state_as_bool(state: State | None) -> bool | None:

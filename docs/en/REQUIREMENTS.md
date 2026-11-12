@@ -370,6 +370,18 @@ For a heated cycle using hybrid confirmation, at least one retained vibration ri
 
 ---
 
+## FR-061
+
+The integration shall normalize usable power and current source measurements into **watts (W)** and **amperes (A)**, respectively, before applying thresholds, evaluating activity, heating or spin evidence, and publishing corresponding diagnostics. Conversion shall use the Home Assistant unit converters and unit symbols supported by the installed Core version. Explicit unit labels must match Home Assistant's canonical, case-sensitive symbols (for example `kW`, not `kw`; Greek `μA`, not `µA`). To preserve compatibility with legacy unitless source sensors, a missing `unit_of_measurement` attribute shall be interpreted as W for power and A for current. No unit conversions shall be applied to optional energy-source statistics by this requirement.
+
+---
+
+## FR-062
+
+A power or current reading with a declared but unsupported unit, a non-numeric or non-finite value, or a non-finite result after unit conversion shall be treated as **unusable**, never as zero or as an unconverted W/A measurement. An unusable **required power** source shall follow the existing power-unavailability grace/error behavior and expose the existing required-source Repairs warning; a usable source shall clear that warning. An unusable **optional current** source shall disable current-based corroboration and diagnostics without creating a Repairs issue or blocking power-only operation. A valid zero in a supported unit shall remain an available zero-valued observation, as required by FR-047.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001

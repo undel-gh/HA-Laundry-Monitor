@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import pytest
+
 from homeassistant.const import (
+    ATTR_UNIT_OF_MEASUREMENT,
     CONF_NAME,
     STATE_OFF,
     STATE_UNAVAILABLE,
+    UnitOfPower,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -197,3 +201,103 @@ async def test_invalid_power_value_creates_issue(
             CONF_POWER_SENSOR,
         ),
     ) is not None
+
+
+@pytest.mark.parametrize(
+    ("value", "unit"),
+    [
+        ("45", "V"),
+        ("45", "VA"),
+        ("45", "watt"),
+        ("45", "kw"),
+        ("45", "W "),
+        ("1e308", UnitOfPower.KILO_WATT),
+    ],
+)
+async def test_invalid_power_units_create_issue_on_setup(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+    value: str,
+    unit: str,
+) -> None:
+    """Repairs must reject the same power reading as the runtime."""
+    _set_sources_available(hass)
+    hass.states.async_set(
+        "sensor.washing_machine_power",
+        value,
+        {ATTR_UNIT_OF_MEASUREMENT: unit},
+    )
+    entry = _create_entry()
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = ir.async_get(hass)
+    issue_id = required_source_issue_id(entry.entry_id, CONF_POWER_SENSOR)
+    issue = registry.async_get_issue(DOMAIN, issue_id)
+    assert issue is not None
+    assert issue.translation_key == ISSUE_TRANSLATION_KEY
+    assert issue.severity is ir.IssueSeverity.WARNING
+    assert entry.runtime_data.power is None
+
+
+async def test_repairs_follows_power_unit_changes_without_numeric_changes(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """A W -> V -> W unit-only change creates and clears the same issue."""
+    _set_sources_available(hass)
+    entity_id = "sensor.washing_machine_power"
+    hass.states.async_set(
+        entity_id,
+        "45",
+        {ATTR_UNIT_OF_MEASUREMENT: UnitOfPower.WATT},
+    )
+    entry = _create_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = ir.async_get(hass)
+    issue_id = required_source_issue_id(entry.entry_id, CONF_POWER_SENSOR)
+    assert registry.async_get_issue(DOMAIN, issue_id) is None
+    assert entry.runtime_data.power == 45.0
+
+    hass.states.async_set(
+        entity_id, "45", {ATTR_UNIT_OF_MEASUREMENT: "V"}
+    )
+    await hass.async_block_till_done()
+    assert entry.runtime_data.power is None
+    assert registry.async_get_issue(DOMAIN, issue_id) is not None
+
+    hass.states.async_set(
+        entity_id,
+        "45",
+        {ATTR_UNIT_OF_MEASUREMENT: UnitOfPower.WATT},
+    )
+    await hass.async_block_till_done()
+    assert entry.runtime_data.power == 45.0
+    assert registry.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_valid_kilowatt_power_has_no_repairs_issue(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Canonical convertible units remain accepted by Repairs."""
+    _set_sources_available(hass)
+    hass.states.async_set(
+        "sensor.washing_machine_power",
+        "0.045",
+        {ATTR_UNIT_OF_MEASUREMENT: UnitOfPower.KILO_WATT},
+    )
+    entry = _create_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.power == 45.0
+    assert ir.async_get(hass).async_get_issue(
+        DOMAIN, required_source_issue_id(entry.entry_id, CONF_POWER_SENSOR)
+    ) is None

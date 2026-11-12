@@ -266,7 +266,7 @@
   "issues": {
     "required_source_unavailable": {
       "title": "Required laundry sensor unavailable",
-      "description": "Laundry Monitor cannot reliably monitor **{name}** because the required entity `{entity_id}` is missing, unknown, or unavailable. Restore the entity or reconfigure the integration."
+      "description": "Laundry Monitor cannot reliably monitor **{name}** because the required entity `{entity_id}` is missing, unavailable, non-numeric, or reports an unsupported power unit. Check the sensor and its unit (for example W, kW or mW), or reconfigure the integration."
     }
   }
 }
