@@ -72,6 +72,14 @@ Only the power sensor is required for basic cycle monitoring.
 
 Optional sources are allowed to become unavailable. Their loss must degrade the corresponding feature rather than stop basic power-only monitoring.
 
+### 2.4 Measurement units
+
+Laundry Monitor converts power and current readings to **W** and **A** before checking thresholds or showing diagnostic values. Home Assistant's built-in converters handle supported units, such as `mW`, `W`, `kW` for power and `μA`, `mA`, `A` for current. For example, `0.12 kW` is interpreted as `120 W` and `500 mA` as `0.5 A`. Additional supported units depend on the installed Home Assistant Core version.
+
+Unit labels must use Home Assistant's **exact, case-sensitive notation**: `kW` is supported but `kw` is not; `μA` uses Greek mu rather than the visually similar micro sign `µ`. Sensors without a `unit_of_measurement` attribute are assumed to report W (power) or A (current) for backward compatibility.
+
+An explicitly unsupported unit, an invalid numeric value, or a conversion overflow makes that measurement **unavailable to Laundry Monitor**, not zero. An unusable required power source triggers the existing Repairs warning and may lead to `error` after the configured grace period. An unusable optional current source disables current-based evidence and diagnostics without creating a Repairs issue; valid power-only detection continues. The optional energy sensor retains its original energy units.
+
 ---
 
 ## 3. Installation
@@ -620,7 +628,7 @@ Transient rolling electrical evidence and diagnostic confirmation-path informati
 
 The power sensor is required.
 
-A brief `unavailable`, `unknown`, missing, or non-numeric state is tolerated for the configured **Power sensor unavailable grace period**.
+A brief `unavailable`, `unknown`, missing, non-numeric or unsupported-unit state is tolerated for the configured **Power sensor unavailable grace period**.
 
 If the required source remains unusable beyond the grace period, Laundry Monitor may enter `error` and create a Home Assistant Repairs issue.
 
@@ -632,7 +640,7 @@ valid 0 W
 
 is not a source failure.
 
-Only loss of a reliable numeric observation is treated as source unavailability.
+Loss of a reliable **normalized** power observation, including an explicitly unsupported unit, is treated as source unavailability. Check the sensor's `unit_of_measurement` if Home Assistant displays a numeric value but Laundry Monitor shows `unknown`.
 
 ---
 
