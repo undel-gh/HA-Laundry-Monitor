@@ -309,3 +309,94 @@ def test_last_unloaded_at_round_trip() -> None:
 
     assert restored == snapshot
 
+@pytest.mark.parametrize(
+    "invalid_time",
+    [
+        "2026-07-14T12:00:00",
+        "not-a-timestamp",
+        123,
+        None,
+    ],
+)
+def test_required_last_state_change_must_be_aware(
+    invalid_time: object,
+) -> None:
+    """Malformed or timezone-naive core timing invalidates the snapshot."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored["last_state_change"] = invalid_time
+
+    assert RuntimeSnapshot.from_storage_dict(stored) is None
+
+
+@pytest.mark.parametrize(
+    "state",
+    [LaundryCycleState.RUNNING, LaundryCycleState.FINAL_SPIN],
+)
+@pytest.mark.parametrize(
+    "invalid_time",
+    [
+        "2026-07-14T11:00:00",
+        "not-a-timestamp",
+        123,
+        None,
+    ],
+)
+def test_invalid_cycle_start_drops_only_active_recovery(
+    state: LaundryCycleState,
+    invalid_time: object,
+) -> None:
+    """Keep tracking and history, but do not recover a mistimed cycle."""
+    stored = _snapshot(state).as_storage_dict()
+    stored["cycle_started_at"] = invalid_time
+    stored["last_cycle_duration"] = 2400.0
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.cycle_started_at is None
+    assert restored.laundry_present is True
+    assert restored.last_cycle_duration == 2400.0
+    assert select_recovery_state(
+        restored,
+        door_open=False,
+        activity_detected=False,
+        vibration_active=False,
+        now=datetime(2026, 7, 14, 12, 1, tzinfo=timezone.utc),
+        max_active_snapshot_age_seconds=86400,
+    ) is LaundryCycleState.IDLE
+
+
+def test_invalid_cycle_start_does_not_discard_completed_statistics() -> None:
+    """FINISHED snapshots do not require an active cycle-start timestamp."""
+    stored = _snapshot(LaundryCycleState.FINISHED).as_storage_dict()
+    stored["cycle_started_at"] = "2026-07-14T11:00:00"
+    stored["last_cycle_duration"] = 2400.0
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.cycle_state is LaundryCycleState.FINISHED
+    assert restored.cycle_started_at is None
+    assert restored.last_cycle_duration == 2400.0
+
+
+def test_naive_last_unloaded_at_is_rejected() -> None:
+    """An invalid unload timestamp cannot enter runtime state."""
+    stored = _snapshot(LaundryCycleState.IDLE).as_storage_dict()
+    stored["last_unloaded_at"] = "2026-07-14T11:00:00"
+
+    assert RuntimeSnapshot.from_storage_dict(stored) is None
+
+
+def test_timezone_offset_timestamps_remain_valid() -> None:
+    """Offset-aware timestamps other than UTC remain supported."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored["last_state_change"] = "2026-07-14T15:00:00+03:00"
+    stored["cycle_started_at"] = "2026-07-14T14:00:00+03:00"
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.last_state_change.utcoffset() == timedelta(hours=3)
+    assert restored.cycle_started_at is not None
+    assert restored.cycle_started_at.utcoffset() == timedelta(hours=3)
