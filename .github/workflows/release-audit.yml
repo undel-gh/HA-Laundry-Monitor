@@ -1,0 +1,48 @@
+name: Audit published release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Release metadata
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out published tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Verify version, prerelease flag and release notes
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$RELEASE_BODY" > "$RUNNER_TEMP/release-notes.md"
+          python scripts/verify_release.py \
+            --tag "$RELEASE_TAG" \
+            --prerelease "$RELEASE_PRERELEASE" \
+            --notes-file "$RUNNER_TEMP/release-notes.md"
+
+      - name: Verify published tag is reachable from main
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Published tag does not point to a commit reachable from main."
+            exit 1
+          fi

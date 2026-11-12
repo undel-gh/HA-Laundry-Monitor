@@ -353,6 +353,10 @@ If the required power source remains unavailable, Laundry Monitor can create a H
 
 Use Home Assistant automations to build actions on top of Laundry Monitor states and events.
 
+## Maintainer releases
+
+Before publishing an RC or stable version, follow the [release checklist](docs/en/RELEASE_CHECKLIST.md) and record verified user-facing changes in the [changelog](CHANGELOG.md). The tag, manifest version, GitHub prerelease flag, and HACS channel must agree. A release requires a separate reviewed release-preparation PR; merging feature fixes does not publish a version.
+
 ## Contributing
 
 Issues and pull requests are welcome.
@@ -363,7 +367,7 @@ the test suite:
 ```bash
 python -m pip install ruff==0.16.8
 python -m pip install -r requirements_test.txt
-ruff check custom_components tests --select E,W,F
+ruff check custom_components tests scripts --select E,W,F
 python -m pytest
 ```
 
@@ -406,7 +410,7 @@ at 2026.6.0 until the published HACS support floor changes.
 
 Ruff runs on **every pull request**, including documentation-only changes, and
 on pushes to `main` through the read-only `Validate / Ruff check` CI job.
-To apply *safe* fixes, run `ruff check custom_components tests --select E,W,F
+To apply *safe* fixes, run `ruff check custom_components tests scripts --select E,W,F
 --fix` locally on a working branch, inspect the diff, then commit the changes
 in the PR for review. Do **not** use unattended `--unsafe-fixes` or push
 autofixes directly to `main`. All automated validation has read-only
@@ -774,6 +778,10 @@ automation:
 
 Используйте автоматизации Home Assistant, чтобы создавать действия на основе состояний и событий Laundry Monitor.
 
+### Публикация релизов
+
+Перед выпуском RC или stable выполните [контрольный список релиза](docs/ru/RELEASE_CHECKLIST.md), а подтверждённые изменения для пользователей внесите в [changelog](CHANGELOG.md). Тег, версия manifest, флаг prerelease на GitHub и канал HACS должны быть согласованы. Для публикации нужен отдельный проверенный PR подготовки релиза; merge исправлений сам по себе новую версию не выпускает.
+
 ### Участие в разработке
 
 Сообщения о проблемах и pull request приветствуются.
@@ -784,7 +792,7 @@ automation:
 ```bash
 python -m pip install ruff==0.16.8
 python -m pip install -r requirements_test.txt
-ruff check custom_components tests --select E,W,F
+ruff check custom_components tests scripts --select E,W,F
 python -m pytest
 ```
 
@@ -830,7 +838,7 @@ Core 2026.6.0 сохраняется до официального измене�
 Задача `Validate / Ruff check` запускается для **каждого PR**, включая
 изменения только документации, и при push в `main`. Безопасные исправления
 можно выполнять локально в рабочей ветке через
-`ruff check custom_components tests --select E,W,F --fix`, после чего
+`ruff check custom_components tests scripts --select E,W,F --fix`, после чего
 нужно проверить diff и отправить его на ревью в PR. Не запускайте
 автоматически `--unsafe-fixes` и не публикуйте исправления напрямую в
 `main`. Проверяющий workflow не имеет прав на запись в репозиторий.
