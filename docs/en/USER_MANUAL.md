@@ -525,7 +525,8 @@ Important user-facing entities include:
 | `binary_sensor.<device>_running` | On in `running` and `final_spin` |
 | `binary_sensor.<device>_finished` | On when the cycle is `finished` |
 | `binary_sensor.<device>_final_spin_detected` | Latches after terminal-spin evidence is confirmed |
-| `sensor.<device>_current_cycle_duration` | Current cycle duration |
+| `sensor.<device>_cycle_started_at` | Start time of the active cycle, suitable for local elapsed-time calculation |
+| `sensor.<device>_current_cycle_duration` | Legacy snapshot, disabled by default and not a live timer |
 | `sensor.<device>_last_cycle_duration` | Most recently completed cycle duration |
 | `sensor.<device>_last_cycle_energy` | Last-cycle energy, when configured |
 
@@ -533,7 +534,7 @@ Additional diagnostic entities expose detector internals.
 
 To reduce Home Assistant history/Recorder writes, most high-frequency detector diagnostics (power/current mirrors, detailed activity timestamps, spin evidence and finish timers) and experimental electrical/hybrid entities are disabled by default on **new** setups. Enable only the ones needed from the device/entity page for investigations. Existing installations retain their saved enabled/disabled choices.
 
-The public `current_cycle_duration` shows exact elapsed seconds when updated, but updates at most once per five-minute elapsed-time bucket during an unchanged phase; phase changes and completion update it immediately. Internal detection still evaluates at its original cadence, and **Download diagnostics** exposes live detector details regardless of these publication limits.
+Use `sensor.<device>_cycle_started_at` with the public cycle state to display a live duration: while the state is `running` or `final_spin`, subtract the start timestamp from the current time **in the frontend**, without creating a minute-updated Template Sensor in Home Assistant. After completion, use `last_cycle_duration`. The legacy `current_cycle_duration` is disabled by default for new setups and, if enabled, provides only a snapshot on lifecycle/phase transitions, **not** a continuously updated timer. Internal detection still evaluates at its original cadence; **Download diagnostics** exposes precise runtime elapsed time regardless of entity publication limits.
 
 Useful hybrid diagnostics include:
 
