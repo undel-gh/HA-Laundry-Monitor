@@ -108,8 +108,9 @@ python scripts/verify_release.py \
 
 ## 5. Тег и публикация (после merge)
 
-- [ ] Объединить проверенный release-PR в `main`. Установить тег на
-      **проверенный коммит в main**, а не на старый HEAD ветки при
+- [ ] Объединить проверенный release-PR в `main` и дождаться успешного
+      **Validate именно на итоговом коммите main**. Установить тег на
+      этот проверенный коммит, а не на старый HEAD ветки при
       squash-merge — SHA мог измениться.
 - [ ] Сверить manifest на коммите публикации. В GitHub открыть
       **Releases → Draft a new release → Choose a tag → Create new tag
