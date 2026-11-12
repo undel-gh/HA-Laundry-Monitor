@@ -25,6 +25,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v6
 
+      - name: Reject tracked Python cache artifacts
+        run: |
+          tracked="$(git ls-files -- '*.pyc' '*.pyo' '*.pyd' '*__pycache__*')"
+          if [ -n "$tracked" ]; then
+            echo "::error::Tracked Python cache artifacts must be removed:"
+            printf '%s\n' "$tracked"
+            exit 1
+          fi
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
