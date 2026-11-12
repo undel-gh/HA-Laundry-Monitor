@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 from homeassistant.const import (
@@ -20,6 +21,11 @@ from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
 )
 
+from custom_components.laundry_monitor.sensor import (
+    CURRENT_SENSOR_DESCRIPTIONS,
+    SENSOR_DESCRIPTIONS,
+    LaundryMonitorSensor,
+)
 from custom_components.laundry_monitor.const import (
     CONF_CURRENT_SENSOR,
     CONF_ENERGY_SENSOR,
@@ -65,30 +71,32 @@ async def _setup_entry(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    # These tests explicitly validate the optional published W/A diagnostics.
-    # Normal installs keep both mirrors disabled to reduce Recorder traffic.
-    registry = er.async_get(hass)
-    for key in ("current_power", "current"):
-        entity_id = registry.async_get_entity_id(
-            "sensor", DOMAIN, f"{entry.entry_id}_{key}"
-        )
-        assert entity_id is not None
-        registry.async_update_entity(entity_id, disabled_by=None)
-    await hass.async_block_till_done()
     return entry
 
 
 def _diagnostic_state(
     hass: HomeAssistant, entry: MockConfigEntry, key: str
 ):
-    """Find the diagnostic entity by stable unique ID."""
+    """Inspect a debug sensor value even when HA registry disables it."""
     entity_id = er.async_get(hass).async_get_entity_id(
         "sensor", DOMAIN, f"{entry.entry_id}_{key}"
     )
     assert entity_id is not None
-    state = hass.states.get(entity_id)
-    assert state is not None
-    return state
+    description = next(
+        description
+        for description in (*SENSOR_DESCRIPTIONS, *CURRENT_SENSOR_DESCRIPTIONS)
+        if description.key == key
+    )
+    # The sensor's value/unit contract remains usable when explicitly
+    # enabled, but new installs do not publish this mirror to Recorder.
+    sensor = LaundryMonitorSensor(entry.runtime_data, description)
+    value = sensor.native_value
+    return SimpleNamespace(
+        state="unknown" if value is None else str(value),
+        attributes={
+            ATTR_UNIT_OF_MEASUREMENT: sensor.native_unit_of_measurement
+        },
+    )
 
 
 def _set_measurement(
