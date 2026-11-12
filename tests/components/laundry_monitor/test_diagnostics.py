@@ -194,10 +194,17 @@ async def test_device_diagnostics(
     """Test diagnostics from the logical device page."""
     entry = await _async_setup_entry(hass)
     device_registry = dr.async_get(hass)
-    device = device_registry.async_get_device_by_identifier(
-        (DOMAIN, entry.entry_id),
-        entry.entry_id,
-    )
+    # Core 2026.6 uses the identifiers lookup; newer Core provides this
+    # dedicated method and deprecates the older async_get_device API.
+    if hasattr(device_registry, "async_get_device_by_identifier"):
+        device = device_registry.async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id),
+            entry.entry_id,
+        )
+    else:
+        device = device_registry.async_get_device(
+            identifiers={(DOMAIN, entry.entry_id)}
+        )
     assert device is not None
 
     diagnostics = await async_get_device_diagnostics(
