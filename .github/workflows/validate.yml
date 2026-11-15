@@ -67,7 +67,9 @@ jobs:
           category: integration
 
   core_tests:
-    # The matrix jobs keep stable names across monthly Core version bumps.
+    # Keep minimum and current as stable required-check names. A third job
+    # verifies the last Core version supported by the legacy fixture package.
+    # Never install old and official pytest plugins in the same environment.
     name: Tests (${{ matrix.check_name }})
     runs-on: ubuntu-latest
     strategy:
@@ -75,14 +77,19 @@ jobs:
       matrix:
         include:
           - check_name: minimum
-            scope: minimum-full
             ha_core: "2026.6.0"
+            fixture_dist: "pytest-homeassistant-custom-component"
             fixture: "0.13.336"
             requirements: requirements_test_min.txt
-          - check_name: current
-            scope: current-full
+          - check_name: legacy
             ha_core: "2026.10.4"
+            fixture_dist: "pytest-homeassistant-custom-component"
             fixture: "0.13.375"
+            requirements: requirements_test_legacy.txt
+          - check_name: current
+            ha_core: "2026.11.1"
+            fixture_dist: "pytest-homeassistant"
+            fixture: "2026.11.1"
             requirements: requirements_test.txt
 
     steps:
@@ -105,6 +112,7 @@ jobs:
       - name: Verify imported Home Assistant and fixture versions
         env:
           EXPECTED_HA: ${{ matrix.ha_core }}
+          EXPECTED_FIXTURE_DIST: ${{ matrix.fixture_dist }}
           EXPECTED_FIXTURE: ${{ matrix.fixture }}
         run: |
           python - <<'PY'
@@ -116,30 +124,38 @@ jobs:
           from homeassistant.const import __version__ as imported_core_version
 
           expected_core = os.environ["EXPECTED_HA"]
+          expected_dist = os.environ["EXPECTED_FIXTURE_DIST"]
           expected_fixture = os.environ["EXPECTED_FIXTURE"]
-          installed_core = metadata.version("homeassistant")
-          installed_fixture = metadata.version(
-              "pytest-homeassistant-custom-component"
+          incompatible_dist = (
+              "pytest-homeassistant"
+              if expected_dist == "pytest-homeassistant-custom-component"
+              else "pytest-homeassistant-custom-component"
           )
+          installed_core = metadata.version("homeassistant")
+          installed_fixture = metadata.version(expected_dist)
           print(f"Python: {sys.version}")
           print(f"Home Assistant imported from: {homeassistant.__file__}")
           print(f"Home Assistant imported Core version: {imported_core_version}")
           print(f"Home Assistant distribution: {installed_core}")
-          print(f"Pytest fixture distribution: {installed_fixture}")
+          print(f"Pytest fixture distribution: {expected_dist} {installed_fixture}")
           assert imported_core_version == expected_core
           assert installed_core == expected_core
           assert installed_fixture == expected_fixture
+          try:
+              incompatible_version = metadata.version(incompatible_dist)
+          except metadata.PackageNotFoundError:
+              pass
+          else:
+              raise AssertionError(
+                  f"Incompatible pytest distribution installed: "
+                  f"{incompatible_dist}=={incompatible_version}"
+              )
           PY
 
       - name: Check Python syntax
         run: python -m compileall -q custom_components tests
 
-      - name: Minimum Core full regression suite
-        if: matrix.scope == 'minimum-full'
-        run: python -m pytest -vv --tb=short
-
-      - name: Current Core full regression suite
-        if: matrix.scope == 'current-full'
+      - name: Full Core regression suite
         run: python -m pytest -vv --tb=short
 
   tests:
@@ -151,7 +167,7 @@ jobs:
     if: always()
 
     steps:
-      - name: Require both supported Core environments to pass
+      - name: Require all three Core environments to pass
         env:
           CORE_TESTS_RESULT: ${{ needs.core_tests.result }}
         run: |
