@@ -71,7 +71,7 @@
       ```
 
 - [ ] Убедиться, что на **актуальном HEAD** PR зелёные
-      `Tests (minimum)`, `Tests (current)`, агрегирующий `Tests`,
+      `Tests (minimum)`, `Tests (legacy)`, `Tests (current)`, агрегирующий `Tests`,
       `Ruff check`, `Hassfest` и `HACS`.
 - [ ] Проверить вывод CI с версиями Core; не объявлять проверенной версию,
       которую тесты на самом деле не запускали.

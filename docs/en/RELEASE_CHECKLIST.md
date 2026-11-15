@@ -76,7 +76,7 @@ checklist for every release candidate (RC) and stable release.
       ```
 
 - [ ] Review the PR and confirm the entire CI is green on its *latest HEAD*:
-      `Tests (minimum)`, `Tests (current)`, aggregate `Tests`,
+      `Tests (minimum)`, `Tests (legacy)`, `Tests (current)`, aggregate `Tests`,
       `Ruff check`, `Hassfest` and `HACS`.
 - [ ] Confirm version targets shown in the CI logs; never claim testing
       against newer Core than actually verified.

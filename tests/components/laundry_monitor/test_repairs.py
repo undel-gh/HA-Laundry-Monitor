@@ -13,7 +13,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from ._ha_compat import MockConfigEntry
 
 from custom_components.laundry_monitor.const import (
     CONF_DOOR_SENSOR,

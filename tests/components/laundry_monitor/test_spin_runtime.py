@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 from homeassistant.const import CONF_NAME, STATE_OFF, STATE_ON
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from ._ha_compat import MockConfigEntry
 
 from custom_components.laundry_monitor.const import (
     CONF_CURRENT_ACTIVITY_THRESHOLD,

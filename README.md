@@ -371,42 +371,51 @@ ruff check custom_components tests scripts --select E,W,F
 python -m pytest
 ```
 
-The **full regression suite** runs against both supported CI targets on
-Python 3.14: minimum **Home Assistant Core 2026.6.0** with
-`pytest-homeassistant-custom-component==0.13.336`, and current
-fixture-supported **Core 2026.10.4** with fixture `0.13.375`.
-The fixture packages pin **exact Core versions** and must not be mixed.
-CI prints and verifies the installed and imported Core and fixture versions;
-a version mismatch fails the job.
+The **full regression suite** runs against three pinned Home Assistant Core
+environments on Python 3.14:
 
-Use **separate Python 3.14 virtual environments** to reproduce each target.
-For the minimum version:
+| Check | Core | Pytest fixture package | Requirements |
+| --- | --- | --- | --- |
+| `Tests (minimum)` | 2026.6.0 | `pytest-homeassistant-custom-component==0.13.336` | `requirements_test_min.txt` |
+| `Tests (legacy)` | 2026.10.4 | `pytest-homeassistant-custom-component==0.13.375` | `requirements_test_legacy.txt` |
+| `Tests (current)` | 2026.11.1 | `pytest-homeassistant==2026.11.1` (official package) | `requirements_test.txt` |
+
+Core 2026.11+ uses the official Home Assistant
+[`pytest-homeassistant`](https://github.com/home-assistant/core/blob/dev/packages/pytest-homeassistant/README.md)
+package. The two fixture package families **must not be installed together**.
+Each job verifies the installed and imported Core version, the pinned
+fixture distribution/version, and the absence of the incompatible package.
+The test-only `tests/components/laundry_monitor/_ha_compat.py` provides
+version-neutral `MockConfigEntry` and `async_fire_time_changed` imports.
+The official package enables custom integrations automatically, while the
+existing `enable_custom_integrations` requests remain valid on both paths.
+
+Use **separate Python 3.14 virtual environments** for each target. Install
+the corresponding requirements file and run the full suite, for example:
 
 ```bash
-python -m pip install -r requirements_test_min.txt
+python -m pip install -r requirements_test.txt
 python -m pip check
 python -m pytest -vv --tb=short
 ```
 
-For the current fixture-supported version, replace the requirements file
-with `requirements_test.txt` and run the same checks. Both jobs run the
-entire pytest suite, covering state reports, unit conversion and metadata,
-configuration, diagnostics, persistence, and detector behavior.
+To reproduce the minimum or legacy jobs, substitute
+`requirements_test_min.txt` or `requirements_test_legacy.txt`. All three
+jobs run the **full suite**, covering state reports, unit conversion,
+metadata, configuration, diagnostics, persistence, and detection.
 
-CI exposes stable `Tests (minimum)` and `Tests (current)` job names even
-when the underlying Core versions advance. The aggregate `Tests` gate
-succeeds **only if both jobs succeed** and preserves the existing required
-`Tests` check in branch protection. All run on pull requests (including
-docs-only PRs), `main` pushes and scheduled validation, alongside Ruff,
-Hassfest and HACS.
+The names `Tests (minimum)` and `Tests (current)` remain stable when
+Core targets advance; `Tests (legacy)` guards the last supported legacy
+fixture version. The aggregate required `Tests` gate succeeds only when
+**all three** pass. Checks run on PRs (including docs-only PRs), pushes to
+`main` and scheduled validation alongside Ruff, Hassfest and HACS.
 
-**Upgrade cadence:** at least monthly after the Home Assistant stable
-release, review both the latest stable Core and the newest fixture package.
-Advance the current target only when a matching fixture/Core pair is
-published, pin both versions together, run CI, and update this README.
-A newer Core release without a corresponding fixture is **not yet
-verified**, and must not be labelled as covered. Keep the minimum target
-at 2026.6.0 until the published HACS support floor changes.
+**Upgrade cadence:** at least monthly after a Home Assistant stable
+release, review the latest Core and its matching official fixture package.
+Pin both versions together, run CI and update this README before advancing
+the current target. The legacy target can be retired in a separate reviewed
+change once its compatibility coverage is no longer needed. Keep the HACS
+minimum at Core 2026.6.0 unless the published support floor changes.
 
 Ruff runs on **every pull request**, including documentation-only changes, and
 on pushes to `main` through the read-only `Validate / Ruff check` CI job.
@@ -418,7 +427,8 @@ repository permissions.
 
 For maintainers: the current `main` ruleset requires `Ruff check`, `Tests`,
 `Hassfest` and `HACS`. Keep the stable aggregate `Tests` check required:
-it fails whenever either `Tests (minimum)` or `Tests (current)` fails.
+it fails whenever any of `Tests (minimum)`, `Tests (legacy)` or
+`Tests (current)` fails.
 Do not require version-numbered Core job names, which would break on
 monthly upgrades. Enforce reviewed PRs and prevent bypasses separately
 in GitHub branch rules; CI YAML does not replace branch protection.
@@ -796,44 +806,54 @@ ruff check custom_components tests scripts --select E,W,F
 python -m pytest
 ```
 
-**Полный набор регрессионных тестов** выполняется на двух версиях
-Home Assistant Core (Python 3.14): минимальной **2026.6.0** с
-`pytest-homeassistant-custom-component==0.13.336` и актуальной проверяемой
-**2026.10.4** с тестовым пакетом `0.13.375`. Тестовые пакеты привязаны
-к **точным версиям Core**, смешивать их нельзя. CI выводит и сверяет
-установленную и импортированную версии Core и fixture; при несовпадении
-задача завершается ошибкой.
+**Полный набор регрессионных тестов** запускается в трёх отдельных
+окружениях Home Assistant Core на Python 3.14:
 
-Для локального воспроизведения используйте **отдельные виртуальные
-окружения Python 3.14**. Для минимальной версии выполните:
+| Проверка | Core | Пакет фикстур | Файл зависимостей |
+| --- | --- | --- | --- |
+| `Tests (minimum)` | 2026.6.0 | `pytest-homeassistant-custom-component==0.13.336` | `requirements_test_min.txt` |
+| `Tests (legacy)` | 2026.10.4 | `pytest-homeassistant-custom-component==0.13.375` | `requirements_test_legacy.txt` |
+| `Tests (current)` | 2026.11.1 | Официальный `pytest-homeassistant==2026.11.1` | `requirements_test.txt` |
+
+Начиная с Core 2026.11 используется официальный пакет
+[`pytest-homeassistant`](https://github.com/home-assistant/core/blob/dev/packages/pytest-homeassistant/README.md).
+**Устанавливать одновременно два семейства пакетов фикстур нельзя.**
+Каждое окружение сверяет версии импортированного и установленного Core,
+пакет фикстур и отсутствие несовместимого пакета.
+Тестовый модуль `tests/components/laundry_monitor/_ha_compat.py`
+объединяет импорты `MockConfigEntry` и `async_fire_time_changed`.
+В новом пакете пользовательские интеграции включены по умолчанию;
+существующие запросы `enable_custom_integrations` допустимы в обоих вариантах.
+
+Для воспроизведения используйте **отдельные виртуальные окружения
+Python 3.14**. Установите файл зависимостей для нужного окружения и
+запустите полный набор, например:
 
 ```bash
-python -m pip install -r requirements_test_min.txt
+python -m pip install -r requirements_test.txt
 python -m pip check
 python -m pytest -vv --tb=short
 ```
 
-Для актуальной проверяемой версии замените файл зависимостей на
-`requirements_test.txt` и выполните те же команды. В обоих окружениях
-запускается **весь pytest-набор**, включая проверки state reports,
-единиц измерения и метаданных, конфигурации, диагностики, сохранения
-состояния и детекторов.
+Для минимальной или прежней версии Core используйте соответственно
+`requirements_test_min.txt` или `requirements_test_legacy.txt`.
+Во **всех трёх окружениях** запускаются все тесты: state reports,
+конвертация единиц, метаданные, конфигурация, диагностика, восстановление
+состояния и детекторы.
 
-CI создаёт проверки с постоянными именами `Tests (minimum)` и
-`Tests (current)` независимо от версии Core. Итоговая проверка
-`Tests` проходит **только при успехе обеих** и сохраняет совместимость
-с уже обязательным статусом `Tests` в branch protection. Все эти
-задачи запускаются для каждого PR (включая изменения только
-документации), при push в `main` и по расписанию вместе с Ruff,
+Постоянные имена `Tests (minimum)` и `Tests (current)` сохраняются при
+смене версий Core. `Tests (legacy)` проверяет последний Core со старым
+пакетом фикстур. Итоговый обязательный статус `Tests` проходит только
+при успехе **всех трёх**. Задачи запускаются для PR (включая изменения
+только документации), при push в `main` и по расписанию, вместе с Ruff,
 Hassfest и HACS.
 
-**Порядок обновления:** минимум раз в месяц после стабильного релиза
-Home Assistant проверяйте последнюю версию Core и доступный тестовый
-пакет. Продвигайте актуальную проверяемую версию только после выпуска
-совместимой пары Core/fixture, закрепляя обе версии вместе, запуская CI
-и обновляя README. Новейший Core **не считается проверенным**, пока
-для него нет подтверждённой совместимой тестовой среды. Минимальный
-Core 2026.6.0 сохраняется до официального изменения порога HACS.
+**Порядок обновления:** минимум раз в месяц проверять последний стабильный
+Core и соответствующий официальный пакет тестовых фикстур. Версии Core
+и фикстур закреплять вместе, запускать CI и обновлять README.
+Промежуточное legacy-окружение можно убрать отдельным ревьюируемым PR,
+когда такая проверка перестанет быть нужна. Минимальная поддерживаемая
+версия Core остаётся 2026.6.0 до изменения порога HACS.
 
 Задача `Validate / Ruff check` запускается для **каждого PR**, включая
 изменения только документации, и при push в `main`. Безопасные исправления
@@ -845,7 +865,7 @@ Core 2026.6.0 сохраняется до официального измене�
 
 Текущий ruleset для `main` требует `Ruff check`, `Tests`,
 `Hassfest` и `HACS`. Оставляйте обязательным постоянный итоговый
-статус `Tests`: он блокирует merge при падении `Tests (minimum)`
+статус `Tests`: он блокирует merge при падении `Tests (minimum)`, `Tests (legacy)`
 или `Tests (current)`. Не закрепляйте имена с номером версии Core:
 они будут меняться при ежемесячных обновлениях. Запрет обхода правил
 и обязательный ревью-PR настраиваются отдельно в GitHub; workflow

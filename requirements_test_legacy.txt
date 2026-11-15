@@ -1,0 +1,5 @@
+# Full regression suite: last Core release supported by the legacy fixture package.
+# Keep separate from pytest-homeassistant (Core 2026.11+).
+pytest==9.0.3
+homeassistant==2026.10.4
+pytest-homeassistant-custom-component==0.13.375
