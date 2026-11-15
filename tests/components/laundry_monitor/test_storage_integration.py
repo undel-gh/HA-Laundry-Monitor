@@ -10,7 +10,7 @@ from homeassistant.const import CONF_NAME, STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from ._ha_compat import MockConfigEntry
 
 from custom_components.laundry_monitor import DATA_STATE_STORE
 from custom_components.laundry_monitor.const import (
