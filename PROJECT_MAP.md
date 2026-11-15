@@ -29,7 +29,7 @@ Home Assistant custom integration that infers washing-machine cycle state from e
 | Constants, defaults, event/reason IDs | — | `const.py` | many tests import these constants |
 | Localization | `SPECIFICATION.md` localization section | `translations/en.json`, `translations/ru.json` | `test_translations.py` |
 | HACS / HA metadata | `README.md` | `manifest.json`, `hacs.json`, `brand/` | HACS/CI validation |
-| CI and test execution | `README.md` contributing section | `.github/workflows/validate.yml`, `pytest.ini`, `requirements_test.txt` | entire test suite |
+| CI and test execution | `README.md` contributing section | `.github/workflows/validate.yml`, `pytest.ini`, `requirements_test{,_min,_legacy}.txt`, `tests/components/laundry_monitor/_ha_compat.py` | entire test suite |
 
 ## Documentation
 
