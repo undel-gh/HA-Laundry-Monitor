@@ -11,7 +11,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import (
+from ._ha_compat import (
     MockConfigEntry,
     async_fire_time_changed,
 )
