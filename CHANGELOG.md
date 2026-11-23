@@ -12,9 +12,72 @@ retrospectively reconstructed here.
 
 ## [Unreleased]
 
-No additional changes recorded since the 0.1.8-rc8 release candidate was
-prepared. Add subsequently merged changes here rather than silently changing
-an already published tag.
+No additional changes recorded.
+
+## [0.1.8] - 2026-11-23
+
+First stable 0.1.8 release. This section summarizes user-facing changes
+accumulated since the last plain-semver stable release, `0.1.4`, including
+the 0.1.5–0.1.8 release-candidate line. It does not mean these features
+were all introduced after 0.1.8-rc8.
+
+### Added
+- Heating detection and a `unknown` / `not_seen` / `detected` context for
+  final-spin decisions; configurable hybrid power/vibration corroboration
+  and a conservative fast path for non-heated short programs.
+- Cycle persistence, restoration and additional diagnostics for heating,
+  electrical spin and state transitions across Home Assistant restarts.
+- `cycle_started_at` timestamp for a frontend-local live duration without
+  periodic Recorder updates (#19).
+- Downloadable source diagnostics separating usable measurements
+  (`available`) from HA entity availability (`entity_available`) (#18).
+
+### Fixed
+- Heated-cycle hybrid `final_spin` false positives: confirmation requires
+  at least 45 seconds of continuous electrical spin evidence and a fresh
+  vibration edge at or after that candidate started (#1).
+- Reject invalid, missing or timezone-naive persisted timing when restoring
+  active cycles; fail closed rather than reviving an unsafe active state (#8).
+- Power/current normalization to canonical W/A with supported unit scales,
+  non-finite rejection and required-power Repairs consistency (#9, #18).
+- Treat repeated valid, unchanged HA power/current reports as fresh
+  electrical observations without fabricating vibration rising edges (#10).
+- Consistent measurement-validity semantics in Diagnostics and runtime (#18).
+
+### Changed
+- Reduce redundant entity publications/Recorder churn without reducing
+  detector evaluation cadence (#19).
+- `current_cycle_duration` is now a transition-only snapshot, not a live
+  ticking timer; new installations disable it and high-churn diagnostic
+  entities by default, while saved registry preferences are retained (#19).
+- Document `error` as a monitoring/input reliability state, not a washing
+  machine fault code (#11).
+- Add reviewed release metadata checks, read-only Ruff validation,
+  bytecode-artifact guards, and full regression suites for Core 2026.6.0,
+  2026.10.4 and 2026.11.1 with matching fixture packages (#20–#26).
+  The Core 2026.11.1 test tooling update (#26) is CI-only: no runtime
+  behavior changed after 0.1.8-rc8.
+
+### Compatibility and upgrade
+- Minimum supported Home Assistant Core remains **2026.6.0**; automatic
+  full-suite CI covers Core **2026.6.0**, **2026.10.4** and **2026.11.1**,
+  not physical field tests for every version.
+- No configuration migration or entity rename in this release-preparation
+  PR. Existing dashboards using `current_cycle_duration` as a live timer
+  should use `cycle_started_at` while `running`/`final_spin` and
+  `last_cycle_duration` after completion (#19).
+- External diagnostics parsers may need to accommodate the changed meaning
+  of `sources[*].available` and the new `entity_available` flag (#18).
+- Historical RC3–RC7 GitHub Releases were misclassified as regular releases;
+  rc8 was correctly marked a prerelease. This stable release must be
+  published as **0.1.8**, `prerelease=false`, on the verified `main`
+  commit. Do not retag or silently alter past RC releases.
+- Required HACS fresh-install, upgrade, restart/recovery and channel smoke
+  checks must be recorded before publication. Real-cycle field results
+  support detector readiness but do not replace the installation checks.
+
+See [0.1.8 stable notes](docs/releases/0.1.8.md) and
+[Russian notes](docs/releases/0.1.8.ru.md).
 
 ## [0.1.8-rc8] - 2026-11-12
 

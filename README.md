@@ -20,7 +20,7 @@ The only required source is a **power sensor**. Optional current, door, vibratio
 - Is laundry still considered present?
 - Why did the integration make a particular state transition?
 
-> **Status:** release candidate / field validation. The state machine, activity/spin/finish detectors, heating-aware hybrid logic, persistence, statistics, diagnostics, and Home Assistant entities are implemented and covered by tests. Current work focuses on field validation, restart/recovery hardening, and documentation/diagnostic consistency before the first stable release."        
+> **Release status:** See [GitHub Releases](https://github.com/undel-gh/HA-Laundry-Monitor/releases) for the latest **published** version. The cycle state machine, activity/spin/finish detectors, heating-aware hybrid logic, persistence, diagnostics and Home Assistant entities are implemented and regression tested. The 0.1.8 stable scope and upgrade guidance are documented in the [release notes](docs/releases/0.1.8.md); preparing or merging a release PR does not publish the release.
 
 ## Features
 
@@ -459,7 +459,7 @@ Released under the [MIT License](LICENSE).
 - Считается ли бельё всё ещё находящимся в машине?
 - Почему интеграция выполнила конкретный переход между состояниями?
 
-> **Статус:** кандидат в релизы / проверка в реальных условиях. Конечный автомат, детекторы активности, отжима и завершения, гибридная логика с учётом нагрева, сохранение состояния, статистика, диагностика и сущности Home Assistant реализованы и покрыты тестами. Текущая работа сосредоточена на проверке в реальных условиях, повышении надёжности восстановления после перезапуска и согласованности документации и диагностики перед первым стабильным релизом.
+> **Статус релиза:** актуальную **опубликованную** версию смотрите в [GitHub Releases](https://github.com/undel-gh/HA-Laundry-Monitor/releases). Конечный автомат, детекторы активности, отжима и завершения, гибридная логика с учётом нагрева, сохранение состояния, диагностика и сущности Home Assistant реализованы и покрыты регрессионными тестами. Состав стабильной версии 0.1.8 и порядок обновления описаны в [заметках релиза](docs/releases/0.1.8.ru.md). Подготовка или merge release-PR сами по себе не публикуют релиз.
 
 ### Возможности
 
