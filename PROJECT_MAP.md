@@ -61,7 +61,7 @@ English and Russian release checklists. The English checklist is authoritative.
 Versioned release notes; published paths and contents remain stable.
 
 ### `docs/README.md`
-Bilingual documentation index. Old `docs/en/` and `docs/ru/` file paths are compatibility stubs, not maintained copies.
+Bilingual documentation index with navigation for users, technical reference and maintainers.
 
 ## Integration implementation — `custom_components/laundry_monitor/`
 

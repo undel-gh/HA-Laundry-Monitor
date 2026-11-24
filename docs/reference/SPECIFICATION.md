@@ -852,9 +852,6 @@ docs/
     0.1.8.ru.md
     0.1.8-rc8.md
     0.1.8-rc8.ru.md
-  en/                      # compatibility notices only
-  ru/                      # compatibility notices only
-  Laundry_monitor_card.md  # compatibility notice and card link
 ```
 
 The English documentation is canonical.
