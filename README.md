@@ -1,4 +1,4 @@
-**[English](#Laundry-Monitor) | [Русский](#Мониторинг-стирки)**
+**[English](#laundry-monitor) | [Русский](#мониторинг-стирки)**
 
 # Laundry Monitor
 
@@ -32,7 +32,7 @@ The only required source is a **power sensor**. Optional current, door, vibratio
 - Optional vibration-based detection of a probable **terminal spin sequence / terminal phase**.
 - Experimental opt-in hybrid confirmation can combine vibration evidence with a fresh, sustained electrical spin candidate.
 - Heating-aware cycle context can suppress false terminal-spin decisions during sustained heater operation, delay reduced-evidence hybrid confirmation for heated wash programs, and permit a conservative faster path for programs where no heating is observed.
-- When hybrid confirmation is enabled and heating has been detected, full vibration evidence still requires fresh electrical corroboration before `final_spin`; hybrid-disabled configurations retain the vibration-only path.     
+- When hybrid confirmation is enabled and heating has been detected, full vibration evidence still requires fresh electrical corroboration before `final_spin`; hybrid-disabled configurations retain the vibration-only path.
 - Electrical confirmation uses power as the primary signal; optional current is corroborating diagnostics only.
 - Two finish paths:
   - shorter confirmation after terminal-phase detection;
@@ -159,7 +159,7 @@ The `error` state belongs to **Laundry Monitor's monitoring logic**, not to the 
 
 The historical identifier `final_spin` is retained as part of the public API. Conceptually it represents entry into a probable terminal phase rather than an assertion that the drum is continuously spinning.
 
-A terminal phase may include multiple spin stages, short stops, overlapping spin and drain operation, drain-only operation after the drum stops, drum positioning, electronics activity, and end-of-program signalling. Detailed normative behavior is defined in [`docs/en/STATE_MACHINE.md`](docs/en/STATE_MACHINE.md).
+A terminal phase may include multiple spin stages, short stops, overlapping spin and drain operation, drain-only operation after the drum stops, drum positioning, electronics activity, and end-of-program signalling. Detailed normative behavior is defined in [`docs/reference/STATE_MACHINE.md`](docs/reference/STATE_MACHINE.md).
 
 ## Entities
 
@@ -303,13 +303,14 @@ For detailed behavior and invariants, use the canonical English documentation.
 
 ## Project documentation
 
+- [Documentation index (EN/RU)](docs/README.md) — guides, reference, maintainer procedures and release notes.
 - [`PROJECT_MAP.md`](PROJECT_MAP.md) — quick navigator: task → specification → implementation → tests.
-- [`docs/en/SPECIFICATION.md`](docs/en/SPECIFICATION.md) — canonical product specification and detection model.
-- [`docs/en/ARCHITECTURE.md`](docs/en/ARCHITECTURE.md) — component boundaries and data flow.
-- [`docs/en/REQUIREMENTS.md`](docs/en/REQUIREMENTS.md) — normative functional and non-functional requirements.
-- [`docs/en/STATE_MACHINE.md`](docs/en/STATE_MACHINE.md) — detailed public/internal states, transitions, timers, recovery, edge cases, and invariants.
-- [`docs/en/USER_MANUAL.md`](docs/en/USER_MANUAL.md) — English user-facing manual.
-- [`docs/ru/USER_MANUAL.md`](docs/ru/USER_MANUAL.md) — Russian user-facing manual.
+- [`docs/reference/SPECIFICATION.md`](docs/reference/SPECIFICATION.md) — canonical product specification and detection model.
+- [`docs/reference/ARCHITECTURE.md`](docs/reference/ARCHITECTURE.md) — component boundaries and data flow.
+- [`docs/reference/REQUIREMENTS.md`](docs/reference/REQUIREMENTS.md) — normative functional and non-functional requirements.
+- [`docs/reference/STATE_MACHINE.md`](docs/reference/STATE_MACHINE.md) — detailed public/internal states, transitions, timers, recovery, edge cases, and invariants.
+- [`docs/guides/USER_MANUAL.en.md`](docs/guides/USER_MANUAL.en.md) — English user-facing manual.
+- [`docs/guides/USER_MANUAL.ru.md`](docs/guides/USER_MANUAL.ru.md) — Russian user-facing manual.
 
 When looking for implementation details, start with [`PROJECT_MAP.md`](PROJECT_MAP.md) instead of scanning the repository. English documentation always remains canonical.
 
@@ -355,7 +356,7 @@ Use Home Assistant automations to build actions on top of Laundry Monitor states
 
 ## Maintainer releases
 
-Before publishing an RC or stable version, follow the [release checklist](docs/en/RELEASE_CHECKLIST.md) and record verified user-facing changes in the [changelog](CHANGELOG.md). The tag, manifest version, GitHub prerelease flag, and HACS channel must agree. A release requires a separate reviewed release-preparation PR; merging feature fixes does not publish a version.
+Before publishing an RC or stable version, follow the [release checklist](docs/maintainers/RELEASE_CHECKLIST.en.md) and record verified user-facing changes in the [changelog](CHANGELOG.md). The tag, manifest version, GitHub prerelease flag, and HACS channel must agree. A release requires a separate reviewed release-preparation PR; merging feature fixes does not publish a version.
 
 ## Contributing
 
@@ -433,7 +434,7 @@ Do not require version-numbered Core job names, which would break on
 monthly upgrades. Enforce reviewed PRs and prevent bypasses separately
 in GitHub branch rules; CI YAML does not replace branch protection.
 
-The English documentation under `docs/en/` is canonical. Translations must follow it and must not define separate behavior.
+The English documentation, including the technical reference under `docs/reference/`, is canonical. Translations must follow it and must not define separate behavior.
 
 During early development, keep documentation, runtime behavior, tests, translations, and [`PROJECT_MAP.md`](PROJECT_MAP.md) synchronized when changing detector or state-machine behavior.
 
@@ -441,7 +442,7 @@ During early development, keep documentation, runtime behavior, tests, translati
 
 Released under the [MIT License](LICENSE).
 
-**[English](#Laundry-Monitor) | [Русский](#Мониторинг-стирки)**
+**[English](#laundry-monitor) | [Русский](#мониторинг-стирки)**
 
 # Мониторинг стирки
 
@@ -594,7 +595,7 @@ Released under the [MIT License](LICENSE).
 
 Исторический идентификатор `final_spin` сохранён как часть публичного API. Концептуально он обозначает вход в вероятную завершающую фазу, а не утверждение о непрерывном вращении барабана.
 
-Завершающая фаза может включать несколько стадий отжима, короткие остановки, одновременную работу отжима и слива, только слив после остановки барабана, позиционирование барабана, активность электроники и сигнал об окончании программы. Подробное нормативное поведение определено в [`docs/en/STATE_MACHINE.md`](docs/en/STATE_MACHINE.md).
+Завершающая фаза может включать несколько стадий отжима, короткие остановки, одновременную работу отжима и слива, только слив после остановки барабана, позиционирование барабана, активность электроники и сигнал об окончании программы. Подробное нормативное поведение определено в [`docs/reference/STATE_MACHINE.md`](docs/reference/STATE_MACHINE.md).
 
 ### Сущности
 
@@ -738,13 +739,14 @@ automation:
 
 ### Документация проекта
 
+- [Навигация по документации EN/RU](docs/README.md#русский) — руководства, справочник, процедуры сопровождения и заметки о релизах.
 - [`PROJECT_MAP.md`](PROJECT_MAP.md) — краткий навигатор: задача → спецификация → реализация → тесты.
-- [`docs/en/SPECIFICATION.md`](docs/en/SPECIFICATION.md) — каноническая спецификация продукта и модель обнаружения.
-- [`docs/en/ARCHITECTURE.md`](docs/en/ARCHITECTURE.md) — границы компонентов и поток данных.
-- [`docs/en/REQUIREMENTS.md`](docs/en/REQUIREMENTS.md) — нормативные функциональные и нефункциональные требования.
-- [`docs/en/STATE_MACHINE.md`](docs/en/STATE_MACHINE.md) — подробные публичные и внутренние состояния, переходы, таймеры, восстановление, пограничные случаи и инварианты.
-- [`docs/en/USER_MANUAL.md`](docs/en/USER_MANUAL.md) — руководство пользователя на английском языке.
-- [`docs/ru/USER_MANUAL.md`](docs/ru/USER_MANUAL.md) — руководство пользователя на русском языке.
+- [`docs/reference/SPECIFICATION.md`](docs/reference/SPECIFICATION.md) — каноническая спецификация продукта и модель обнаружения.
+- [`docs/reference/ARCHITECTURE.md`](docs/reference/ARCHITECTURE.md) — границы компонентов и поток данных.
+- [`docs/reference/REQUIREMENTS.md`](docs/reference/REQUIREMENTS.md) — нормативные функциональные и нефункциональные требования.
+- [`docs/reference/STATE_MACHINE.md`](docs/reference/STATE_MACHINE.md) — подробные публичные и внутренние состояния, переходы, таймеры, восстановление, пограничные случаи и инварианты.
+- [`docs/guides/USER_MANUAL.en.md`](docs/guides/USER_MANUAL.en.md) — руководство пользователя на английском языке.
+- [`docs/guides/USER_MANUAL.ru.md`](docs/guides/USER_MANUAL.ru.md) — руководство пользователя на русском языке.
 
 При поиске сведений о реализации начните с [`PROJECT_MAP.md`](PROJECT_MAP.md), а не с просмотра всего репозитория. Канонической всегда остаётся английская документация.
 
@@ -790,7 +792,7 @@ automation:
 
 ### Публикация релизов
 
-Перед выпуском RC или stable выполните [контрольный список релиза](docs/ru/RELEASE_CHECKLIST.md), а подтверждённые изменения для пользователей внесите в [changelog](CHANGELOG.md). Тег, версия manifest, флаг prerelease на GitHub и канал HACS должны быть согласованы. Для публикации нужен отдельный проверенный PR подготовки релиза; merge исправлений сам по себе новую версию не выпускает.
+Перед выпуском RC или stable выполните [контрольный список релиза](docs/maintainers/RELEASE_CHECKLIST.ru.md), а подтверждённые изменения для пользователей внесите в [changelog](CHANGELOG.md). Тег, версия manifest, флаг prerelease на GitHub и канал HACS должны быть согласованы. Для публикации нужен отдельный проверенный PR подготовки релиза; merge исправлений сам по себе новую версию не выпускает.
 
 ### Участие в разработке
 
@@ -871,7 +873,7 @@ Core и соответствующий официальный пакет тес�
 и обязательный ревью-PR настраиваются отдельно в GitHub; workflow
 не заменяет защиту ветки.
 
-Английская документация в `docs/en/` является канонической. Переводы должны следовать ей и не должны определять отдельное поведение.
+Английская документация, включая технический справочник в `docs/reference/`, является канонической. Переводы должны следовать ей и не должны определять отдельное поведение.
 
 На раннем этапе разработки при изменении поведения детекторов или конечного автомата поддерживайте синхронность документации, поведения во время работы, тестов, переводов и [`PROJECT_MAP.md`](PROJECT_MAP.md).
 
@@ -879,4 +881,4 @@ Core и соответствующий официальный пакет тес�
 
 Выпущено под [лицензией MIT](LICENSE).
 
-**[English](#Laundry-Monitor) | [Русский](#Мониторинг-стирки)**
+**[English](#laundry-monitor) | [Русский](#мониторинг-стирки)**
