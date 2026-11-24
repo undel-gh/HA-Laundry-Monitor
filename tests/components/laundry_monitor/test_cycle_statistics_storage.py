@@ -64,8 +64,8 @@ def test_snapshot_without_cycle_statistics_is_backward_compatible() -> None:
     assert restored.final_spin_detected is False
 
 
-def test_non_finite_cycle_statistics_are_rejected() -> None:
-    """Test corrupt numeric statistics cannot enter runtime state."""
+def test_non_finite_cycle_statistics_degrade_independently() -> None:
+    """One invalid numeric statistic must not discard other history."""
     stored = {
         "cycle_state": "finished",
         "last_transition_reason": "finish_confirmed",
@@ -73,6 +73,41 @@ def test_non_finite_cycle_statistics_are_rejected() -> None:
         "cycle_started_at": None,
         "laundry_present": True,
         "last_cycle_duration": "nan",
+        "last_cycle_energy": 0.56,
+        "last_cycle_energy_unit": "kWh",
     }
 
-    assert RuntimeSnapshot.from_storage_dict(stored) is None
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.cycle_state is LaundryCycleState.FINISHED
+    assert restored.laundry_present is True
+    assert restored.last_cycle_duration is None
+    assert restored.last_cycle_energy == 0.56
+    assert restored.last_cycle_energy_unit == "kWh"
+
+
+def test_corrupt_active_energy_and_completed_energy_do_not_poison_duration() -> None:
+    """Independent energy fields fail locally without losing known duration."""
+    stored = {
+        "cycle_state": "running",
+        "last_transition_reason": "test",
+        "last_state_change": "2026-07-15T12:00:00+00:00",
+        "cycle_started_at": "2026-07-15T11:00:00+00:00",
+        "laundry_present": True,
+        "cycle_energy_start": "inf",
+        "cycle_energy_unit": "kWh",
+        "last_cycle_energy": "invalid",
+        "last_cycle_energy_unit": "kWh",
+        "last_cycle_duration": 3600.0,
+    }
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.cycle_energy_start is None
+    assert restored.cycle_energy_unit is None
+    assert restored.last_cycle_energy is None
+    assert restored.last_cycle_energy_unit is None
+    assert restored.last_cycle_duration == 3600.0
+    assert restored.cycle_state is LaundryCycleState.RUNNING

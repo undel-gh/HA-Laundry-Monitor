@@ -721,6 +721,41 @@ The integration should re-evaluate the error condition after startup.
 
 It may remain in `error` or recover according to Section 8.6.
 
+### 13.8 Partially corrupt persisted snapshots
+
+The persisted `last_state_change` is **mandatory cycle-state timing**.
+If it is missing, malformed or timezone-naive, recovery **always selects
+`idle`**, even if the stored state is `armed`, `running`, `final_spin`,
+`finished` or `error`. No saved cycle-start, heating, spin or finish
+context is trusted in that case. This is a fallback, not a restored state:
+the runtime assigns a fresh transition time, uses
+`state_recovery_fallback`, resets active-cycle detectors and persists a
+sanitized snapshot. Recovery itself does not fire cycle events.
+
+In contrast, **independent history is recovered field-by-field** wherever
+its own values are valid:
+
+* `laundry_present` is retained, subject to the existing Laundry Tracking
+  policy (including the disabled-tracking finished-state cleanup);
+* a valid timezone-aware `last_unloaded_at` is retained; malformed,
+  missing or timezone-naive optional unload timing becomes `None` only;
+* valid completed `last_cycle_duration`, `last_cycle_energy` and
+  `last_cycle_energy_unit` survive independent timing failures; corrupt
+  non-finite optional numeric statistics are discarded individually;
+* invalid optional `cycle_started_at` prevents active-cycle restoration,
+  as before; `cycle_energy_start` and its unit are not carried into an
+  idle fallback.
+
+Missing or invalid **non-timing mandatory identity fields**
+(`cycle_state`, `last_transition_reason`, `laundry_present`) still
+invalidate the snapshot as a whole. Detector proof such as vibration
+timestamps and heating fingerprint remains optional and is subject to
+its existing independent validation rules.
+
+Snapshot storage format/version remains unchanged; older valid snapshots
+continue to deserialize normally. Invalid optional-only fields are safely
+ignored on load and are overwritten on the next ordinary snapshot save.
+
 ## 14. Timing Rules
 
 ### 14.1 Monotonic evaluation

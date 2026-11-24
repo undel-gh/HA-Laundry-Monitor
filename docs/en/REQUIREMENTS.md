@@ -429,6 +429,26 @@ Recorder load.
 
 ---
 
+## FR-068
+
+Snapshot decoding shall distinguish **recovery-critical cycle timing**
+from independently usable laundry tracking and completed-cycle history.
+A persisted `last_state_change` that is absent, malformed or
+timezone-naive shall never recover an active, armed, finished or error
+cycle state: it shall select `idle`, reset active-cycle context, apply
+a recovery-fallback reason and save corrected timing without fabricating
+cycle events. Valid independent `laundry_present`, a timezone-aware
+`last_unloaded_at`, completed duration and energy values shall be
+preserved whenever safe under the existing tracking policy. Invalid
+optional unload timestamps and non-finite optional numeric statistics
+shall degrade individually, not invalidate an otherwise valid snapshot.
+Invalid other mandatory structural fields still cause the snapshot
+to be rejected. Existing storage versions, valid snapshots and
+the fail-closed requirements for active-cycle recovery shall remain
+compatible.
+
+---
+
 # Non-Functional Requirements
 
 ## NFR-001

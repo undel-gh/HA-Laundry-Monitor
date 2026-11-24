@@ -23,7 +23,8 @@ class RuntimeSnapshot:
 
     cycle_state: LaundryCycleState
     last_transition_reason: str
-    last_state_change: datetime
+    # None means persisted transition timing is unusable: never resume a state.
+    last_state_change: datetime | None
     cycle_started_at: datetime | None
     laundry_present: bool
     last_unloaded_at: datetime | None = None
@@ -48,7 +49,11 @@ class RuntimeSnapshot:
         return {
             "cycle_state": self.cycle_state.value,
             "last_transition_reason": self.last_transition_reason,
-            "last_state_change": self.last_state_change.isoformat(),
+            "last_state_change": (
+                self.last_state_change.isoformat()
+                if self.last_state_change is not None
+                else None
+            ),
             "cycle_started_at": (
                 self.cycle_started_at.isoformat()
                 if self.cycle_started_at is not None
@@ -91,30 +96,41 @@ class RuntimeSnapshot:
         cls,
         data: dict[str, Any],
     ) -> RuntimeSnapshot | None:
-        """Deserialize and validate stored data."""
+        """Recover independent data without trusting corrupt cycle timing.
+
+        Invalid last_state_change becomes None, which forces the recovery
+        policy to IDLE. Invalid optional unload/statistic fields degrade
+        individually; valid laundry history is not discarded with them.
+        """
         try:
             cycle_state = LaundryCycleState(data["cycle_state"])
             last_state_change = _optional_aware_datetime(
-                data["last_state_change"]
+                data.get("last_state_change")
             )
             cycle_started_at = _optional_aware_datetime(
                 data.get("cycle_started_at")
             )
-            reason = str(data["last_transition_reason"])
-            laundry_present = bool(data["laundry_present"])
+            reason = data["last_transition_reason"]
+            laundry_present = data["laundry_present"]
+            # Unlike optional history, structural identity must not be
+            # guessed from truthiness or string coercion after corruption.
+            if not isinstance(reason, str) or not reason:
+                return None
+            if not isinstance(laundry_present, bool):
+                return None
             last_unloaded_at = _optional_aware_datetime(
                 data.get("last_unloaded_at")
             )
-            cycle_energy_start = _optional_finite_float(
+            cycle_energy_start = _safe_optional_finite_float(
                 data.get("cycle_energy_start")
             )
             cycle_energy_unit = _optional_string(
                 data.get("cycle_energy_unit")
             )
-            last_cycle_duration = _optional_finite_float(
+            last_cycle_duration = _safe_optional_finite_float(
                 data.get("last_cycle_duration")
             )
-            last_cycle_energy = _optional_finite_float(
+            last_cycle_energy = _safe_optional_finite_float(
                 data.get("last_cycle_energy")
             )
             last_cycle_energy_unit = _optional_string(
@@ -131,6 +147,12 @@ class RuntimeSnapshot:
 
         except (KeyError, TypeError, ValueError):
             return None
+        # A unit with no valid numeric energy value would be orphaned.
+        # Preserve usable duration/history even if one energy reading fails.
+        if cycle_energy_start is None:
+            cycle_energy_unit = None
+        if last_cycle_energy is None:
+            last_cycle_energy_unit = None
         # Recovery-only detector context degrades independently from the
         # core snapshot. Corrupt optional proof must never discard an
         # otherwise valid active cycle, laundry tracking state, or
@@ -153,10 +175,6 @@ class RuntimeSnapshot:
         spin_evidence_timestamps = _aware_datetime_tuple_discard_invalid(
             data.get("spin_evidence_timestamps")
         )
-        if last_state_change is None:
-            return None
-        if data.get("last_unloaded_at") and last_unloaded_at is None:
-            return None
         if heating_detected and heating_not_seen:
             # DETECTED is the stricter latched fact; a contradictory
             # NOT_SEEN bit is treated as corrupt optional context rather
@@ -339,6 +357,11 @@ def select_recovery_state(
     the configured lifecycle policy explicitly.
     """
     timestamp = now or dt_util.utcnow()
+    # Transition timing is mandatory for *every* cycle-state recovery.
+    # A degraded snapshot retains independent laundry/statistics only.
+    if snapshot.last_state_change is None:
+        return LaundryCycleState.IDLE
+
     age = max(timestamp - snapshot.last_state_change, timedelta())
     state = snapshot.cycle_state
 

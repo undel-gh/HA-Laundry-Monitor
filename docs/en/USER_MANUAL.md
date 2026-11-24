@@ -631,6 +631,18 @@ A stored active-cycle snapshot is restored only when it is sufficiently recent a
 
 Recovery is conservative: stale or unsafe runtime state must not be blindly restored.
 
+If a saved transition timestamp is corrupted, absent or has no timezone,
+the integration falls back to **idle** rather than guessing which
+washing-cycle phase was active. Where safely possible, the laundry-present
+flag, a valid previous unload timestamp and completed-cycle statistics
+are preserved. A corrupted optional unload timestamp is discarded without
+losing the rest of the valid snapshot. An invalid individual numeric
+statistic is also discarded rather than poisoning other valid history.
+
+A safe fallback does not announce that a wash has started or finished.
+The storage format has not changed; normal saved snapshots still recover
+as before.
+
 Transient rolling electrical evidence and diagnostic confirmation-path information may be rebuilt or cleared after restart.
 
 ---

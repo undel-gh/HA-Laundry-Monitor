@@ -796,6 +796,17 @@ For backward compatibility with experimental configurations created before heati
 - expired `finished` snapshots recover as `idle` when Laundry Tracking is off;
 - `finished` remains restorable when Laundry Tracking is on;
 - `error` recovers as `idle` when valid power data is already available.
+- missing, malformed or timezone-naive mandatory `last_state_change`
+  always forces a safe `idle` recovery regardless of saved state; cycle
+  timing and active detector evidence are discarded, and the runtime
+  persists a sanitized fallback snapshot;
+- valid independent `laundry_present`, `last_unloaded_at` and completed
+  cycle statistics survive a partially corrupt snapshot where safe;
+  bad optional unload timestamps and non-finite numeric statistics
+  degrade field-by-field rather than discarding all history;
+- corrupt or absent other mandatory structural fields still invalidate
+  the entire snapshot; storage version and existing valid snapshots
+  retain backward compatibility.
 
 Restoration does not emit cycle-start, final-spin, cycle-finished, or unload
 events.
