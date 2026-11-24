@@ -369,6 +369,48 @@ The electrical candidate is based on time-weighted rolling statistics, minimum o
 If power and current are supplied by the same smart plug or measurement device, they are correlated measurements of one electrical load and must not be interpreted as two independent votes.
 
 The runtime records `confirmation_path` as `vibration_only` or `hybrid` and exposes supporting evidence for diagnostics/event payloads. This value is diagnostic metadata rather than authoritative persisted cycle state and may be reset during restart recovery. Hybrid confirmation does not add or rename any public cycle state.
+
+#### Decision precedence (behavioral baseline for issue #3)
+
+The following **ordered first-match policy** documents the behavior of
+`runtime._evaluate_spin()` **before** the pure decision-policy extraction.
+Rows below the detector guards apply *after* the vibration detector has
+updated evidence/confidence and the runtime has persisted any new edge.
+
+| Order | First matching condition | `gate_reason` / result |
+| --- | --- | --- |
+| G0 | Public state is not `running` | Return without evaluating or changing spin diagnostics |
+| G1 | Vibration source not configured | `vibration_not_configured`; no detector evaluation |
+| G2 | Required power unavailable | `power_unavailable`; no detector evaluation |
+| 1 | Heating currently active | `heating_active` (blocks every confirmation path) |
+| 2 | Full vibration detector reports `detected` **and not** (hybrid enabled **and** heating previously `detected`) | Confirm `vibration_only`, `confirmed_vibration_only` |
+| 3 | Hybrid disabled | `hybrid_disabled` |
+| 4 | Electrical spin threshold missing | `hybrid_spin_threshold_not_configured` |
+| 5 | Heating threshold missing | `hybrid_heating_not_configured` |
+| 6 | Electrical candidate inactive | `heated_cycle_requires_electrical_candidate` **only** if hybrid heated and full vibration was detected; otherwise `electrical_candidate_inactive` |
+| 7 | Meaningful activity not recent | `activity_not_recent` |
+| 8 | Heating state `unknown` | `heating_unknown` |
+| 9 | Heating `not_seen` and normal vibration-cycle minimum age **not** reached | Confirm `hybrid` / `fast_non_heated` if **full** vibration count is met; otherwise `fast_path_requires_full_vibration` |
+| 10 | Vibration count below reduced hybrid requirement | `hybrid_vibration_insufficient` |
+| 11a | Heating `detected`, cycle start unknown | `cycle_age_unknown` |
+| 11b | Heating `detected`, cycle age below max(normal, heated minimum) | `heated_cycle_too_young` |
+| 11c | Heating `detected`, electrical candidate not continuously active for 45 seconds or missing candidate timestamp | `heated_electrical_candidate_immature` |
+| 11d | Heating `detected`, no retained rising edge at/after electrical candidate start | `heated_cycle_requires_fresh_vibration_after_electrical_candidate` |
+| 11e | Heating `detected`, all preceding gates passed | Confirm `hybrid` / `reduced`, `confirmed_hybrid_reduced` |
+| 12 | Remaining eligible case (including mature `not_seen`) | Confirm `hybrid` / `reduced`, `confirmed_hybrid_reduced` |
+
+In particular, row 2 intentionally permits the full vibration-only path
+when heating state is `unknown` or when hybrid is disabled. Row 8 blocks
+only **reduced hybrid** confirmation in unknown heating context. Row 9
+intentionally precedes the reduced vibration gate; early fast-path
+confirmation requires the full vibration count. Rows 11c and 11d are
+cumulative (FR-059 and FR-060), with equality at the 45-second and
+candidate-edge boundaries accepted.
+
+The policy decision supplies only the path, variant and gate reason;
+detector updates, evidence persistence, diagnostics, state-machine
+transitions (including rejection), HA event payloads and entity
+notifications remain the runtime's responsibility.
  
 #### Entry actions
 
