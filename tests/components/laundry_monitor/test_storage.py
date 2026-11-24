@@ -515,3 +515,26 @@ def test_corrupt_timing_and_unload_do_not_poison_independent_statistics(
         activity_detected=True,
         vibration_active=True,
     ) is LaundryCycleState.IDLE
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("laundry_present", "false"),
+        ("laundry_present", 1),
+        ("laundry_present", None),
+        ("last_transition_reason", None),
+        ("last_transition_reason", {}),
+        ("last_transition_reason", ""),
+    ],
+)
+def test_corrupt_mandatory_identity_fields_still_reject_snapshot(
+    field: str,
+    value: object,
+) -> None:
+    """No coercion may manufacture independently trusted history."""
+    stored = _snapshot(LaundryCycleState.FINISHED).as_storage_dict()
+    stored["last_state_change"] = "invalid"
+    stored[field] = value
+
+    assert RuntimeSnapshot.from_storage_dict(stored) is None
