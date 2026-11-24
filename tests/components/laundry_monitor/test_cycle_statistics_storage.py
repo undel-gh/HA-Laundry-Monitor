@@ -96,7 +96,9 @@ def test_corrupt_active_energy_and_completed_energy_do_not_poison_duration() -> 
         "cycle_started_at": "2026-07-15T11:00:00+00:00",
         "laundry_present": True,
         "cycle_energy_start": "inf",
+        "cycle_energy_unit": "kWh",
         "last_cycle_energy": "invalid",
+        "last_cycle_energy_unit": "kWh",
         "last_cycle_duration": 3600.0,
     }
 
@@ -104,6 +106,8 @@ def test_corrupt_active_energy_and_completed_energy_do_not_poison_duration() -> 
 
     assert restored is not None
     assert restored.cycle_energy_start is None
+    assert restored.cycle_energy_unit is None
     assert restored.last_cycle_energy is None
+    assert restored.last_cycle_energy_unit is None
     assert restored.last_cycle_duration == 3600.0
     assert restored.cycle_state is LaundryCycleState.RUNNING
