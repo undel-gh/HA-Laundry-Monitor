@@ -110,8 +110,14 @@ class RuntimeSnapshot:
             cycle_started_at = _optional_aware_datetime(
                 data.get("cycle_started_at")
             )
-            reason = str(data["last_transition_reason"])
-            laundry_present = bool(data["laundry_present"])
+            reason = data["last_transition_reason"]
+            laundry_present = data["laundry_present"]
+            # Unlike optional history, structural identity must not be
+            # guessed from truthiness or string coercion after corruption.
+            if not isinstance(reason, str) or not reason:
+                return None
+            if not isinstance(laundry_present, bool):
+                return None
             last_unloaded_at = _optional_aware_datetime(
                 data.get("last_unloaded_at")
             )
