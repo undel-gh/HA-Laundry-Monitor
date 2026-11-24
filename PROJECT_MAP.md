@@ -73,6 +73,17 @@ Activity Detector. Normalizes/evaluates power and optional current activity, cyc
 ### `spin.py`
 Spin detection implementation. `SpinDetector` maintains vibration-event evidence/windowing, cycle-age and activity gates. `ElectricalSpinCandidateDetector` maintains time-weighted electrical rolling statistics, source freshness, and the experimental sustained electrical candidate used by the opt-in hybrid confirmation path.
 
+### `spin_decision.py`
+Pure heating-aware spin-confirmation decision policy (issue #3).
+`SpinDecisionInputs` contains immutable detector evidence and runtime-provided
+timestamps/configuration facts. `decide_spin_confirmation()` evaluates the
+documented ordered gates and returns `SpinDecision` (confirmation path,
+hybrid variant, diagnostic gate reason) without mutating detectors or invoking
+Home Assistant. Compare with the decision-precedence table in
+`docs/en/STATE_MACHINE.md` §8.4. `runtime._evaluate_spin()` applies the
+decision and owns state transitions, event payloads, evidence persistence and
+entity notifications.
+
 ### `heating.py`
 Heating-context implementation. `HeatingContextDetector` maintains the cycle-local `unknown` / `not_seen` / `detected` state, sustained heater confirmation, valid observation coverage, source freshness, and persistence compatibility metadata used by heating-aware spin gating.
 
