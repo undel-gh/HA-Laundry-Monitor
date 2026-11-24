@@ -27,6 +27,8 @@ from custom_components.laundry_monitor.const import (
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
     DOMAIN,
+    EVENT_FINAL_SPIN_DETECTED,
+    EVENT_TRANSITION_REJECTED,
     HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION,
     LaundryCycleState,
     REASON_FINAL_SPIN_CONFIRMED,
@@ -41,6 +43,7 @@ async def _setup_entry(
     *,
     start_running: bool = True,
     with_current: bool = False,
+    with_vibration: bool = True,
     hybrid_enabled: bool = False,
     electrical_power_threshold: float | None = None,
     electrical_current_threshold: float | None = None,
@@ -70,10 +73,12 @@ async def _setup_entry(
         CONF_NAME: "Washing Machine",
         CONF_POWER_SENSOR: "sensor.washing_machine_power",
         CONF_DOOR_SENSOR: "binary_sensor.washing_machine_door",
-        CONF_VIBRATION_SENSOR:
-            "binary_sensor.washing_machine_vibration",
         CONF_TRACK_LAUNDRY: True,
     }
+    if with_vibration:
+        data[CONF_VIBRATION_SENSOR] = (
+            "binary_sensor.washing_machine_vibration"
+        )
     if with_current:
         data[CONF_CURRENT_SENSOR] = "sensor.washing_machine_current"
 
@@ -843,3 +848,138 @@ async def test_snapshot_recovery_discards_not_seen_when_parameters_changed(
 
     assert runtime.heating_state is HeatingState.UNKNOWN
     assert runtime.final_spin_evidence_count == 1
+
+
+async def test_spin_evaluation_without_vibration_source_keeps_early_guard(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Absent vibration source never evaluates spin evidence."""
+    entry = await _setup_entry(hass, with_vibration=False)
+    runtime = entry.runtime_data
+
+    assert not runtime._evaluate_spin()
+    assert runtime.spin_gate_reason == "vibration_not_configured"
+    assert runtime.final_spin_evidence_count == 0
+    assert runtime.final_spin_confirmation_path is None
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+
+
+async def test_hybrid_confirmation_event_payload_survives_policy_extraction(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """One successful hybrid transition preserves diagnostics and event data."""
+    entry = await _setup_entry(
+        hass,
+        hybrid_enabled=True,
+        electrical_power_threshold=100.0,
+        heating_power_threshold=1000.0,
+    )
+    runtime = entry.runtime_data
+    now = dt_util.utcnow()
+    _mark_heating_not_seen(runtime, now)
+    runtime.electrical_spin_detector.reset(
+        now=now - timedelta(seconds=30),
+        power=150.0,
+    )
+    hass.states.async_set("sensor.washing_machine_power", "150")
+    await hass.async_block_till_done()
+    assert runtime.spin_electrical_candidate is True
+
+    emitted = []
+    hass.bus.async_listen(
+        EVENT_FINAL_SPIN_DETECTED, lambda event: emitted.append(event.data)
+    )
+
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.FINAL_SPIN
+    assert runtime.final_spin_confirmation_path == "hybrid"
+    assert runtime.final_spin_hybrid_variant == "reduced"
+    assert runtime.spin_gate_reason == "confirmed_hybrid_reduced"
+    assert len(emitted) == 1
+    event_data = emitted[0]
+    assert set(event_data) == {
+        "config_entry_id",
+        "name",
+        "confidence",
+        "evidence_count",
+        "window_seconds",
+        "confirmation_path",
+        "hybrid_variant",
+        "electrical_candidate",
+        "electrical_candidate_since",
+        "electrical_candidate_age_seconds",
+        "heated_candidate_min_duration_seconds",
+        "latest_vibration_evidence_at",
+        "power_rolling_median",
+        "current_rolling_median",
+        "heating_state",
+        "heating_active",
+        "heating_observation_coverage",
+        "effective_hybrid_min_cycle_seconds",
+        "timestamp",
+    }
+    assert event_data["config_entry_id"] == entry.entry_id
+    assert event_data["confidence"] == runtime.final_spin_confidence
+    assert event_data["window_seconds"] == runtime.spin_detector.window_seconds
+    assert event_data["confirmation_path"] == "hybrid"
+    assert event_data["hybrid_variant"] == "reduced"
+    assert event_data["evidence_count"] == 2
+    assert event_data["electrical_candidate"] is True
+    assert event_data["heating_state"] == HeatingState.NOT_SEEN.value
+    assert event_data["heating_active"] is False
+    assert event_data["latest_vibration_evidence_at"] is not None
+    assert event_data["electrical_candidate_since"] is not None
+    assert event_data["heated_candidate_min_duration_seconds"] == 45
+
+
+async def test_rejected_spin_transition_keeps_diagnostics_and_no_spin_event(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """State-machine rejection stays a runtime effect, not policy success."""
+    entry = await _setup_entry(hass)
+    runtime = entry.runtime_data
+
+    await _vibration_pulse(hass)
+    await _vibration_pulse(hass)
+    assert runtime.final_spin_evidence_count == 2
+
+    # Deliberately create a conflicting machine state to exercise the
+    # *actual* rejected-transition path (IDLE -> FINAL_SPIN is forbidden)
+    # while the runtime still attempts confirmation from RUNNING.
+    runtime.state_machine.restore(LaundryCycleState.IDLE)
+
+    spin_events = []
+    rejection_events = []
+    hass.bus.async_listen(
+        EVENT_FINAL_SPIN_DETECTED, lambda event: spin_events.append(event.data)
+    )
+    hass.bus.async_listen(
+        EVENT_TRANSITION_REJECTED,
+        lambda event: rejection_events.append(event.data),
+    )
+
+    await _vibration_pulse(hass)
+
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.state_machine.state is LaundryCycleState.IDLE
+    assert runtime.final_spin_evidence_count == 3
+    assert runtime.final_spin_confirmation_path is None
+    assert runtime.final_spin_hybrid_variant is None
+    assert runtime.spin_gate_reason == "transition_rejected"
+    assert runtime.rejected_transition_count >= 1
+    assert runtime.last_rejected_transition == (
+        "idle->final_spin:final_spin_confirmed"
+    )
+    assert spin_events == []
+    assert rejection_events
+    assert all(
+        event["old_state"] == "idle"
+        and event["requested_state"] == "final_spin"
+        and event["reason"] == REASON_FINAL_SPIN_CONFIRMED
+        for event in rejection_events
+    )

@@ -201,6 +201,17 @@ Vibration evidence ────────────────────�
 Cycle age / timing gates ─────────────────────────────────────┘
 ```
 
+The mechanical `SpinDetector` maintains vibration edges and reports the
+frozen `SpinEvaluation`; the electrical and heating detectors maintain their
+own state. The pure `spin_decision.py` policy combines immutable evidence and
+explicit current-time/configuration facts into a `SpinDecision` containing
+the confirmation path, hybrid variant and gate reason. It neither accesses
+Home Assistant nor mutates detector or runtime state. `runtime.py` continues
+to own source guards, detector invocation, diagnostics, persistence, state-machine
+transitions (including rejection), HA events and notifications.
+The exact first-match gate order is recorded in
+`docs/en/STATE_MACHINE.md` §8.4; the policy extraction does not alter it.
+
 The electrical stage uses time-weighted rolling medians and minimum observed coverage rather than instantaneous samples. Piecewise-constant source values are valid only for a bounded maximum source age so an old available-but-not-updating value cannot provide indefinite coverage.
 
 Power remains the primary electrical signal. Current is optional corroboration. When both are measured by the same smart plug or meter, the implementation should treat them as correlated observations of the same electrical load rather than as two independent votes.
