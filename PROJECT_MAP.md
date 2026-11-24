@@ -2,7 +2,7 @@
 
 Short navigation map for maintainers and assistants. Use this file to jump directly to the relevant implementation, tests, or design document instead of scanning the repository.
 
-> Canonical behavior is documented in `docs/en/`. Implementation details live in `custom_components/laundry_monitor/`. Tests mirror the implementation under `tests/components/laundry_monitor/`.
+> Canonical behavior is documented in `docs/reference/`. Implementation details live in `custom_components/laundry_monitor/`. Tests mirror the implementation under `tests/components/laundry_monitor/`.
 
 ## Project purpose
 
@@ -12,10 +12,10 @@ Home Assistant custom integration that infers washing-machine cycle state from e
 
 | Topic / question | Read first | Implementation | Tests |
 |---|---|---|---|
-| Overall product behavior and scope | `docs/en/SPECIFICATION.md` | — | — |
-| Architecture / component responsibilities | `docs/en/ARCHITECTURE.md` | package files below | — |
-| Normative functional requirements | `docs/en/REQUIREMENTS.md` | — | — |
-| States, transitions, timers, recovery, edge cases | `docs/en/STATE_MACHINE.md` | `runtime.py`, `state_machine.py`, `storage.py` | `test_state_machine.py`, `test_state_machine_runtime.py`, `test_storage.py` |
+| Overall product behavior and scope | `docs/reference/SPECIFICATION.md` | — | — |
+| Architecture / component responsibilities | `docs/reference/ARCHITECTURE.md` | package files below | — |
+| Normative functional requirements | `docs/reference/REQUIREMENTS.md` | — | — |
+| States, transitions, timers, recovery, edge cases | `docs/reference/STATE_MACHINE.md` | `runtime.py`, `state_machine.py`, `storage.py` | `test_state_machine.py`, `test_state_machine_runtime.py`, `test_storage.py` |
 | Power/current meaningful activity and cycle start | `SPECIFICATION.md §7.1`, `STATE_MACHINE.md §5.1/§9` | `activity.py`, `runtime.py` | `test_activity.py`, `test_activity_runtime.py` |
 | Terminal spin sequence / terminal phase / experimental hybrid spin confirmation | `SPECIFICATION.md §7.2`, `STATE_MACHINE.md §8.4` | `spin.py`, `heating.py`, `runtime.py` | `test_spin.py`, `test_spin_runtime.py`, `test_heating.py`, `test_heating_entities.py` |
 | Cycle finish / quiet timers / fallback finish | `SPECIFICATION.md §7.3`, `STATE_MACHINE.md §10/§14` | `finish.py`, `runtime.py` | `test_finish.py`, `test_finish_runtime.py` |
@@ -34,25 +34,34 @@ Home Assistant custom integration that infers washing-machine cycle state from e
 ## Documentation
 
 ### `README.md`
-Public-facing overview: features, installation, configuration, defaults, exposed entities/events, troubleshooting, and contributing instructions. Keep it concise; detailed behavior belongs in `docs/en/`.
+Public-facing overview: features, installation, configuration, defaults, exposed entities/events, troubleshooting, and contributing instructions. Keep it concise; detailed behavior belongs in `docs/reference/`.
 
-### `docs/en/SPECIFICATION.md`
+### `docs/reference/SPECIFICATION.md`
 Canonical product specification. Defines scope/non-goals, inputs, public state model, detection concepts, entities/events, configuration, diagnostics, failure handling, roadmap, and open questions. Start here when deciding **what the integration should do**.
 
-### `docs/en/ARCHITECTURE.md`
+### `docs/reference/ARCHITECTURE.md`
 Component boundaries and data flow: source normalization → Activity Detector / Spin Detector / Finish Detector → State Machine, with Laundry Tracking, Leak Detector, statistics, diagnostics, and HA entities separated. Start here when deciding **which component should own new logic**.
 
-### `docs/en/REQUIREMENTS.md`
+### `docs/reference/REQUIREMENTS.md`
 Normative `FR-*` and `NFR-*` requirements. Use this to check whether a proposed implementation violates an explicit requirement. Terminal-phase, hybrid-spin, heating-context, and recovery rules are currently FR-029 through FR-060.
 
-### `docs/en/STATE_MACHINE.md`
+### `docs/reference/STATE_MACHINE.md`
 Most detailed behavioral document. Defines public/internal states, allowed transitions, detector inputs, state entry/exit semantics, timers, source failures, restart recovery, invariants, edge cases, examples, and test expectations. Start here for any state-transition question.
 
-### `docs/en/USER_MANUAL.md`
+### `docs/guides/USER_MANUAL.en.md`
 User-facing manual: detailed setup, available settings and defaults, calibration guidance, and relevant limitations. Start here when deciding **how to set up the integration properly**.
 
-### `docs/ru/`
-Russian user-facing documentation. The current Russian document is `USER_MANUAL.md`; English `docs/en/` remains canonical and must define behavior.
+### `docs/guides/USER_MANUAL.ru.md`
+Russian user-facing manual. The English user manual and technical reference remain canonical.
+
+### `docs/maintainers/`
+English and Russian release checklists. The English checklist is authoritative.
+
+### `docs/releases/`
+Versioned release notes; published paths and contents remain stable.
+
+### `docs/README.md`
+Bilingual documentation index. Old `docs/en/` and `docs/ru/` file paths are compatibility stubs, not maintained copies.
 
 ## Integration implementation — `custom_components/laundry_monitor/`
 
@@ -80,7 +89,7 @@ timestamps/configuration facts. `decide_spin_confirmation()` evaluates the
 documented ordered gates and returns `SpinDecision` (confirmation path,
 hybrid variant, diagnostic gate reason) without mutating detectors or invoking
 Home Assistant. Compare with the decision-precedence table in
-`docs/en/STATE_MACHINE.md` §8.4. `runtime._evaluate_spin()` applies the
+`docs/reference/STATE_MACHINE.md` §8.4. `runtime._evaluate_spin()` applies the
 decision and owns state transitions, event payloads, evidence persistence and
 entity notifications.
 
@@ -148,7 +157,7 @@ Runtime integration tests around source updates and activity/start behavior.
 
 ### `test_spin.py`
 Unit tests for vibration evidence, electrical rolling statistics, source freshness, electrical candidate behavior, and detector reset semantics.
- 
+
 ### `test_spin_runtime.py`
 Runtime state transitions and event behavior for vibration-only and experimental hybrid final-spin confirmation.
 
@@ -206,10 +215,10 @@ MIT license.
 
 For behavioral changes, use this order:
 
-1. `docs/en/REQUIREMENTS.md` — is there a normative rule?
-2. `docs/en/STATE_MACHINE.md` — what exact state/timer behavior is intended?
-3. `docs/en/SPECIFICATION.md` — broader product semantics and public API.
-4. `docs/en/ARCHITECTURE.md` — which component owns the behavior?
+1. `docs/reference/REQUIREMENTS.md` — is there a normative rule?
+2. `docs/reference/STATE_MACHINE.md` — what exact state/timer behavior is intended?
+3. `docs/reference/SPECIFICATION.md` — broader product semantics and public API.
+4. `docs/reference/ARCHITECTURE.md` — which component owns the behavior?
 5. `runtime.py` plus the relevant detector (`activity.py`, `spin.py`, `heating.py`, `finish.py`) — what is actually implemented?
 6. matching `test_*.py` files — what behavior is regression-protected?
 7. `const.py` / `config_flow.py` — defaults, option keys and UI configuration.

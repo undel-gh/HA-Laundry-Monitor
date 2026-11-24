@@ -145,5 +145,5 @@ Release candidate changes since the published `0.1.8-rc7` tag.
 
 See [0.1.8-rc8 release notes](docs/releases/0.1.8-rc8.md) for details.
 
-See [Release checklist](docs/en/RELEASE_CHECKLIST.md) and
-[Russian checklist](docs/ru/RELEASE_CHECKLIST.md).
+See [Release checklist](docs/maintainers/RELEASE_CHECKLIST.en.md) and
+[Russian checklist](docs/maintainers/RELEASE_CHECKLIST.ru.md).

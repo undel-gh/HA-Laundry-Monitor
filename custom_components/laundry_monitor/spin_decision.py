@@ -53,7 +53,7 @@ def decide_spin_confirmation(inputs: SpinDecisionInputs) -> SpinDecision:
     """Apply the existing ordered policy after SpinDetector.evaluate().
 
     The order is a behavioral contract: see the first-match decision table in
-    docs/en/STATE_MACHINE.md, Section 8.4. Do not reorder gates.
+    docs/reference/STATE_MACHINE.md, Section 8.4. Do not reorder gates.
     """
     evaluation = inputs.evaluation
     heated_hybrid_requires_electrical = (

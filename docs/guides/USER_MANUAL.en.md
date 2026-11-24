@@ -1,0 +1,840 @@
+# Laundry Monitor — User Manual
+
+**Document status:** maintained for the current Laundry Monitor implementation on `main`.
+
+The English documentation is canonical. The Russian manual is maintained as a user-facing translation.
+
+## 1. What Laundry Monitor does
+
+Laundry Monitor is a Home Assistant custom integration that creates a logical monitoring device for a washing machine using existing Home Assistant sensor entities.
+
+It does **not** communicate with or control the washing machine directly. Instead, it observes electrical and optional physical signals and infers the current cycle state.
+
+The integration can determine whether a washing machine is:
+
+- idle;
+- armed and waiting for a cycle to start;
+- running;
+- in a probable terminal spin sequence / terminal phase;
+- finished;
+- unable to be evaluated reliably because a required source is unavailable.
+
+It can also optionally:
+
+- use current measurements as additional activity evidence;
+- use a door sensor for arming context and post-finish access detection;
+- use a vibration sensor for terminal-spin detection;
+- combine vibration and sustained electrical evidence with the optional hybrid spin detector;
+- monitor a leak sensor independently from the cycle state;
+- calculate per-cycle energy use when an energy sensor is available;
+- track whether laundry is still considered present in the machine.
+
+Laundry Monitor is passive. It does not switch a smart plug, send notifications, sound alarms, start or stop the washing machine, or modify external entities.
+
+---
+
+## 2. Requirements
+
+### 2.1 Home Assistant
+
+Home Assistant **2026.6.0 or newer** is required.
+
+### 2.2 Required source
+
+A Home Assistant power sensor is required:
+
+- domain: `sensor`;
+- device class: `power`;
+- value: active power, normally in watts.
+
+Example:
+
+```text
+sensor.washing_machine_power
+```
+
+The power sensor is the authoritative source for cycle-start confirmation.
+
+### 2.3 Optional sources
+
+Laundry Monitor can also use:
+
+| Source | Home Assistant type | Purpose |
+| --- | --- | --- |
+| Current sensor | `sensor`, device class `current` | Supplemental meaningful-activity evidence and hybrid diagnostics |
+| Door sensor | `binary_sensor`, `door` or `opening` | Arming context and post-finish door events |
+| Vibration sensor | `binary_sensor`, `vibration` | Terminal-spin evidence |
+| Leak sensor | `binary_sensor`, `moisture` | Independent leak monitoring |
+| Energy sensor | `sensor`, device class `energy` | Last-cycle energy statistics |
+| Smart-plug switch | `switch` | Diagnostics only |
+
+Only the power sensor is required for basic cycle monitoring.
+
+Optional sources are allowed to become unavailable. Their loss must degrade the corresponding feature rather than stop basic power-only monitoring.
+
+### 2.4 Measurement units
+
+Laundry Monitor converts power and current readings to **W** and **A** before checking thresholds or showing diagnostic values. Home Assistant's built-in converters handle supported units, such as `mW`, `W`, `kW` for power and `μA`, `mA`, `A` for current. For example, `0.12 kW` is interpreted as `120 W` and `500 mA` as `0.5 A`. Additional supported units depend on the installed Home Assistant Core version.
+
+Unit labels must use Home Assistant's **exact, case-sensitive notation**: `kW` is supported but `kw` is not; `μA` uses Greek mu rather than the visually similar micro sign `µ`. Sensors without a `unit_of_measurement` attribute are assumed to report W (power) or A (current) for backward compatibility.
+
+An explicitly unsupported unit, an invalid numeric value, or a conversion overflow makes that measurement **unavailable to Laundry Monitor**, not zero. An unusable required power source triggers the existing Repairs warning and may lead to `error` after the configured grace period. An unusable optional current source disables current-based evidence and diagnostics without creating a Repairs issue; valid power-only detection continues. The optional energy sensor retains its original energy units.
+
+### 2.5 Repeated readings and freshness
+
+A sensor may legitimately report the **same power or current value** more than once. Laundry Monitor counts each valid new Home Assistant report as a fresh observation, including reports where the state and attributes do not change. This helps stable low-power readings establish sufficient no-heating observation coverage and stable spin-level readings remain eligible for electrical corroboration.
+
+Invalid and unavailable reports do not refresh evidence. Repeated vibration ON reports do not create extra vibration events, and routine identical electrical reports do not themselves cause bulk diagnostic state updates.
+
+Home Assistant can confirm that the source entity was republished, **not** that its physical device sampled the value again. For reliable hybrid detection, ensure your plug/sensor integration reports actual measurements rather than automatically republishing an old cached value.
+
+---
+
+## 3. Installation
+
+### 3.1 HACS custom repository
+
+1. Open **HACS**.
+2. Open **Custom repositories**.
+3. Add:
+
+   ```text
+   https://github.com/undel-gh/HA-Laundry-Monitor
+   ```
+
+4. Select **Integration** as the category.
+5. Find **Laundry Monitor** in HACS and install it.
+6. Restart Home Assistant.
+
+### 3.2 Manual installation
+
+1. Copy:
+
+   ```text
+   custom_components/laundry_monitor
+   ```
+
+   to:
+
+   ```text
+   <config>/custom_components/
+   ```
+
+2. Restart Home Assistant.
+
+---
+
+## 4. Adding a washing machine
+
+Configuration is performed through the Home Assistant UI. YAML configuration is not required.
+
+1. Open **Settings → Devices & Services**.
+2. Select **Add Integration**.
+3. Search for **Laundry Monitor**.
+4. Enter a friendly name for the washing machine.
+5. Select the required power sensor.
+6. Select any optional sources that are available.
+7. Enable **Laundry Tracking** if you want Laundry Monitor to remember that laundry remains in the machine until you explicitly mark it as unloaded.
+
+Configure one Laundry Monitor entry for each washing machine.
+
+The same power sensor cannot be used by more than one Laundry Monitor entry.
+
+---
+
+## 5. Recommended first setup
+
+For a first installation, use the normal detector defaults unless you already have measured data from the washing machine.
+
+The basic defaults are intended to provide conservative behavior:
+
+| Setting | Default |
+| --- | ---: |
+| Power activity threshold | 5 W |
+| Current activity threshold | 0.1 A |
+| Start threshold | 10 W |
+| Start confirmation | 30 s |
+| Required vibration events | 3 |
+| Vibration event window | 180 s |
+| Minimum cycle time before final spin | 600 s |
+| Maximum age of supporting activity | 120 s |
+| Electrical spin window | 30 s |
+| Minimum electrical coverage | 20 s |
+| Maximum electrical source age | 30 s |
+| Heating power threshold | unset |
+| Heating confirmation | 30 s |
+| Heating observation | 300 s |
+| Heated-cycle minimum spin time | 900 s |
+| Hybrid spin enabled | Off |
+| Hybrid required vibration events | 2 |
+| Final-spin finish confirmation | 180 s |
+| Running-state finish confirmation | 600 s |
+| Arming timeout | 1800 s |
+| Finished-state retention | 300 s |
+| Power sensor unavailable grace period | 120 s |
+| Maximum snapshot age | 86400 s |
+
+Electrical spin **power** and **current** thresholds intentionally have no universal default. They depend on the electrical profile of the individual washing machine and measuring device.
+
+For normal power-only monitoring, no hybrid tuning is required.
+
+---
+
+## 6. Cycle states
+
+Laundry Monitor exposes a public cycle-state sensor.
+
+| State | Meaning |
+| --- | --- |
+| `idle` | No active cycle is being tracked. |
+| `armed` | Door context indicates that a cycle may start soon. |
+| `running` | A washing cycle has been confirmed. |
+| `final_spin` | A probable terminal spin sequence / terminal phase has been detected. |
+| `finished` | Cycle completion has been confirmed. |
+| `error` | Laundry Monitor cannot reliably evaluate the cycle because required power telemetry has remained unusable. This is **not** a washing-machine fault code. |
+
+### 6.1 About `final_spin`
+
+The historical state name is `final_spin`, but it should be understood as **terminal phase detected**, not as “the drum is continuously at maximum RPM”.
+
+The terminal phase may include:
+
+- several spin stages;
+- changes of drum speed;
+- short pauses;
+- pumping and draining;
+- drum positioning;
+- short electrical activity after spinning;
+- end-of-program signalling.
+
+Once a terminal phase has been confirmed, normal terminal activity does not automatically return the integration to `running`.
+
+---
+
+## 7. How cycle start is detected
+
+Power is the authoritative start source.
+
+A start candidate is created when power reaches the configured **Start threshold**. The condition must persist for **Start confirmation** before the cycle is declared `running`.
+
+This confirmation helps reject short power spikes.
+
+The optional current sensor can contribute to meaningful-activity detection, but current alone cannot start a cycle.
+
+### Important validation rule
+
+The **Power activity threshold** must not be higher than the **Start threshold**.
+
+---
+
+## 8. Meaningful activity
+
+Laundry Monitor uses meaningful electrical activity to distinguish active work from quiet periods.
+
+Power at or above the configured **Power activity threshold** counts as power activity.
+
+If a current sensor is configured and available, current at or above the **Current activity threshold** also counts as meaningful activity.
+
+This is intentionally an OR relationship:
+
+```text
+power activity
+OR
+current activity
+=
+meaningful activity
+```
+
+However, current remains supplemental:
+
+- current alone does not confirm cycle start;
+- current alone does not confirm final spin;
+- current alone does not confirm cycle completion.
+
+---
+
+## 9. Zero values versus unavailable data
+
+A valid numeric zero is real data.
+
+```text
+0 W ≠ unavailable
+0 A ≠ unavailable
+```
+
+Examples:
+
+- A reachable smart plug that is switched off and reports `0 W` is providing valid information: no power is being delivered.
+- A machine in a genuine zero-power pause may also report `0 W`.
+- An `unavailable`, `unknown`, invalid, or absent power state means that Laundry Monitor does not have a reliable measurement.
+
+Laundry Monitor must not reinterpret a valid `0 W` or `0 A` as source failure.
+
+It must also not replace missing or unavailable data with a synthetic zero.
+
+This distinction is particularly important during low-power pauses and communication failures.
+
+---
+
+## 10. Final-spin detection
+
+Laundry Monitor can confirm the terminal phase through two paths.
+
+### 10.1 Vibration-only path
+
+When a vibration sensor is configured, Laundry Monitor counts vibration OFF-to-ON events in a rolling time window.
+
+A normal vibration-only confirmation requires:
+
+- the configured number of vibration events;
+- all required events inside the configured vibration window;
+- the minimum cycle age to have been reached;
+- sufficiently recent meaningful electrical activity.
+
+With the default settings this means:
+
+```text
+3 vibration events
+inside 180 seconds
+after at least 600 seconds of cycle time
+with recent electrical activity
+```
+
+### 10.2 Hybrid vibration + electrical path
+
+Hybrid spin confirmation is optional and disabled by default.
+
+It is intended for vibration sensors that may miss physical spin events or remain latched ON long enough to produce too few rising edges.
+
+A hybrid confirmation requires:
+
+- hybrid mode enabled;
+- a configured vibration sensor;
+- a configured electrical spin power threshold;
+- a configured heating power threshold;
+- a reduced but still meaningful number of vibration events;
+- a sustained electrical spin candidate;
+- known heating context;
+- no active heater signature;
+- the applicable heating-aware minimum cycle age;
+- recent meaningful activity;
+- fresh electrical source data.
+
+Electrical evidence **alone can never confirm final spin**.
+
+### 10.3 Heating-aware cycle context
+
+Hybrid detection also watches for sustained heater-level power. This prevents a wash-program heating phase from being mistaken for high-speed motor activity.
+
+Heating context has three diagnostic states:
+
+```text
+unknown
+not_seen
+detected
+```
+
+At cycle start it is `unknown`.
+
+- **detected** — power remained at or above the configured **Heating power threshold** for the **Heating confirmation** duration. Once detected, this fact remains latched for the rest of the cycle.
+- **not_seen** — Laundry Monitor accumulated the configured **Heating observation** amount of valid power data without seeing a confirmed heater signature.
+- **unknown** — there is not enough reliable history to make either conclusion.
+
+`Heating observation` is based on valid observed power coverage, not just elapsed wall-clock time. A Matter/Zigbee/network outage therefore does not count as evidence that heating was absent.
+
+While heater-level operation is actively confirmed, Laundry Monitor blocks `final_spin`.
+
+If heating has been detected, the reduced-evidence hybrid path is delayed until **Heated-cycle minimum spin time** has elapsed from cycle start. When hybrid mode is enabled, a heated cycle also cannot fall back to vibration-only confirmation: even a complete vibration pattern still needs a fresh electrical spin candidate. This prevents an intermediate spin in a heated wash from bypassing the hybrid safeguards. With hybrid mode disabled, the normal vibration-only behavior is unchanged.
+
+If heating is confidently `not_seen`, Laundry Monitor may use a **fast non-heated path** before the normal spin minimum cycle time. That fast path is intentionally stricter mechanically: it requires the full vibration-event requirement plus the electrical spin candidate. This supports short spin-only or rinse-and-spin programs without assuming that every no-heating program is a spin-only program.
+
+A cold wash can also have `not_seen` heating. Therefore no-heating context by itself is never enough to confirm `final_spin`.
+
+### 10.4 Electrical spin candidate
+
+The electrical detector uses a time-weighted rolling median rather than a single instantaneous sample.
+
+The relevant settings are:
+
+- **Electrical spin window** — rolling observation window;
+- **Minimum electrical coverage** — minimum observed time required inside that window;
+- **Maximum electrical source age** — how long the latest real source observation may be extrapolated;
+- **Electrical spin power threshold** — machine-specific power level used for the candidate;
+- **Electrical spin current threshold** — optional corroborating current level.
+
+The freshness limit prevents an old high-power sample from supporting a hybrid decision indefinitely if the sensor stops updating while still appearing available.
+
+### 10.5 Current corroboration
+
+Current is corroborating evidence only.
+
+A hybrid decision is power-authoritative. The optional current threshold helps diagnostics show whether the current profile supports the same conclusion, but failure to cross the current threshold does not by itself block hybrid confirmation.
+
+### 10.6 Choosing hybrid thresholds
+
+Do **not** copy power/current thresholds from another washing machine unless its electrical profile has been measured and shown to be comparable.
+
+A practical calibration workflow is:
+
+1. Leave hybrid mode disabled.
+2. Observe several complete cycles.
+3. Compare vibration events with power/current history around the physical terminal spin.
+4. Identify sustained heater operation separately from motor/spin power.
+5. Choose an electrical spin power threshold that is sustained during the relevant spin signature.
+6. Choose a **higher** heating power threshold that reliably identifies the machine's heater without being reached by normal motor/spin operation.
+7. Configure the optional current threshold as corroborating diagnostic evidence.
+8. Enable the disabled electrical/hybrid diagnostic entities.
+9. Observe several additional cycles in shadow mode, including at least one heated wash and, if available, a spin-only or rinse-and-spin program.
+10. Enable hybrid confirmation only after the combination does not show false terminal-spin candidates.
+
+Before enabling hybrid confirmation, verify that the power sensor publishes real updates more frequently than **Maximum electrical source age**. If the plug publishes only every 60 seconds while the maximum source age is 30 seconds, the electrical source will repeatedly become stale. In a heated cycle, FR-058 then prevents vibration-only fallback, so `final_spin` may remain unconfirmed and the cycle will finish later through the conservative running-state fallback.
+
+If a heated wash has full vibration evidence but `spin_gate_reason` remains `heated_cycle_requires_electrical_candidate`, first check the electrical spin threshold and source freshness/publication interval. That diagnostic points to missing or stale electrical corroboration, not to insufficient vibration evidence.
+
+Example spin values such as `100 W` and `0.7 A`, or heater values observed on one particular machine, are **not universal recommendations**.
+
+### 10.7 Hybrid configuration rules
+
+Laundry Monitor rejects contradictory hybrid settings.
+
+In particular:
+
+- hybrid mode requires a vibration sensor;
+- hybrid mode requires an electrical spin power threshold;
+- hybrid mode requires a heating power threshold;
+- the heating power threshold must be higher than the electrical spin power threshold;
+- the hybrid vibration-event requirement must be lower than the normal vibration-only requirement;
+- minimum electrical coverage must not exceed the electrical window;
+- heated-cycle minimum spin time must not be lower than the normal spin minimum cycle time;
+- heating confirmation must not exceed the heating observation coverage;
+- reconfiguration must not remove the vibration source while hybrid mode remains enabled.
+
+If an upgraded experimental configuration has hybrid enabled but no valid heating threshold, reduced-evidence hybrid confirmation must remain disabled until the missing heating configuration is supplied.
+
+### 10.8 Battery-powered vibration sensors and report-rate limits
+
+Laundry Monitor counts observable vibration **OFF-to-ON** transitions. It does not estimate how many physical vibration episodes occurred between sensor reports.
+
+Some battery-powered Zigbee vibration sensors rate-limit their reports or keep the binary `vibration` state active for a configurable timeout. This can reduce the number of independent rising edges available to both the vibration-only path and the full-evidence fast non-heated path.
+
+For example, Zigbee2MQTT documents that the Aqara **DJT11LM** emits `vibration` actions no more frequently than about once per minute, while its device-specific `vibration_timeout` defaults to 90 seconds:
+
+https://www.zigbee2mqtt.io/devices/DJT11LM.html
+
+If the binary vibration state remains `on` across a later device report, Home Assistant may not expose a new OFF-to-ON edge for Laundry Monitor to count. Reducing a supported device-side timeout so the state can clear between reports may improve observability, but it does not remove the sensor's own report-rate limit.
+
+Do not lower Laundry Monitor's vibration evidence requirements solely to compensate for a rate-limited sensor without validating the change against real cycles. If a short non-heated program has strong electrical spin corroboration but does not provide the full configured vibration count, the fast path intentionally remains unconfirmed and the cycle can still complete through the conservative running-state finish fallback.
+
+---
+
+### 10.9 Heated-cycle terminal-profile maturity
+
+For a cycle where heating has been detected and hybrid confirmation is enabled, an electrical spin candidate does not confirm the terminal phase immediately. The current experimental implementation requires the candidate to remain active for at least **45 seconds** and requires at least one retained vibration OFF-to-ON edge to occur at or after the start of that same electrical candidate. Vibration accumulated only before the electrical episode cannot complete heated-cycle confirmation.
+
+This is a targeted heated-cycle safeguard. It does not change the non-heated hybrid path, hybrid-disabled vibration-only behavior, or finish detection semantics.
+
+---
+
+## 11. Finish detection
+
+Laundry Monitor uses inactivity confirmation rather than trying to recognize an exact standby wattage.
+
+### 11.1 After `final_spin`
+
+After the terminal phase is detected, meaningful activity resets the finish timer.
+
+When meaningful activity has remained absent for **Final-spin finish confirmation**, the cycle becomes `finished`.
+
+Default:
+
+```text
+180 seconds
+```
+
+### 11.2 Fallback when final spin was not detected
+
+If no terminal phase was confirmed, Laundry Monitor uses a longer conservative inactivity timer while still in `running`.
+
+Default:
+
+```text
+600 seconds
+```
+
+This allows a cycle to finish even when no vibration sensor is configured or final-spin evidence is insufficient.
+
+---
+
+## 12. Door sensor behavior
+
+The door sensor is optional.
+
+When configured, it can provide context before and after a cycle.
+
+Typical behavior:
+
+- closing the door may move the integration to `armed`;
+- opening the door before a cycle starts may return it to `idle`;
+- opening the door after `finished` can generate a diagnostic event.
+
+Opening the door after a cycle does **not** automatically mean the laundry was removed.
+
+---
+
+## 13. Laundry Tracking
+
+Laundry Tracking is optional.
+
+When enabled, Laundry Monitor exposes:
+
+- `binary_sensor.<device>_laundry_present`;
+- `button.<device>_mark_unloaded`;
+- `sensor.<device>_last_unloaded_at`.
+
+Laundry is considered present after a cycle starts and remains present after the cycle finishes.
+
+To tell Laundry Monitor that the laundry has actually been removed, press **Mark unloaded**.
+
+Door opening alone does not clear laundry presence.
+
+When Laundry Tracking is disabled, the `finished` state is retained for the configured retention period and then returns automatically to `idle`.
+
+---
+
+## 14. Leak monitoring
+
+If a leak sensor is configured, Laundry Monitor monitors it independently.
+
+Leak detection does not change the washing-cycle state.
+
+This separation is intentional: a leak is safety information, while `idle`, `running`, `final_spin`, and `finished` describe the cycle lifecycle.
+
+Use normal Home Assistant automations if you want a leak event to send a notification, sound an alarm, or switch another device.
+
+---
+
+## 15. Main entities
+
+Entity IDs depend on the configured washing-machine name.
+
+Important user-facing entities include:
+
+| Entity | Purpose |
+| --- | --- |
+| `sensor.<device>_cycle_state` | Current public cycle state |
+| `binary_sensor.<device>_running` | On in `running` and `final_spin` |
+| `binary_sensor.<device>_finished` | On when the cycle is `finished` |
+| `binary_sensor.<device>_final_spin_detected` | Latches after terminal-spin evidence is confirmed |
+| `sensor.<device>_cycle_started_at` | Start time of the active cycle, suitable for local elapsed-time calculation |
+| `sensor.<device>_current_cycle_duration` | Legacy snapshot, disabled by default and not a live timer |
+| `sensor.<device>_last_cycle_duration` | Most recently completed cycle duration |
+| `sensor.<device>_last_cycle_energy` | Last-cycle energy, when configured |
+
+Additional diagnostic entities expose detector internals.
+
+To reduce Home Assistant history/Recorder writes, most high-frequency detector diagnostics (power/current mirrors, detailed activity timestamps, spin evidence and finish timers) and experimental electrical/hybrid entities are disabled by default on **new** setups. Enable only the ones needed from the device/entity page for investigations. Existing installations retain their saved enabled/disabled choices.
+
+Use `sensor.<device>_cycle_started_at` with the public cycle state to display a live duration: while the state is `running` or `final_spin`, subtract the start timestamp from the current time **in the frontend**, without creating a minute-updated Template Sensor in Home Assistant. After completion, use `last_cycle_duration`. The legacy `current_cycle_duration` is disabled by default for new setups and, if enabled, provides only a snapshot on lifecycle/phase transitions, **not** a continuously updated timer. Internal detection still evaluates at its original cadence; **Download diagnostics** exposes precise runtime elapsed time regardless of entity publication limits.
+
+Useful hybrid diagnostics include:
+
+- final-spin confirmation path;
+- vibration evidence count and confidence;
+- electrical spin candidate;
+- electrical power rolling median;
+- optional current rolling median;
+- electrical candidate start time;
+- activity timestamps.
+
+The confirmation path can identify whether `final_spin` was confirmed through:
+
+```text
+vibration_only
+```
+
+or:
+
+```text
+hybrid
+```
+
+Diagnostic confirmation-path information is not authoritative persisted cycle state and may be cleared after a restart.
+
+---
+
+## 16. Events and automations
+
+Laundry Monitor emits Home Assistant events for lifecycle observations.
+
+Common events include:
+
+- `laundry_monitor.cycle_started`;
+- `laundry_monitor.final_spin_detected`;
+- `laundry_monitor.cycle_finished`;
+- `laundry_monitor.door_opened_after_finish`;
+- `laundry_monitor.machine_unloaded`;
+- `laundry_monitor.leak_detected`;
+- `laundry_monitor.state_changed`;
+- `laundry_monitor.transition_rejected`.
+
+Laundry Monitor itself does not send notifications.
+
+Example notification automation:
+
+```yaml
+automation:
+  - alias: "Laundry finished"
+    trigger:
+      - platform: event
+        event_type: laundry_monitor.cycle_finished
+    action:
+      - service: notify.mobile_app_phone
+        data:
+          message: "The washing machine has finished."
+```
+
+You can also use the exposed binary sensors or cycle-state sensor as normal Home Assistant automation triggers.
+
+---
+
+## 17. Changing sensors and settings
+
+There are two different configuration actions.
+
+### Reconfigure
+
+Use **Reconfigure** to change source entities or Laundry Tracking.
+
+Examples:
+
+- replace the power sensor;
+- add/remove the current sensor;
+- add a vibration sensor;
+- change the door sensor;
+- add an energy or leak sensor.
+
+Hybrid configuration invariants are checked during reconfiguration.
+
+### Configure / Options
+
+Use **Configure** to change detector thresholds and lifecycle timers.
+
+Do not change several detector parameters at once when tuning a real machine. Change one logical group, collect complete-cycle data, and compare the results.
+
+---
+
+## 18. Restarts and recovery
+
+Laundry Monitor stores runtime information so that Home Assistant restarts do not automatically discard an active cycle.
+
+A stored active-cycle snapshot is restored only when it is sufficiently recent according to **Maximum snapshot age**.
+
+Recovery is conservative: stale or unsafe runtime state must not be blindly restored.
+
+If a saved transition timestamp is corrupted, absent or has no timezone,
+the integration falls back to **idle** rather than guessing which
+washing-cycle phase was active. Where safely possible, the laundry-present
+flag, a valid previous unload timestamp and completed-cycle statistics
+are preserved. A corrupted optional unload timestamp is discarded without
+losing the rest of the valid snapshot. An invalid individual numeric
+statistic is also discarded rather than poisoning other valid history.
+
+A safe fallback does not announce that a wash has started or finished.
+The storage format has not changed; normal saved snapshots still recover
+as before.
+
+Transient rolling electrical evidence and diagnostic confirmation-path information may be rebuilt or cleared after restart.
+
+---
+
+## 19. Required power source failure
+
+The power sensor is required.
+
+A brief `unavailable`, `unknown`, missing, non-numeric or unsupported-unit state is tolerated for the configured **Power sensor unavailable grace period**.
+
+If the required source remains unusable beyond the grace period, Laundry Monitor may enter `error` and create a Home Assistant Repairs issue. This means the **integration lacks reliable monitoring data**; it does not establish a mechanical or electronic fault in the washing machine. A valid power reading permits recovery to `idle`. Optional current-sensor failures and leak events do not independently cause this cycle-state error.
+
+Remember:
+
+```text
+valid 0 W
+```
+
+is not a source failure.
+
+Loss of a reliable **normalized** power observation, including an explicitly unsupported unit, is treated as source unavailability. Check the sensor's `unit_of_measurement` if Home Assistant displays a numeric value but Laundry Monitor shows `unknown`.
+
+---
+
+## 20. Troubleshooting
+
+### The cycle never starts
+
+Check:
+
+- the power sensor is available and numeric;
+- the machine exceeds the **Start threshold**;
+- start-level power remains present for the full **Start confirmation** period;
+- the power activity threshold is not higher than the start threshold.
+
+### The cycle starts from short spikes
+
+Increase **Start confirmation** and review whether the **Start threshold** is too low.
+
+### `final_spin` is never detected
+
+If using vibration-only detection:
+
+- confirm that the vibration entity produces OFF-to-ON transitions;
+- inspect event spacing;
+- check the vibration window;
+- check minimum cycle time;
+- check whether meaningful activity is recent enough.
+
+If the sensor physically detects spinning but produces too few rising edges, hybrid detection may be appropriate after machine-specific calibration.
+
+### Hybrid confirms `final_spin` too early
+
+Disable hybrid mode first, then inspect:
+
+- vibration evidence timing;
+- power rolling median;
+- electrical spin threshold;
+- heating state and heating-active diagnostics;
+- heating power threshold and confirmation duration;
+- heating observation coverage;
+- the effective heating-aware minimum cycle age;
+- electrical coverage;
+- source freshness;
+- whether the same electrical profile occurs during heating or ordinary wash activity.
+
+If heater-level power can satisfy the electrical spin threshold, configure a separate higher heating threshold rather than simply raising the spin threshold. Verify at least one heated cycle and one non-heated/short program when possible.
+
+### Hybrid never confirms
+
+Check:
+
+- hybrid mode is enabled;
+- a vibration sensor is configured;
+- the electrical power threshold is configured;
+- enough vibration events are present;
+- the rolling median reaches the configured power threshold;
+- minimum electrical coverage is reached;
+- the cycle has passed minimum cycle time;
+- the power source remains fresh;
+- meaningful activity is recent.
+
+### `finished` is delayed
+
+Check the last meaningful activity timestamp. Any qualifying power or current activity resets the finish confirmation timer.
+
+If `final_spin` was not detected, the longer running-state fallback timer is used.
+
+### Current sensor becomes unavailable
+
+Basic monitoring should continue with power only.
+
+Do not interpret the missing current source as `0 A`.
+
+### Power sensor shows `0 W`
+
+If the entity is available and the value is numeric, `0 W` is valid data. This is normal for a powered-down smart plug output, a stopped machine, or a real zero-power interval.
+
+### Integration enters `error`
+
+This is a **Laundry Monitor source/monitoring problem**, not an appliance diagnostic code. Check the required power sensor, its `unit_of_measurement`, and Home Assistant Repairs. A prolonged missing, unavailable, unknown, non-numeric, or unsupported-unit power reading is different from a valid `0 W`.
+
+Laundry Monitor does not read the washing machine's internal error codes. If the appliance itself displays a fault, consult its manufacturer documentation; that fault is not diagnosed by the Laundry Monitor `error` state.
+
+---
+
+## 21. Debug logging and diagnostics
+
+For unexpected behavior:
+
+1. Open the Laundry Monitor integration or device in Home Assistant.
+2. Enable **debug logging**.
+3. Reproduce a complete relevant part of the cycle.
+4. Stop debug logging.
+5. Download diagnostics.
+
+Diagnostics can include:
+
+- configured source entities and their availability;
+- current runtime state;
+- detector thresholds;
+- vibration evidence;
+- electrical/hybrid statistics;
+- activity timestamps;
+- finish timers;
+- cycle statistics;
+- persisted snapshot information;
+- rejected transitions.
+
+For each `sources` entry in downloadable diagnostics, `available` means the reading is **usable by Laundry Monitor**, while `entity_available` means Home Assistant exposes a state other than `unknown`/`unavailable`. A numeric power reading with incompatible units (for example `45 V`) can therefore have `entity_available=true` but `available=false`; it will also appear in `required_sources_unavailable`. Invalid optional current affects only that source. The export preserves the original state, unit and timestamps to help identify the cause. Energy values are checked independently, without conversion into W/A.
+
+For hybrid issues, enable the disabled hybrid diagnostic entities before collecting cycle history when practical.
+
+---
+
+## 22. Updating Laundry Monitor
+
+When updating through HACS:
+
+1. Install the new version.
+2. Restart Home Assistant if requested.
+3. Open the Laundry Monitor entry.
+4. Review options when release notes mention new detector settings.
+5. Verify that required and optional source entities are still configured.
+6. For detector changes, observe at least one complete cycle before assuming previous tuning is still optimal.
+
+Avoid copying tuning parameters from another washing machine without validating its signal profile.
+
+---
+
+## 23. Multiple washing machines
+
+Create a separate Laundry Monitor config entry for each machine.
+
+Each entry has its own:
+
+- required power source;
+- optional sensor set;
+- thresholds;
+- cycle state;
+- statistics;
+- laundry-tracking state.
+
+Do not share one power sensor between multiple entries.
+
+---
+
+## 24. Suggested production checklist
+
+Before relying on a newly configured machine in daily automations, observe several full cycles and confirm:
+
+- cycle start is detected reliably;
+- ordinary low-power pauses do not finish the cycle;
+- `final_spin` is not detected during unrelated early/mid-cycle activity;
+- the cycle reaches `finished` after real completion;
+- power-source outages behave differently from valid `0 W`;
+- Laundry Tracking behaves as expected, if enabled;
+- hybrid mode, if enabled, produces no false terminal-phase transitions;
+- both normal and unusual programs have been observed where practical.
+
+Detector settings describe the electrical and vibration behavior of a particular installation. Treat tuning as calibration, not as a universal washing-machine profile.
+
+---
+
+## 25. Where to find more technical information
+
+For implementation and normative behavior, see:
+
+- `docs/reference/SPECIFICATION.md`;
+- `docs/reference/ARCHITECTURE.md`;
+- `docs/reference/REQUIREMENTS.md`;
+- `docs/reference/STATE_MACHINE.md`;
+- `PROJECT_MAP.md`.
+
+The user manual explains how to operate and tune the integration. The canonical technical documents define the exact architecture and required behavior.

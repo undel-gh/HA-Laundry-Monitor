@@ -1,0 +1,522 @@
+# REQUIREMENTS.md
+
+# Laundry Monitor Requirements
+
+Status: Draft
+
+Revision basis: current `main` implementation
+
+---
+
+# Functional Requirements
+
+## FR-001
+
+The integration shall require a power sensor. It shall support optional current, door and vibration sensors.
+
+---
+
+## FR-002
+
+The integration shall operate without a leak sensor.
+
+---
+
+## FR-003
+
+The integration shall expose a stable public cycle state model.
+
+---
+
+## FR-004
+
+The integration shall never control external devices.
+
+---
+
+## FR-005
+
+The integration shall explain every state transition.
+
+---
+
+## FR-006
+
+The integration shall expose diagnostic information.
+
+---
+
+## FR-007
+
+Every threshold shall be configurable.
+
+---
+
+## FR-008
+
+Activity detection shall be independent from spin detection.
+
+---
+
+## FR-009
+
+Spin detection shall be independent from finish detection.
+
+---
+
+## FR-010
+
+Leak detection shall be independent from cycle detection.
+
+---
+
+## FR-011
+
+Laundry Tracking shall be independent from cycle detection.
+
+---
+
+## FR-012
+
+Laundry Tracking shall be optional.
+
+---
+
+## FR-013
+
+Opening the washing machine door shall not imply that laundry has been removed.
+
+---
+
+## FR-014
+
+Laundry shall be marked as removed only by explicit user action.
+
+---
+
+## FR-015
+
+The integration shall support multiple washing machines.
+
+---
+
+## FR-016
+
+The integration shall support localization.
+
+---
+
+## FR-017
+
+English translations shall be provided.
+
+---
+
+## FR-018
+
+All user-visible strings shall be localizable.
+
+---
+
+## FR-019
+
+The integration shall expose Home Assistant events for major state transitions.
+
+---
+
+## FR-020
+
+Public entity identifiers shall remain stable between compatible releases.
+
+---
+
+## FR-021
+
+The integration shall operate correctly without a current sensor.
+
+---
+
+## FR-022
+
+When a current sensor is configured, the Activity Detector may treat current above a configurable threshold as supplemental meaningful activity.
+
+---
+
+## FR-023
+
+Cycle-start confirmation shall remain based on the required power sensor. Current activity may corroborate diagnostics but shall not independently start a cycle.
+
+---
+
+## FR-024
+
+Current activity may reset or cancel finish confirmation and may contribute supporting evidence to spin detection.
+
+---
+
+## FR-025
+
+Current activity alone shall not confirm final spin or cycle completion.
+
+---
+
+## FR-026
+
+Unavailable, unknown, or invalid current data shall not be interpreted as zero current or inactivity.
+
+---
+
+## FR-027
+
+Loss of the optional current sensor shall degrade the integration to power-only operation without changing the public cycle state.
+
+---
+
+## FR-028
+
+Diagnostics shall identify whether power activity, current activity, or both contributed to a detector decision.
+
+---
+
+## FR-029
+
+The public `final_spin` state shall represent detection of a probable **terminal spin sequence / terminal phase** of the cycle, not an assertion that the drum is continuously spinning. The identifier `final_spin` shall remain stable for public-API compatibility.
+
+---
+
+## FR-030
+
+Terminal-spin-sequence / terminal-phase detection shall tolerate multiple spin stages, short pauses between spin stages, and cycle-to-cycle variation caused by program, load size, and load distribution.
+
+---
+
+## FR-031
+
+After `final_spin` is confirmed, meaningful power activity, current activity, vibration, overlapping spin-and-drain operation, drain-only operation after drum stop, pump operation, drum positioning, electronics activity, or end-of-program signalling shall not independently cause `final_spin → running`.
+
+---
+
+## FR-032
+
+Meaningful terminal-phase activity shall refresh the last-activity timestamp and reset or cancel pending finish confirmation while preserving the `final_spin` public state.
+
+---
+
+## FR-033
+
+A transition from `final_spin` back to `running` shall require an explicit `cycle_continuation_confirmed` decision based on evidence stronger than a single inactivity-to-activity edge.
+
+---
+
+## FR-034
+
+When `final_spin` has been confirmed, finish timing shall be measured from the last meaningful terminal activity rather than from the final-spin detection timestamp.
+
+---
+
+## FR-035
+
+The exact algorithm and timing thresholds used to confirm cycle continuation after `final_spin` shall remain implementation-specific until validated across multiple programs, loads, and machines.
+
+---
+
+## FR-036
+
+The terminal phase shall permit draining to begin before the drum has fully stopped after the terminal spin sequence.
+
+---
+
+## FR-037
+
+The terminal phase shall permit draining and other meaningful electrical activity to continue after drum rotation has fully stopped. Such activity shall remain terminal-phase activity and shall reset or cancel pending finish confirmation.
+
+---
+
+## FR-038
+
+A compatible hybrid spin detector may use a sustained electrical spin signature as corroborating evidence for terminal-spin-sequence detection.
+
+---
+
+## FR-039
+
+Electrical spin corroboration shall be based on observations over time, such as a rolling statistic or sustained-duration condition. A single instantaneous power or current sample shall not be sufficient to establish the electrical spin candidate.
+
+---
+
+## FR-040
+
+Electrical evidence alone shall not confirm `final_spin`. A final-spin decision shall continue to require meaningful mechanical spin evidence from the active detector algorithm.
+
+---
+
+## FR-041
+
+A hybrid detector may require less vibration evidence than the vibration-only detector only when the sustained electrical spin candidate and all applicable cycle-age and timing gates are simultaneously satisfied.
+
+---
+
+## FR-042
+
+Power shall be the primary electrical input for hybrid spin corroboration. Optional current measurements may strengthen the electrical candidate, but power and current originating from the same measurement device shall not be treated as fully independent evidence channels.
+
+---
+
+## FR-043
+
+Electrical-spin thresholds, rolling-window lengths, and sustained-duration gates shall be configurable or implementation-specific until validated across multiple washing machines, programs, and loads. Machine-specific field values shall not become universal defaults without broader validation.
+
+---
+
+## FR-044
+
+Diagnostics shall identify whether final-spin confirmation used the `vibration_only` or `hybrid` confirmation path and shall expose the relevant supporting electrical statistics when available.
+
+---
+
+## FR-045
+
+Electrical spin observations shall have a bounded freshness lifetime. An available source that stops publishing updates shall not be extrapolated indefinitely, shall stop contributing observed coverage after the configured maximum source age, and shall not keep an electrical spin candidate active from stale data.
+
+---
+
+## FR-046
+
+Hybrid-spin configuration shall preserve its required evidence invariants. Enabling hybrid confirmation shall require a configured vibration sensor and an explicit electrical power threshold; the hybrid vibration requirement shall be lower than the vibration-only requirement; electrical minimum coverage shall not exceed the electrical rolling window; and reconfiguration shall not remove the vibration source while hybrid confirmation remains enabled.
+
+---
+
+## FR-047
+
+A valid numeric source value of zero shall be treated as an observed measurement, not as missing or unavailable data. In particular, valid `0 W` power or `0 A` current readings shall not be converted into source-unavailable conditions. Conversely, `unavailable`, `unknown`, invalid, or absent source data shall not be synthesized as zero.
+
+---
+
+## FR-048
+
+When active hybrid spin confirmation is enabled, the integration shall support a machine-specific sustained-power threshold for detecting heater operation. A single instantaneous power spike shall not be sufficient to mark heating as detected.
+
+---
+
+## FR-049
+
+Heating context shall use at least the diagnostic states `unknown`, `not_seen`, and `detected`. It shall start each new cycle as `unknown`. Once heating is confirmed, `detected` shall be latched for the remainder of that cycle.
+
+---
+
+## FR-050
+
+The integration shall classify heating as `not_seen` only after sufficient **valid power-observation coverage** has accumulated without confirmed heating. Wall-clock passage alone shall not establish `not_seen`. Missing, unavailable, unknown, invalid, absent, or stale power data shall not count as evidence that heating did not occur.
+
+---
+
+## FR-051
+
+While sustained heater-level power is actively confirmed, terminal-spin confirmation shall be blocked regardless of whether vibration-only or hybrid spin evidence would otherwise satisfy its gates.
+
+---
+
+## FR-052
+
+After heating has been detected, reduced-evidence hybrid confirmation shall not be permitted before a configurable heated-cycle minimum age. That minimum age shall not be lower than the normal configured spin minimum cycle age.
+
+---
+
+## FR-053
+
+A fast non-heated hybrid path may confirm `final_spin` before the normal spin minimum cycle age only when heating has been classified as `not_seen`, full vibration evidence is satisfied, a fresh sustained electrical spin candidate is present, and the normal activity-recency requirements are satisfied. The fast path shall not use the reduced hybrid vibration requirement.
+
+---
+
+## FR-054
+
+An enabled reduced-evidence hybrid configuration shall require an explicit heating power threshold in addition to the existing vibration source and electrical spin power threshold. The heating threshold shall be greater than the electrical spin power threshold. A configuration that cannot satisfy the heating-aware safety invariants shall fail closed to non-reduced detection rather than silently use unsafe reduced-evidence hybrid confirmation.
+
+---
+
+## FR-055
+
+Heating context that changes future spin-gating decisions shall be included in restart recovery. A reliably known `heating_detected` fact shall survive safe recovery. A confirmed `not_seen` conclusion may also survive recovery, but only when the persisted heating-detector persistence version and the complete detector parameter set match the currently configured detector. If that proof is missing, incomplete, incompatible, or corrupt, only the `not_seen` proof shall be discarded and the runtime shall recover heating context conservatively as `unknown`; unrelated active-cycle, Laundry Tracking, and cycle-statistics fields shall remain recoverable. A malformed or timezone-naive `heating_detected_at` value shall be discarded without discarding the latched `heating_detected` fact or the rest of the snapshot. The runtime shall never infer `not_seen` from elapsed cycle age or missing pre-restart history.
+
+---
+
+## FR-056
+
+Diagnostics shall expose enough heating context to explain a blocked or accepted terminal-spin decision, including the heating state, whether heater-level power is currently active, observation coverage, the configured heating threshold/timers, and the effective heating-aware cycle-age gate.
+
+---
+ 
+## FR-057
+
+For an active recovered cycle, vibration rising-edge timestamps that are still inside the configured spin rolling window shall survive safe restart/reload recovery. Recovery shall re-prune persisted timestamps against the current window, discard stale, duplicate, corrupt, timezone-naive, or future evidence individually, and seed the edge detector from the current vibration state so startup cannot create a synthetic rising edge. Invalid vibration evidence metadata shall not invalidate unrelated snapshot state.
+
+---
+
+## FR-058
+
+When hybrid terminal-spin confirmation is enabled and the current cycle has latched heating as `detected`, full vibration evidence shall not independently confirm `final_spin`. After active heating has ended, a heated cycle shall still require a fresh sustained electrical spin candidate, recent meaningful activity, sufficient vibration evidence, and the applicable heated-cycle minimum age. This rule prevents an intermediate spin in a heated wash from bypassing electrical corroboration through the vibration-only path. When hybrid confirmation is disabled, the existing vibration-only path shall remain unchanged.
+
+---
+
+## FR-059
+
+When hybrid terminal-spin confirmation is enabled and heating has been latched as `detected`, the electrical spin candidate shall not corroborate `final_spin` immediately upon becoming active. It shall first satisfy a minimum maturity duration. The initial experimental implementation uses 45 seconds. This requirement is based on sustained terminal-profile structure rather than a second machine-specific power threshold.
+
+---
+
+## FR-060
+
+For a heated cycle using hybrid confirmation, at least one retained vibration rising edge used for terminal confirmation shall occur at or after the start of the current electrical spin candidate. Vibration evidence accumulated entirely before the current electrical episode shall not be sufficient, even after the candidate becomes mature. The maturity requirement from FR-059 and this temporal-correlation requirement are cumulative.
+
+---
+
+## FR-061
+
+The integration shall normalize usable power and current source measurements into **watts (W)** and **amperes (A)**, respectively, before applying thresholds, evaluating activity, heating or spin evidence, and publishing corresponding diagnostics. Conversion shall use the Home Assistant unit converters and unit symbols supported by the installed Core version. Explicit unit labels must match Home Assistant's canonical, case-sensitive symbols (for example `kW`, not `kw`; Greek `μA`, not `µA`). To preserve compatibility with legacy unitless source sensors, a missing `unit_of_measurement` attribute shall be interpreted as W for power and A for current. No unit conversions shall be applied to optional energy-source statistics by this requirement.
+
+---
+
+## FR-062
+
+A power or current reading with a declared but unsupported unit, a non-numeric or non-finite value, or a non-finite result after unit conversion shall be treated as **unusable**, never as zero or as an unconverted W/A measurement. An unusable **required power** source shall follow the existing power-unavailability grace/error behavior and expose the existing required-source Repairs warning; a usable source shall clear that warning. An unusable **optional current** source shall disable current-based corroboration and diagnostics without creating a Repairs issue or blocking power-only operation. A valid zero in a supported unit shall remain an available zero-valued observation, as required by FR-047.
+
+---
+
+## FR-063
+
+The integration shall distinguish a changed normalized power/current value from a **new valid electrical observation**. Both Home Assistant `state_changed` events (including attribute-only changes) and `state_reported` events for the configured power/current sensors shall refresh the corresponding source timestamps and observed coverage, even when the normalized W/A value remains identical. Repeated unknown, invalid or unavailable readings shall not establish fresh electrical evidence. Startup state reads and timer-only evaluations shall not fabricate source freshness. Sensor freshness and coverage shall remain bounded by the configured maximum source age.
+
+---
+
+## FR-064
+
+Repeated electrical reports shall not create synthetic door/vibration/leak transitions or vibration rising-edge evidence, and shall not trigger a general public entity-state publication merely because a value was re-reported. Meaningful detector/public-state transitions shall remain observable, and source-report listeners shall be removed on integration unload. `state_reported` establishes that a Home Assistant entity was republished; physical hardware sampling freshness remains a responsibility of the upstream source integration.
+
+---
+
+## FR-065
+
+The public cycle state `error` shall indicate that **Laundry Monitor cannot reliably evaluate the cycle**, not that the washing machine has reported or been diagnosed with an appliance fault. In the current implementation, automatic entry to `error` follows prolonged unavailability or invalidity of the required power measurement after the configured grace period; reception of a usable power observation permits recovery to `idle`. The integration shall not claim to interpret washing-machine fault codes or identify mechanical/electronic defects. Leak detection and failures of optional sources shall remain independent of this cycle-state error policy.
+
+---
+
+## FR-066
+
+Downloadable source diagnostics shall distinguish **Home Assistant entity availability** from **measurement usability for Laundry Monitor**. The `sources[*].entity_available` field shall indicate an entity state that is neither `unknown` nor `unavailable` (and exists), while `sources[*].available` shall indicate a usable observation for the configured source type. Required power and optional current usability shall follow the same W/A normalization and finite-value validation as runtime and Repairs. The `required_sources_unavailable` list shall reflect unusable *required* sources only, including a numeric value with incompatible units or conversion overflow. Optional current faults shall not be classified as required failures. Optional energy shall retain its independent numeric validation without W/A conversion. Source raw states, declared units, timestamps, and safe selected metadata shall remain available for troubleshooting.
+
+---
+
+## FR-067
+
+Home Assistant entity publication shall not be coupled one-to-one to every
+runtime notification. Each enabled entity shall suppress unchanged
+observable-state writes (including a sensor's dynamic measurement unit) while
+publishing relevant transitions promptly. High-churn internal diagnostic
+entities shall default to disabled in the entity registry for new
+installations, preserving existing user choices. A default-enabled
+`cycle_started_at` timestamp entity shall expose the persisted start time
+during `running` and `final_spin`, become unknown outside the active
+cycle, survive valid cycle recovery, and never require periodic publications
+for time passage. Consumers shall calculate live elapsed duration from that
+timestamp in the presentation layer. The legacy `current_cycle_duration`
+sensor shall remain available for compatibility, be disabled by default in
+new setups, and publish a point-in-time value only when lifecycle/phase or
+start-time information changes (not on elapsed-time ticks). Finalized
+`last_cycle_duration` semantics shall remain unchanged. The 30-second
+internal detector tick, input-event processing, downloadable diagnostics,
+and recovery snapshot persistence shall not be weakened or slowed to reduce
+Recorder load.
+
+---
+
+## FR-068
+
+Snapshot decoding shall distinguish **recovery-critical cycle timing**
+from independently usable laundry tracking and completed-cycle history.
+A persisted `last_state_change` that is absent, malformed or
+timezone-naive shall never recover an active, armed, finished or error
+cycle state: it shall select `idle`, reset active-cycle context, apply
+a recovery-fallback reason and save corrected timing without fabricating
+cycle events. Valid independent `laundry_present`, a timezone-aware
+`last_unloaded_at`, completed duration and energy values shall be
+preserved whenever safe under the existing tracking policy. Invalid
+optional unload timestamps and non-finite optional numeric statistics
+shall degrade individually, not invalidate an otherwise valid snapshot.
+Invalid other mandatory structural fields still cause the snapshot
+to be rejected. Existing storage versions, valid snapshots and
+the fail-closed requirements for active-cycle recovery shall remain
+compatible.
+
+---
+
+# Non-Functional Requirements
+
+## NFR-001
+
+The integration shall follow Home Assistant Integration Quality Scale recommendations where applicable.
+
+---
+
+## NFR-002
+
+The public API shall remain backward compatible within the same major version.
+
+---
+
+## NFR-003
+
+Internal implementation details may change without affecting public entities.
+
+---
+
+## NFR-004
+
+Debug mode shall not affect cycle detection behaviour.
+
+---
+
+## NFR-005
+
+Optional sensors shall not be required for basic operation.
+
+---
+
+## NFR-006
+
+Loss of an optional sensor shall not stop cycle detection.
+
+---
+
+## NFR-007
+
+The integration should continue operating after Home Assistant restart without requiring manual recovery whenever sufficient state can be restored.
+
+---
+
+## NFR-008
+
+Configuration shall be performed through Config Flow.
+
+---
+
+## NFR-009
+
+The integration should use native Home Assistant entity types whenever possible.
+
+---
+
+## NFR-010
+
+The architecture should support future detector implementations without requiring changes to the public API.
+
+---
+
+## NFR-011
+
+Adding or removing an optional current source shall not introduce new public cycle states.
+
+---
+
+## NFR-012
+
+Current-assisted detection shall remain deterministic for a given ordered sequence of source observations and timestamps.
