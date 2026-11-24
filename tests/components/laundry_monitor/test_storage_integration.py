@@ -335,7 +335,7 @@ async def test_last_unloaded_at_is_restored_after_unload_and_setup(
 @pytest.mark.parametrize(
     ("corrupt_field", "expected_laundry_present"),
     [
-        ("last_state_change", False),
+        ("last_state_change", True),
         ("cycle_started_at", True),
     ],
 )
@@ -359,6 +359,10 @@ async def test_naive_snapshot_timestamp_does_not_block_entry_setup(
         last_state_change=now - timedelta(minutes=1),
         cycle_started_at=now - timedelta(minutes=20),
         laundry_present=True,
+        last_cycle_duration=3600.0,
+        last_cycle_energy=0.61,
+        last_cycle_energy_unit="kWh",
+        last_unloaded_at=now - timedelta(days=1),
     ).as_storage_dict()
     stored[corrupt_field] = "2026-01-01T00:00:00"
 
@@ -372,6 +376,75 @@ async def test_naive_snapshot_timestamp_does_not_block_entry_setup(
     assert entry.state is ConfigEntryState.LOADED
     assert runtime.cycle_state is LaundryCycleState.IDLE
     assert runtime.laundry_present is expected_laundry_present
-    if corrupt_field == "cycle_started_at":
-        assert runtime.last_transition_reason == REASON_STATE_RECOVERY_FALLBACK
-        assert runtime.cycle_started_at is None
+    assert runtime.last_cycle_duration == 3600.0
+    assert runtime.last_cycle_energy == 0.61
+    assert runtime.last_cycle_energy_unit == "kWh"
+    assert runtime.last_unloaded_at == now - timedelta(days=1)
+    assert runtime.last_transition_reason == REASON_STATE_RECOVERY_FALLBACK
+    assert runtime.cycle_started_at is None
+    assert runtime.cycle_energy_start is None
+
+    # The fallback snapshot must be immediately re-persisted with valid
+    # transition timing, so a subsequent restart cannot revive the cycle.
+    healed = await runtime.state_store.async_get(entry.entry_id)
+    assert healed is not None
+    assert healed.cycle_state is LaundryCycleState.IDLE
+    assert healed.last_state_change is not None
+    assert healed.laundry_present is True
+    assert healed.last_cycle_duration == 3600.0
+
+    original_store = runtime.state_store
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.data.pop(DATA_STATE_STORE) is original_store
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    restarted = entry.runtime_data
+    assert restarted.cycle_state is LaundryCycleState.IDLE
+    assert restarted.last_cycle_duration == 3600.0
+    assert restarted.last_unloaded_at == now - timedelta(days=1)
+    assert restarted.laundry_present is True
+
+
+@pytest.mark.parametrize(
+    "bad_unload_time",
+    ["not-a-date", "2026-01-01T00:00:00", 123],
+)
+async def test_corrupt_optional_unload_time_preserves_active_cycle_and_history(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+    bad_unload_time: object,
+) -> None:
+    """Invalid optional unload history cannot poison an otherwise safe cycle."""
+    _set_source_states(hass, prefix="corrupt_unload", power=45.0)
+    entry = _create_entry(name="Washer Bad Unload", prefix="corrupt_unload")
+    now = dt_util.utcnow()
+
+    stored = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="stored_running",
+        last_state_change=now - timedelta(minutes=1),
+        cycle_started_at=now - timedelta(minutes=20),
+        laundry_present=True,
+        last_unloaded_at=now - timedelta(days=1),
+        last_cycle_duration=1900.0,
+        last_cycle_energy=0.43,
+        last_cycle_energy_unit="kWh",
+    ).as_storage_dict()
+    stored["last_unloaded_at"] = bad_unload_time
+    await Store(hass, STORAGE_VERSION, STORAGE_KEY).async_save(
+        {entry.entry_id: stored}
+    )
+
+    await _async_add_and_setup_entry(hass, entry)
+
+    runtime = entry.runtime_data
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.last_transition_reason == REASON_STATE_RESTORED
+    assert runtime.cycle_started_at is not None
+    assert runtime.last_unloaded_at is None
+    assert runtime.laundry_present is True
+    assert runtime.last_cycle_duration == 1900.0
+    assert runtime.last_cycle_energy == 0.43
