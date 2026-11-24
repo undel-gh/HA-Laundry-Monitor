@@ -538,3 +538,84 @@ def test_corrupt_mandatory_identity_fields_still_reject_snapshot(
     stored[field] = value
 
     assert RuntimeSnapshot.from_storage_dict(stored) is None
+
+
+@pytest.mark.parametrize(
+    ("threshold", "expected"),
+    [
+        pytest.param(True, None, id="true"),
+        pytest.param(False, None, id="false"),
+        pytest.param(None, None, id="absent"),
+        pytest.param(float("nan"), None, id="nan"),
+        pytest.param(float("inf"), None, id="infinity"),
+        pytest.param(10**400, None, id="integer-overflow"),
+        pytest.param([], None, id="list"),
+        pytest.param({}, None, id="object"),
+        pytest.param(1000, 1000.0, id="integer"),
+        pytest.param(1000.5, 1000.5, id="float"),
+        pytest.param("1000.5", 1000.5, id="legacy-numeric-string"),
+    ],
+)
+def test_optional_heating_threshold_types_preserve_independent_context(
+    threshold: object, expected: float | None
+) -> None:
+    """Corrupt numeric fingerprint cannot authorize persisted NOT_SEEN."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored.update(
+        heating_not_seen=True,
+        heating_detector_version=1,
+        heating_power_threshold_w=threshold,
+        heating_confirmation_seconds=30,
+        heating_observation_seconds=300,
+        heating_max_source_age_seconds=30,
+        last_cycle_duration=1234.0,
+        last_cycle_energy=0.42,
+        last_cycle_energy_unit="kWh",
+        last_unloaded_at="2026-07-13T10:00:00+03:00",
+        spin_evidence_timestamps=["2026-07-14T11:59:00+00:00"],
+    )
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.heating_power_threshold_w == expected
+    assert restored.heating_not_seen is (expected is not None)
+    assert restored.heating_detector_version == 1
+    assert restored.heating_confirmation_seconds == 30
+    assert restored.heating_observation_seconds == 300
+    assert restored.heating_max_source_age_seconds == 30
+    assert restored.cycle_state is LaundryCycleState.RUNNING
+    assert restored.laundry_present is True
+    assert restored.last_cycle_duration == 1234.0
+    assert restored.last_cycle_energy == 0.42
+    assert restored.last_cycle_energy_unit == "kWh"
+    assert restored.last_unloaded_at == datetime.fromisoformat(
+        "2026-07-13T10:00:00+03:00"
+    )
+    assert restored.spin_evidence_timestamps == (
+        datetime.fromisoformat("2026-07-14T11:59:00+00:00"),
+    )
+
+
+def test_invalid_optional_heating_threshold_retains_detected_fact() -> None:
+    """A damaged NOT_SEEN fingerprint cannot erase latched DETECTED."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored.update(
+        heating_detected=True,
+        heating_detected_at="2026-07-14T11:20:00+00:00",
+        heating_not_seen=True,
+        heating_detector_version=1,
+        heating_power_threshold_w=True,
+        heating_confirmation_seconds=30,
+        heating_observation_seconds=300,
+        heating_max_source_age_seconds=30,
+    )
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.heating_detected is True
+    assert restored.heating_detected_at == datetime.fromisoformat(
+        "2026-07-14T11:20:00+00:00"
+    )
+    assert restored.heating_not_seen is False
+    assert restored.heating_power_threshold_w is None
