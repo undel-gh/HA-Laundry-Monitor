@@ -61,7 +61,7 @@ def test_snapshot_round_trip(
             "last_transition_reason": "test",
             "last_state_change": "invalid",
             "cycle_started_at": None,
-            "laundry_present": False,
+            # A mandatory non-timing field is absent.
         },
     ],
 )
@@ -321,11 +321,32 @@ def test_last_unloaded_at_round_trip() -> None:
 def test_required_last_state_change_must_be_aware(
     invalid_time: object,
 ) -> None:
-    """Malformed or timezone-naive core timing invalidates the snapshot."""
+    """Corrupt mandatory timing must fail closed, retaining valid history."""
     stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
     stored["last_state_change"] = invalid_time
+    stored["last_cycle_duration"] = 2400.0
+    stored["last_cycle_energy"] = 0.81
+    stored["last_cycle_energy_unit"] = "kWh"
 
-    assert RuntimeSnapshot.from_storage_dict(stored) is None
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.last_state_change is None
+    assert restored.laundry_present is True
+    assert restored.last_cycle_duration == 2400.0
+    assert restored.last_cycle_energy == 0.81
+    assert restored.last_cycle_energy_unit == "kWh"
+    assert select_recovery_state(
+        restored,
+        door_open=False,
+        activity_detected=True,
+        vibration_active=True,
+        now=datetime(2026, 7, 14, 12, 1, tzinfo=timezone.utc),
+        power_available=True,
+    ) is LaundryCycleState.IDLE
+    assert RuntimeSnapshot.from_storage_dict(
+        restored.as_storage_dict()
+    ).last_state_change is None
 
 
 @pytest.mark.parametrize(
@@ -380,12 +401,29 @@ def test_invalid_cycle_start_does_not_discard_completed_statistics() -> None:
     assert restored.last_cycle_duration == 2400.0
 
 
-def test_naive_last_unloaded_at_is_rejected() -> None:
-    """An invalid unload timestamp cannot enter runtime state."""
-    stored = _snapshot(LaundryCycleState.IDLE).as_storage_dict()
-    stored["last_unloaded_at"] = "2026-07-14T11:00:00"
+@pytest.mark.parametrize(
+    "invalid_time",
+    ["2026-07-14T11:00:00", "not-a-timestamp", 123, {}],
+)
+def test_bad_optional_unload_timestamp_degrades_locally(
+    invalid_time: object,
+) -> None:
+    """An invalid unload time must not discard a safe active cycle/history."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored["last_unloaded_at"] = invalid_time
+    stored["last_cycle_duration"] = 2700.0
+    stored["last_cycle_energy"] = 0.9
+    stored["last_cycle_energy_unit"] = "kWh"
 
-    assert RuntimeSnapshot.from_storage_dict(stored) is None
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.last_unloaded_at is None
+    assert restored.cycle_state is LaundryCycleState.RUNNING
+    assert restored.last_state_change is not None
+    assert restored.laundry_present is True
+    assert restored.last_cycle_duration == 2700.0
+    assert restored.last_cycle_energy == 0.9
 
 
 def test_timezone_offset_timestamps_remain_valid() -> None:
@@ -400,3 +438,80 @@ def test_timezone_offset_timestamps_remain_valid() -> None:
     assert restored.last_state_change.utcoffset() == timedelta(hours=3)
     assert restored.cycle_started_at is not None
     assert restored.cycle_started_at.utcoffset() == timedelta(hours=3)
+
+
+@pytest.mark.parametrize(
+    "state",
+    list(LaundryCycleState),
+    ids=_state_test_id,
+)
+def test_missing_transition_time_forces_idle_even_for_nonactive_states(
+    state: LaundryCycleState,
+) -> None:
+    """Missing timing never revives ARMED, FINISHED, ERROR or a live cycle."""
+    stored = _snapshot(state).as_storage_dict()
+    stored.pop("last_state_change")
+    stored["last_cycle_duration"] = 1234.0
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.last_state_change is None
+    assert restored.last_cycle_duration == 1234.0
+    assert select_recovery_state(
+        restored,
+        door_open=False,
+        activity_detected=True,
+        vibration_active=True,
+        now=datetime(2026, 7, 14, 12, 1, tzinfo=timezone.utc),
+        power_available=False,
+    ) is LaundryCycleState.IDLE
+
+
+def test_salvage_independent_unload_history_with_corrupt_core_time() -> None:
+    """Independent unload time and statistics survive a broken core clock."""
+    stored = _snapshot(LaundryCycleState.FINISHED).as_storage_dict()
+    stored["last_state_change"] = "bad-clock"
+    stored["last_unloaded_at"] = "2026-07-13T09:30:00+03:00"
+    stored["laundry_present"] = True
+    stored["last_cycle_duration"] = 3600.0
+    stored["last_cycle_energy"] = 0.75
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.last_state_change is None
+    assert restored.last_unloaded_at is not None
+    assert restored.last_unloaded_at.utcoffset() == timedelta(hours=3)
+    assert restored.laundry_present is True
+    assert restored.last_cycle_duration == 3600.0
+    assert restored.last_cycle_energy == 0.75
+
+
+@pytest.mark.parametrize("invalid_time", ["bad", "2026-07-14T11:00:00", 123, None])
+def test_corrupt_timing_and_unload_do_not_poison_independent_statistics(
+    invalid_time: object,
+) -> None:
+    """Multiple corrupt timestamps still salvage independent valid data."""
+    stored = _snapshot(LaundryCycleState.RUNNING).as_storage_dict()
+    stored["last_state_change"] = invalid_time
+    stored["last_unloaded_at"] = invalid_time
+    stored["cycle_started_at"] = invalid_time
+    stored["last_cycle_duration"] = 1234.5
+    stored["last_cycle_energy"] = 0.42
+
+    restored = RuntimeSnapshot.from_storage_dict(stored)
+
+    assert restored is not None
+    assert restored.last_state_change is None
+    assert restored.last_unloaded_at is None
+    assert restored.cycle_started_at is None
+    assert restored.laundry_present is True
+    assert restored.last_cycle_duration == 1234.5
+    assert restored.last_cycle_energy == 0.42
+    assert select_recovery_state(
+        restored,
+        door_open=False,
+        activity_detected=True,
+        vibration_active=True,
+    ) is LaundryCycleState.IDLE
