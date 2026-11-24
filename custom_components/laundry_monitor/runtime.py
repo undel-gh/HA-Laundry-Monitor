@@ -734,9 +734,10 @@ class LaundryMonitorRuntime:
             return
 
         now = dt_util.utcnow()
-        snapshot_age_seconds = max(
-            (now - snapshot.last_state_change).total_seconds(),
-            0.0,
+        snapshot_age_seconds = (
+            max((now - snapshot.last_state_change).total_seconds(), 0.0)
+            if snapshot.last_state_change is not None
+            else None
         )
         recovered_state = select_recovery_state(
             snapshot,
@@ -752,16 +753,25 @@ class LaundryMonitorRuntime:
             require_final_spin_context=True,
         )
 
+        recovery_fallback = (
+            snapshot.last_state_change is None
+            or recovered_state is not snapshot.cycle_state
+        )
+
         _LOGGER.debug(
             "Snapshot recovery selected for entry %s (%s): "
-            "stored_state=%s, recovered_state=%s, age=%.1fs, "
+            "stored_state=%s, recovered_state=%s, age=%s, "
             "power_available=%s, activity_detected=%s, "
             "door_open=%s, vibration_active=%s",
             self.entry.entry_id,
             self.name,
             snapshot.cycle_state.value,
             recovered_state.value,
-            snapshot_age_seconds,
+            (
+                f"{snapshot_age_seconds:.1f}s"
+                if snapshot_age_seconds is not None
+                else "unknown"
+            ),
             self.power is not None,
             self.activity_detected,
             self.door_open,
@@ -771,14 +781,14 @@ class LaundryMonitorRuntime:
         self.state_machine.restore(recovered_state)
         self.cycle_state = recovered_state
         self.last_transition_reason = (
-            REASON_STATE_RESTORED
-            if recovered_state is snapshot.cycle_state
-            else REASON_STATE_RECOVERY_FALLBACK
+            REASON_STATE_RECOVERY_FALLBACK
+            if recovery_fallback
+            else REASON_STATE_RESTORED
         )
         self.last_state_change = (
             snapshot.last_state_change
-            if recovered_state is snapshot.cycle_state
-            else dt_util.utcnow()
+            if not recovery_fallback and snapshot.last_state_change is not None
+            else now
         )
         self.laundry_present = snapshot.laundry_present
         self.last_unloaded_at = snapshot.last_unloaded_at
@@ -846,14 +856,15 @@ class LaundryMonitorRuntime:
         self.spin_gate_reason = None
         self._reset_finish_detection()
 
-        if recovered_state is not snapshot.cycle_state:
+        if recovery_fallback:
             _LOGGER.debug(
                 "Applied snapshot recovery fallback for entry %s (%s): "
-                "%s -> %s",
+                "%s -> %s (transition_timing_valid=%s)",
                 self.entry.entry_id,
                 self.name,
                 snapshot.cycle_state.value,
                 recovered_state.value,
+                snapshot.last_state_change is not None,
             )
             self._schedule_snapshot_save()
         else:
