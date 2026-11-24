@@ -375,7 +375,8 @@ The runtime records `confirmation_path` as `vibration_only` or `hybrid` and expo
 The following **ordered first-match policy** documents the behavior of
 `runtime._evaluate_spin()` **before** the pure decision-policy extraction.
 Rows below the detector guards apply *after* the vibration detector has
-updated evidence/confidence and the runtime has persisted any new edge.
+updated evidence/confidence and the runtime has scheduled persistence of
+any newly observed edge.
 
 | Order | First matching condition | `gate_reason` / result |
 | --- | --- | --- |
