@@ -207,8 +207,8 @@ own state. The pure `spin_decision.py` policy combines immutable evidence and
 explicit current-time/configuration facts into a `SpinDecision` containing
 the confirmation path, hybrid variant and gate reason. It neither accesses
 Home Assistant nor mutates detector or runtime state. `runtime.py` continues
-to own source guards, detector invocation, diagnostics, persistence, state-
-machine transitions (including rejection), HA events and notifications.
+to own source guards, detector invocation, diagnostics, persistence, state-machine
+transitions (including rejection), HA events and notifications.
 The exact first-match gate order is recorded in
 `docs/en/STATE_MACHINE.md` §8.4; the policy extraction does not alter it.
 
