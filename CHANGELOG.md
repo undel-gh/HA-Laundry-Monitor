@@ -14,6 +14,52 @@ retrospectively reconstructed here.
 
 No additional changes recorded.
 
+## [0.1.9] - 2026-11-24
+
+Stable maintenance release covering changes since the published 0.1.8 tag.
+
+### Fixed
+- Salvage valid independent laundry-tracking data and finalized statistics
+  from partially corrupt snapshots; invalid mandatory transition timing
+  always falls back to idle, clears active context and schedules a
+  sanitized save without synthetic lifecycle events (#29).
+- Degrade invalid optional unload timestamps and energy/duration fields
+  individually; retain mandatory non-timing fail-closed guards (#29).
+- Reject boolean, non-finite, non-numeric and overflowing optional
+  numeric values; preserve finite legacy numeric strings and valid zero (#32).
+- Reject non-string/blank persisted energy units without losing valid
+  independent amounts; never calculate a new completed-cycle energy delta
+  from unknown units. Reject corrupt numeric heating thresholds as
+  proof for restoring NOT_SEEN; preserve independent valid DETECTED (#32).
+
+### Changed
+- Extract the ordered heating-aware spin-confirmation policy into a pure
+  decision function without changing thresholds, gate ordering, public
+  events, diagnostic contracts or detector behavior (#31).
+- Reorganize bilingual user guides, canonical references, maintainer
+  checklists and release notes; remove legacy paths and redundant card
+  page before 1.0.0. Published historical notes remain unchanged (#33, #35).
+- Add read-only Markdown local-link/heading validation and nine
+  checker tests to required CI; extend HA regression coverage to
+  452 tests on each of the three Core targets (#29, #31, #32, #33).
+
+### Compatibility and upgrade
+- Minimum Core remains 2026.6.0; CI targets 2026.6.0, 2026.10.4 and
+  2026.11.1. Storage version remains 1; no config migration, public
+  entity/event renaming or detector recalibration required.
+- Existing dashboards, Diagnostics and Recorder behavior remain unchanged
+  from 0.1.8. Old documentation URLs on main no longer resolve; use the
+  [documentation index](docs/README.md). Versioned historical paths
+  remain available at their original tags.
+- Intended stable publication: 0.1.9, prerelease=false, after release
+  checklist validation; no new field or HACS installation results
+  are claimed at preparation. #34 remains planned before 1.0.0.
+- Back up HA before upgrading; rollback to published 0.1.8 if necessary
+  and restore a known-good backup.
+
+See [0.1.9 release notes](docs/releases/0.1.9.md) and
+[Russian notes](docs/releases/0.1.9.ru.md).
+
 ## [0.1.8] - 2026-11-23
 
 First stable 0.1.8 release. This section summarizes user-facing changes

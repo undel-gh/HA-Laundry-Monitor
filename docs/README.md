@@ -24,7 +24,7 @@
 - [Release checklist (EN)](maintainers/RELEASE_CHECKLIST.en.md) — authoritative release procedure.
 - [Release checklist (RU)](maintainers/RELEASE_CHECKLIST.ru.md)
 - [Changelog](../CHANGELOG.md) and [GitHub Releases](https://github.com/undel-gh/HA-Laundry-Monitor/releases).
-- Published notes: 0.1.8 [EN](releases/0.1.8.md) / [RU](releases/0.1.8.ru.md); 0.1.8-rc8 [EN](releases/0.1.8-rc8.md) / [RU](releases/0.1.8-rc8.ru.md).
+- Versioned release notes: 0.1.9 [EN](releases/0.1.9.md) / [RU](releases/0.1.9.ru.md); 0.1.8 [EN](releases/0.1.8.md) / [RU](releases/0.1.8.ru.md); 0.1.8-rc8 [EN](releases/0.1.8-rc8.md) / [RU](releases/0.1.8-rc8.ru.md).
 
 English documentation remains canonical. Published release-note paths and contents remain unchanged.
 
@@ -59,7 +59,7 @@ Run from the repository root after staging new Markdown files. The check reads t
 - [Контрольный список релиза (RU)](maintainers/RELEASE_CHECKLIST.ru.md)
 - [Контрольный список релиза (EN)](maintainers/RELEASE_CHECKLIST.en.md) — нормативная версия.
 - [История изменений](../CHANGELOG.md) и [GitHub Releases](https://github.com/undel-gh/HA-Laundry-Monitor/releases).
-- Опубликованные заметки: 0.1.8 [RU](releases/0.1.8.ru.md) / [EN](releases/0.1.8.md); 0.1.8-rc8 [RU](releases/0.1.8-rc8.ru.md) / [EN](releases/0.1.8-rc8.md).
+- Заметки о релизах: 0.1.9 [RU](releases/0.1.9.ru.md) / [EN](releases/0.1.9.md); 0.1.8 [RU](releases/0.1.8.ru.md) / [EN](releases/0.1.8.md); 0.1.8-rc8 [RU](releases/0.1.8-rc8.ru.md) / [EN](releases/0.1.8-rc8.md).
 
 Канонической остаётся английская документация. Пути и содержимое опубликованных заметок о релизах не меняются.
 
