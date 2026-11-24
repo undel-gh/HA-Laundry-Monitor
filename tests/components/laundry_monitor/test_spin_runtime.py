@@ -901,7 +901,30 @@ async def test_hybrid_confirmation_event_payload_survives_policy_extraction(
     assert runtime.spin_gate_reason == "confirmed_hybrid_reduced"
     assert len(emitted) == 1
     event_data = emitted[0]
+    assert set(event_data) == {
+        "config_entry_id",
+        "name",
+        "confidence",
+        "evidence_count",
+        "window_seconds",
+        "confirmation_path",
+        "hybrid_variant",
+        "electrical_candidate",
+        "electrical_candidate_since",
+        "electrical_candidate_age_seconds",
+        "heated_candidate_min_duration_seconds",
+        "latest_vibration_evidence_at",
+        "power_rolling_median",
+        "current_rolling_median",
+        "heating_state",
+        "heating_active",
+        "heating_observation_coverage",
+        "effective_hybrid_min_cycle_seconds",
+        "timestamp",
+    }
     assert event_data["config_entry_id"] == entry.entry_id
+    assert event_data["confidence"] == runtime.final_spin_confidence
+    assert event_data["window_seconds"] == runtime.spin_detector.window_seconds
     assert event_data["confirmation_path"] == "hybrid"
     assert event_data["hybrid_variant"] == "reduced"
     assert event_data["evidence_count"] == 2
@@ -955,6 +978,8 @@ async def test_rejected_spin_transition_keeps_diagnostics_and_no_spin_event(
     assert spin_events == []
     assert rejection_events
     assert all(
-        event["requested_state"] == "final_spin"
+        event["old_state"] == "idle"
+        and event["requested_state"] == "final_spin"
+        and event["reason"] == REASON_FINAL_SPIN_CONFIRMED
         for event in rejection_events
     )
