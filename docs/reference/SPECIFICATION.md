@@ -831,18 +831,30 @@ custom_components/laundry_monitor/
     ru.json
 ```
 
-Documentation may be organized as:
+Documentation is organized as:
 
 ```text
 docs/
-  en/
+  README.md
+  guides/
+    USER_MANUAL.en.md
+    USER_MANUAL.ru.md
+  reference/
     SPECIFICATION.md
     ARCHITECTURE.md
     REQUIREMENTS.md
     STATE_MACHINE.md
-    USER_MANUAL.md
-  ru/
-    USER_MANUAL.md
+  maintainers/
+    RELEASE_CHECKLIST.en.md
+    RELEASE_CHECKLIST.ru.md
+  releases/
+    0.1.8.md
+    0.1.8.ru.md
+    0.1.8-rc8.md
+    0.1.8-rc8.ru.md
+  en/                      # compatibility notices only
+  ru/                      # compatibility notices only
+  Laundry_monitor_card.md  # compatibility notice and card link
 ```
 
 The English documentation is canonical.
