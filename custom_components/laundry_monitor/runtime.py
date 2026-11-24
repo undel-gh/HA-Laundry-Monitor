@@ -122,6 +122,7 @@ from .heating import (
 )
 from .source_units import normalized_current, normalized_power, state_as_float
 from .spin import ElectricalSpinCandidateDetector, SpinDetector
+from .spin_decision import SpinDecisionInputs, decide_spin_confirmation
 from .state_machine import LaundryStateMachine, TransitionStatus
 from .storage import LaundryStateStore, RuntimeSnapshot, select_recovery_state
 
@@ -524,21 +525,6 @@ class LaundryMonitorRuntime:
     def heated_electrical_candidate_min_duration_seconds(self) -> int:
         """Return the heated-cycle electrical maturity requirement."""
         return HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION
-
-    def _heated_electrical_candidate_is_mature(
-        self,
-        now: datetime,
-    ) -> bool:
-        """Return whether the current candidate survived the maturity gate."""
-        since = self.spin_electrical_candidate_since
-        return bool(
-            self.spin_electrical_candidate
-            and since is not None
-            and now - since
-            >= timedelta(
-                seconds=HEATED_ELECTRICAL_CANDIDATE_MIN_DURATION
-            )
-        )
 
     @property
     def current_cycle_duration(self) -> float | None:
@@ -1921,80 +1907,34 @@ class LaundryMonitorRuntime:
                 self.heating_state.value,
                 self.heating_detector.heating_active,
             )
-        confirmation_path: str | None = None
-        hybrid_variant: str | None = None
-        heated_hybrid_requires_electrical = (
-            self.hybrid_spin_enabled
-            and self.heating_state is HeatingState.DETECTED
+        decision = decide_spin_confirmation(
+            SpinDecisionInputs(
+                evaluation=evaluation,
+                now=timestamp,
+                hybrid_enabled=self.hybrid_spin_enabled,
+                heating_state=self.heating_state,
+                heating_active=self.heating_detector.heating_active,
+                electrical_power_threshold_configured=(
+                    self.electrical_spin_detector.power_threshold_w is not None
+                ),
+                heating_power_threshold_configured=(
+                    self.heating_detector.power_threshold_w is not None
+                ),
+                electrical_candidate=self.spin_electrical_candidate,
+                electrical_candidate_since=self.spin_electrical_candidate_since,
+                cycle_started_at=self.cycle_started_at,
+                vibration_required_events=self.spin_detector.required_events,
+                hybrid_required_events=self.hybrid_spin_required_events,
+                spin_min_cycle_seconds=self.spin_detector.min_cycle_seconds,
+                heated_cycle_min_seconds=self.heated_cycle_min_seconds,
+                heated_candidate_min_duration_seconds=(
+                    self.heated_electrical_candidate_min_duration_seconds
+                ),
+            )
         )
-        if self.heating_detector.heating_active:
-            gate_reason = "heating_active"
-        elif evaluation.detected and not heated_hybrid_requires_electrical:
-            confirmation_path = "vibration_only"
-            gate_reason = "confirmed_vibration_only"
-        elif not self.hybrid_spin_enabled:
-            gate_reason = "hybrid_disabled"
-        elif self.electrical_spin_detector.power_threshold_w is None:
-            gate_reason = "hybrid_spin_threshold_not_configured"
-        elif self.heating_detector.power_threshold_w is None:
-            gate_reason = "hybrid_heating_not_configured"
-        elif not self.spin_electrical_candidate:
-            if heated_hybrid_requires_electrical and evaluation.detected:
-                gate_reason = "heated_cycle_requires_electrical_candidate"
-            else:
-                gate_reason = "electrical_candidate_inactive"
-        elif not evaluation.activity_recent:
-            gate_reason = "activity_not_recent"
-        elif self.heating_state is HeatingState.UNKNOWN:
-            gate_reason = "heating_unknown"
-        elif (
-            self.heating_state is HeatingState.NOT_SEEN
-            and not evaluation.cycle_mature
-        ):
-            if evaluation.evidence_count >= self.spin_detector.required_events:
-                confirmation_path = "hybrid"
-                hybrid_variant = "fast_non_heated"
-                gate_reason = "confirmed_fast_non_heated"
-            else:
-                gate_reason = "fast_path_requires_full_vibration"
-        elif evaluation.evidence_count < self.hybrid_spin_required_events:
-            gate_reason = "hybrid_vibration_insufficient"
-        elif self.heating_state is HeatingState.DETECTED:
-            if self.cycle_started_at is None:
-                gate_reason = "cycle_age_unknown"
-            else:
-                cycle_age = max(
-                    (timestamp - self.cycle_started_at).total_seconds(),
-                    0.0,
-                )
-                effective_min = max(
-                    self.spin_detector.min_cycle_seconds,
-                    self.heated_cycle_min_seconds,
-                )
-                if cycle_age < effective_min:
-                    gate_reason = "heated_cycle_too_young"
-                elif not self._heated_electrical_candidate_is_mature(
-                    timestamp
-                ):
-                    gate_reason = "heated_electrical_candidate_immature"
-                elif (
-                    self.spin_electrical_candidate_since is None
-                    or evaluation.latest_evidence_at is None
-                    or evaluation.latest_evidence_at
-                    < self.spin_electrical_candidate_since
-                ):
-                    gate_reason = (
-                        "heated_cycle_requires_fresh_vibration_"
-                        "after_electrical_candidate"
-                    )
-                else:
-                    confirmation_path = "hybrid"
-                    hybrid_variant = "reduced"
-                    gate_reason = "confirmed_hybrid_reduced"
-        else:
-            confirmation_path = "hybrid"
-            hybrid_variant = "reduced"
-            gate_reason = "confirmed_hybrid_reduced"
+        confirmation_path = decision.confirmation_path
+        hybrid_variant = decision.hybrid_variant
+        gate_reason = decision.gate_reason
 
         self.spin_gate_reason = gate_reason
         self.final_spin_hybrid_variant = hybrid_variant
