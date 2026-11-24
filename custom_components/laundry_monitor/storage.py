@@ -141,6 +141,12 @@ class RuntimeSnapshot:
 
         except (KeyError, TypeError, ValueError):
             return None
+        # A unit with no valid numeric energy value would be orphaned.
+        # Preserve usable duration/history even if one energy reading fails.
+        if cycle_energy_start is None:
+            cycle_energy_unit = None
+        if last_cycle_energy is None:
+            last_cycle_energy_unit = None
         # Recovery-only detector context degrades independently from the
         # core snapshot. Corrupt optional proof must never discard an
         # otherwise valid active cycle, laundry tracking state, or
