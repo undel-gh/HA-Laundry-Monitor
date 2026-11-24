@@ -6,7 +6,7 @@ from datetime import timedelta
 
 import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_NAME, STATE_OFF
+from homeassistant.const import ATTR_UNIT_OF_MEASUREMENT, CONF_NAME, STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
@@ -15,6 +15,8 @@ from ._ha_compat import MockConfigEntry
 from custom_components.laundry_monitor import DATA_STATE_STORE
 from custom_components.laundry_monitor.const import (
     CONF_DOOR_SENSOR,
+    CONF_ENERGY_SENSOR,
+    CONF_HEATING_POWER_THRESHOLD,
     CONF_POWER_SENSOR,
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
@@ -28,6 +30,7 @@ from custom_components.laundry_monitor.const import (
     REASON_STATE_RECOVERY_FALLBACK,
     REASON_STATE_RESTORED,
 )
+from custom_components.laundry_monitor.heating import HeatingState
 from custom_components.laundry_monitor.storage import (
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -467,3 +470,125 @@ async def test_corrupt_optional_unload_time_preserves_active_cycle_and_history(
     assert runtime.laundry_present is True
     assert runtime.last_cycle_duration == 1900.0
     assert runtime.last_cycle_energy == 0.43
+
+
+async def test_corrupt_optional_types_restore_cycle_without_fabricating_proof(
+    hass: HomeAssistant,
+    enable_custom_integrations: None,
+) -> None:
+    """Real storage recovery must not coerce optional data into evidence."""
+    prefix = "corrupt_optional_types"
+    _set_source_states(hass, prefix=prefix, power=0.25)
+    energy_entity = f"sensor.{prefix}_energy"
+    # Deliberately use a string matching the old coerced integer unit.
+    # Even such a live value cannot legitimize a corrupt stored unit.
+    hass.states.async_set(
+        energy_entity, "126.0", {ATTR_UNIT_OF_MEASUREMENT: "123"}
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Washer With Corrupt Optional Types",
+        data={
+            CONF_NAME: "Washer With Corrupt Optional Types",
+            CONF_POWER_SENSOR: f"sensor.{prefix}_power",
+            CONF_DOOR_SENSOR: f"binary_sensor.{prefix}_door",
+            CONF_VIBRATION_SENSOR: f"binary_sensor.{prefix}_vibration",
+            CONF_ENERGY_SENSOR: energy_entity,
+            CONF_TRACK_LAUNDRY: True,
+        },
+        # The old float(True) would match this configured threshold.
+        options={CONF_HEATING_POWER_THRESHOLD: 1.0},
+    )
+
+    now = dt_util.utcnow()
+    stored = RuntimeSnapshot(
+        cycle_state=LaundryCycleState.RUNNING,
+        last_transition_reason="stored_running",
+        last_state_change=now - timedelta(minutes=1),
+        cycle_started_at=now - timedelta(minutes=20),
+        laundry_present=True,
+        last_unloaded_at=now - timedelta(days=1),
+        cycle_energy_start=125.3,
+        last_cycle_duration=1900.0,
+        last_cycle_energy=0.43,
+        last_cycle_energy_unit="kWh",
+        heating_not_seen=True,
+        heating_detector_version=1,
+        heating_power_threshold_w=1.0,
+        heating_confirmation_seconds=30,
+        heating_observation_seconds=300,
+        heating_max_source_age_seconds=30,
+    ).as_storage_dict()
+    stored.update(
+        cycle_energy_start="125.3",
+        cycle_energy_unit=123,
+        last_cycle_energy=True,
+        heating_power_threshold_w=True,
+    )
+    await Store(hass, STORAGE_VERSION, STORAGE_KEY).async_save(
+        {entry.entry_id: stored}
+    )
+
+    emitted: list[str] = []
+    for event_name in (
+        EVENT_CYCLE_STARTED,
+        EVENT_FINAL_SPIN_DETECTED,
+        EVENT_CYCLE_FINISHED,
+        EVENT_MACHINE_UNLOADED,
+        EVENT_STATE_CHANGED,
+    ):
+        hass.bus.async_listen(
+            event_name, lambda event: emitted.append(event.event_type)
+        )
+
+    await _async_add_and_setup_entry(hass, entry)
+    runtime = entry.runtime_data
+
+    assert emitted == []
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.last_transition_reason == REASON_STATE_RESTORED
+    assert runtime.laundry_present is True
+    assert runtime.last_unloaded_at == now - timedelta(days=1)
+    assert runtime.cycle_started_at == now - timedelta(minutes=20)
+    assert runtime.last_cycle_duration == 1900.0
+    assert runtime.last_cycle_energy is None
+    assert runtime.last_cycle_energy_unit is None
+    assert runtime.cycle_energy_start == 125.3
+    assert runtime.cycle_energy_unit is None
+    assert runtime.energy == 126.0
+    assert runtime.energy_unit == "123"
+    assert runtime.heating_state is HeatingState.UNKNOWN
+    assert runtime.heating_detector.power_threshold_w == 1.0
+    assert runtime.spin_electrical_candidate is False
+
+    # Graceful unload checkpoints the sanitized data to real HA storage.
+    original_store = runtime.state_store
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.data.pop(DATA_STATE_STORE) is original_store
+
+    raw = await Store(hass, STORAGE_VERSION, STORAGE_KEY).async_load()
+    assert raw is not None
+    saved = raw[entry.entry_id]
+    assert saved["cycle_energy_start"] == 125.3
+    assert saved["cycle_energy_unit"] is None
+    assert saved["last_cycle_energy"] is None
+    assert saved["last_cycle_energy_unit"] is None
+    assert saved["heating_not_seen"] is False
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    runtime = entry.runtime_data
+    assert emitted == []
+    assert runtime.cycle_state is LaundryCycleState.RUNNING
+    assert runtime.cycle_energy_unit is None
+    assert runtime.last_cycle_duration == 1900.0
+    assert runtime.heating_state is HeatingState.UNKNOWN
+
+    # No fabricated consumption when the original unit is unknown.
+    assert runtime.async_set_cycle_state(
+        LaundryCycleState.FINISHED, "test_finished"
+    )
+    await hass.async_block_till_done()
+    assert runtime.last_cycle_energy is None
+    assert runtime.last_cycle_energy_unit is None

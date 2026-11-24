@@ -795,6 +795,23 @@ invalidate the snapshot as a whole. Detector proof such as vibration
 timestamps and heating fingerprint remains optional and is subject to
 its existing independent validation rules.
 
+Optional persisted statistics and heating-threshold metadata accept finite
+numbers, including legacy numeric strings, but not booleans. Non-finite
+numbers and numeric conversion failures (including overflow) degrade to
+`None`. An invalid heating-threshold value invalidates persisted
+`not_seen` proof without discarding unrelated history or a valid latched
+`detected` fact.
+
+Energy-unit fields accept only non-empty strings after trimming.
+Non-string units degrade to `None`; no unit is invented by coercion.
+A valid numeric energy amount is preserved even when its unit is missing
+or corrupt, consistent with legacy unitless snapshots. Conversely, an
+unusable energy amount clears its associated unit. A restored active
+energy baseline with no known unit cannot produce a completed energy
+delta: the existing runtime requires matching known units to finalize
+energy consumption. This is a snapshot-decoding rule, not a change to
+live source unit handling.
+
 Snapshot storage format/version remains unchanged; older valid snapshots
 continue to deserialize normally. Invalid optional-only fields are safely
 ignored on load and are overwritten on the next ordinary snapshot save.

@@ -148,7 +148,9 @@ class RuntimeSnapshot:
         except (KeyError, TypeError, ValueError):
             return None
         # A unit with no valid numeric energy value would be orphaned.
-        # Preserve usable duration/history even if one energy reading fails.
+        # Keep valid amounts even if their unit is absent or corrupt, as
+        # with legacy unitless snapshots. Runtime needs matching known
+        # units before it can calculate a new cycle's energy consumption.
         if cycle_energy_start is None:
             cycle_energy_unit = None
         if last_cycle_energy is None:
@@ -220,9 +222,11 @@ class RuntimeSnapshot:
 
 
 def _optional_finite_float(value: Any) -> float | None:
-    """Return an optional finite float or raise for invalid storage."""
+    """Return a finite float, accepting legacy numeric strings, not bools."""
     if value is None:
         return None
+    if isinstance(value, bool):
+        raise ValueError
     number = float(value)
     if not isfinite(number):
         raise ValueError
@@ -230,11 +234,11 @@ def _optional_finite_float(value: Any) -> float | None:
 
 
 def _optional_string(value: Any) -> str | None:
-    """Return an optional non-empty string."""
-    if value is None:
+    """Return a trimmed non-empty string; discard other types locally."""
+    if not isinstance(value, str):
         return None
-    text = str(value).strip()
-    return text or None
+    return value.strip() or None
+
 
 def _optional_positive_int(value: Any) -> int | None:
     """Return an optional positive integer or raise for invalid storage."""
@@ -260,7 +264,7 @@ def _safe_optional_finite_float(value: Any) -> float | None:
     """Return a finite float, degrading corrupt optional data to None."""
     try:
         return _optional_finite_float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
