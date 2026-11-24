@@ -26,7 +26,7 @@
 - [Changelog](../CHANGELOG.md) and [GitHub Releases](https://github.com/undel-gh/HA-Laundry-Monitor/releases).
 - Published notes: 0.1.8 [EN](releases/0.1.8.md) / [RU](releases/0.1.8.ru.md); 0.1.8-rc8 [EN](releases/0.1.8-rc8.md) / [RU](releases/0.1.8-rc8.ru.md).
 
-English documentation remains canonical. The former language directories contain compatibility notices only; maintain the new files. Old file links still open a notice, not an automatic redirect to a specific section. Published release-note paths and contents remain unchanged.
+English documentation remains canonical. Published release-note paths and contents remain unchanged.
 
 To verify repository-local Markdown links before opening a PR, install the parser and run:
 
@@ -61,6 +61,6 @@ Run from the repository root after staging new Markdown files. The check reads t
 - [История изменений](../CHANGELOG.md) и [GitHub Releases](https://github.com/undel-gh/HA-Laundry-Monitor/releases).
 - Опубликованные заметки: 0.1.8 [RU](releases/0.1.8.ru.md) / [EN](releases/0.1.8.md); 0.1.8-rc8 [RU](releases/0.1.8-rc8.ru.md) / [EN](releases/0.1.8-rc8.md).
 
-Канонической остаётся английская документация. Старые языковые каталоги содержат только страницы-переходники; редактировать следует новые файлы. Старые ссылки открывают страницу-переходник, а не автоматически выбранный раздел. Пути и содержимое опубликованных заметок о релизах не меняются.
+Канонической остаётся английская документация. Пути и содержимое опубликованных заметок о релизах не меняются.
 
 Команда проверки ссылок приведена в [английском разделе](#maintainers-and-releases). Проверка читает отслеживаемые Git Markdown-файлы, проверяет локальные пути и якоря заголовков; внешние URL пропускаются без сетевых запросов.
