@@ -19,6 +19,11 @@ from custom_components.laundry_monitor.const import (
     CONF_TRACK_LAUNDRY,
     CONF_VIBRATION_SENSOR,
     DOMAIN,
+    EVENT_CYCLE_FINISHED,
+    EVENT_CYCLE_STARTED,
+    EVENT_FINAL_SPIN_DETECTED,
+    EVENT_MACHINE_UNLOADED,
+    EVENT_STATE_CHANGED,
     LaundryCycleState,
     REASON_STATE_RECOVERY_FALLBACK,
     REASON_STATE_RESTORED,
@@ -370,7 +375,21 @@ async def test_naive_snapshot_timestamp_does_not_block_entry_setup(
         {entry.entry_id: stored}
     )
 
+    # Recovery must not fabricate any public lifecycle event.
+    emitted: list[str] = []
+    for event_name in (
+        EVENT_CYCLE_STARTED,
+        EVENT_FINAL_SPIN_DETECTED,
+        EVENT_CYCLE_FINISHED,
+        EVENT_MACHINE_UNLOADED,
+        EVENT_STATE_CHANGED,
+    ):
+        hass.bus.async_listen(
+            event_name, lambda event: emitted.append(event.event_type)
+        )
+
     await _async_add_and_setup_entry(hass, entry)
+    assert emitted == []
 
     runtime = entry.runtime_data
     assert entry.state is ConfigEntryState.LOADED
